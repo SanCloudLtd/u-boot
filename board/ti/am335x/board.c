@@ -669,8 +669,26 @@ int board_late_init(void)
 #ifdef CONFIG_ENV_VARS_UBOOT_RUNTIME_CONFIG
 	char *name = NULL;
 
+	if (board_is_bone_lt()) {
+		puts("Board: BeagleBone Black\n");
+		name = "A335BNLT";
+		if (!strncmp(board_ti_get_rev(), "BW", 2)) {
+			puts("Model: BeagleBone Black Wireless\n");
+			name = "BBBW";
+		}
+		if (!strncmp(board_ti_get_rev(), "BLA", 3)) {
+			puts("Model: BeagleBone Blue\n");
+			name = "BBBL";
+		}
+		if (!strncmp(board_ti_get_rev(), "SE", 2)) {
+			puts("Model: SanCloud BeagleBone Enhanced\n");
+			name = "SBBE";
+		}
+	}
+
 	if (board_is_bbg1())
 		name = "BBG1";
+
 	set_board_info_env(name);
 
 	/*
