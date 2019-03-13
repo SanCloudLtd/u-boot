@@ -824,18 +824,21 @@ int board_eth_init(bd_t *bis)
 	(defined(CONFIG_SPL_ETH_SUPPORT) && defined(CONFIG_SPL_BUILD))
 
 #ifdef CONFIG_DRIVER_TI_CPSW
-	if (board_is_bone() || board_is_bone_lt() ||
+	if (board_is_bone() || (board_is_bone_lt() && !board_is_bone_lt_enhanced() && !board_is_m10a()) ||
 	    board_is_idk()) {
+		puts("eth0: MII MODE\n");
 		writel(MII_MODE_ENABLE, &cdev->miisel);
 		cpsw_slaves[0].phy_if = cpsw_slaves[1].phy_if =
 				PHY_INTERFACE_MODE_MII;
 	} else if (board_is_icev2()) {
+		puts("eth0: icev2: RGMII MODE\n");
 		writel(RMII_MODE_ENABLE | RMII_CHIPCKL_ENABLE, &cdev->miisel);
 		cpsw_slaves[0].phy_if = PHY_INTERFACE_MODE_RMII;
 		cpsw_slaves[1].phy_if = PHY_INTERFACE_MODE_RMII;
 		cpsw_slaves[0].phy_addr = 1;
 		cpsw_slaves[1].phy_addr = 3;
 	} else {
+		puts("eth0: RGMII MODE\n");
 		writel((RGMII_MODE_ENABLE | RGMII_INT_DELAY), &cdev->miisel);
 		cpsw_slaves[0].phy_if = cpsw_slaves[1].phy_if =
 				PHY_INTERFACE_MODE_RGMII;
@@ -860,7 +863,7 @@ int board_eth_init(bd_t *bis)
 #define AR8051_DEBUG_RGMII_CLK_DLY_REG	0x5
 #define AR8051_RGMII_TX_CLK_DLY		0x100
 
-	if (board_is_evm_sk() || board_is_gp_evm()) {
+	if (board_is_evm_sk() || board_is_gp_evm() || board_is_bone_lt_enhanced() || board_is_m10a()) {
 		const char *devname;
 		devname = miiphy_get_current_dev();
 
