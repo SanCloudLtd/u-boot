@@ -347,6 +347,7 @@ dtb-$(CONFIG_AM33XX) += \
 	am335x-pocketbeagle.dtb \
 	am335x-pxm50.dtb \
 	am335x-rut.dtb \
+	am335x-sancloud-bbe.dtb \
 	am335x-shc.dtb \
 	am335x-pdu001.dtb \
 	am335x-chiliboard.dtb \
