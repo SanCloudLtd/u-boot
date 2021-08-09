@@ -6,6 +6,8 @@
  * Copyright (c) 2018, Theobroma Systems Design und Consulting GmbH
  */
 
+#define LOG_CATEGORY UCLASS_CLK
+
 #include <common.h>
 #include <clk.h>
 #include <clk-uclass.h>
@@ -14,6 +16,7 @@
 #include <errno.h>
 #include <log.h>
 #include <malloc.h>
+#include <dm/device_compat.h>
 #include <dm/device-internal.h>
 #include <dm/devres.h>
 #include <dm/read.h>
@@ -39,7 +42,7 @@ int clk_get_by_driver_info(struct udevice *dev, struct phandle_1_arg *cells,
 {
 	int ret;
 
-	ret = device_get_by_driver_info_idx(cells->idx, &clk->dev);
+	ret = device_get_by_ofplat_idx(cells->idx, &clk->dev);
 	if (ret)
 		return ret;
 	clk->id = cells->arg[0];
@@ -159,7 +162,7 @@ int clk_get_by_index_nodev(ofnode node, int index, struct clk *clk)
 int clk_get_bulk(struct udevice *dev, struct clk_bulk *bulk)
 {
 	int i, ret, err, count;
-	
+
 	bulk->count = 0;
 
 	count = dev_count_phandle_with_args(dev, "clocks", "#clock-cells", 0);
@@ -206,7 +209,8 @@ static struct clk *clk_set_default_get_by_id(struct clk *clk)
 	return c;
 }
 
-static int clk_set_default_parents(struct udevice *dev, int stage)
+static int clk_set_default_parents(struct udevice *dev,
+				   enum clk_defaults_stage stage)
 {
 	struct clk clk, parent_clk, *c, *p;
 	int index;
@@ -240,6 +244,15 @@ static int clk_set_default_parents(struct udevice *dev, int stage)
 
 		ret = clk_get_by_indexed_prop(dev, "assigned-clocks",
 					      index, &clk);
+		/*
+		 * If the clock provider is not ready yet, let it handle
+		 * the re-programming later.
+		 */
+		if (ret == -EPROBE_DEFER) {
+			ret = 0;
+			continue;
+		}
+
 		if (ret) {
 			debug("%s: could not get assigned clock %d for %s\n",
 			      __func__, index, dev_read_name(dev));
@@ -250,10 +263,10 @@ static int clk_set_default_parents(struct udevice *dev, int stage)
 		 * It cannot be done right now but need to wait after the
 		 * device is probed
 		 */
-		if (stage == 0 && clk.dev == dev)
+		if (stage == CLK_DEFAULTS_PRE && clk.dev == dev)
 			continue;
 
-		if (stage > 0 && clk.dev != dev)
+		if (stage != CLK_DEFAULTS_PRE && clk.dev != dev)
 			/* do not setup twice the parent clocks */
 			continue;
 
@@ -279,7 +292,8 @@ static int clk_set_default_parents(struct udevice *dev, int stage)
 	return 0;
 }
 
-static int clk_set_default_rates(struct udevice *dev, int stage)
+static int clk_set_default_rates(struct udevice *dev,
+				 enum clk_defaults_stage stage)
 {
 	struct clk clk, *c;
 	int index;
@@ -308,9 +322,19 @@ static int clk_set_default_rates(struct udevice *dev, int stage)
 
 		ret = clk_get_by_indexed_prop(dev, "assigned-clocks",
 					      index, &clk);
+		/*
+		 * If the clock provider is not ready yet, let it handle
+		 * the re-programming later.
+		 */
+		if (ret == -EPROBE_DEFER) {
+			ret = 0;
+			continue;
+		}
+
 		if (ret) {
-			debug("%s: could not get assigned clock %d for %s\n",
-			      __func__, index, dev_read_name(dev));
+			dev_dbg(dev,
+				"could not get assigned clock %d (err = %d)\n",
+				index, ret);
 			continue;
 		}
 
@@ -318,10 +342,10 @@ static int clk_set_default_rates(struct udevice *dev, int stage)
 		 * It cannot be done right now but need to wait after the
 		 * device is probed
 		 */
-		if (stage == 0 && clk.dev == dev)
+		if (stage == CLK_DEFAULTS_PRE && clk.dev == dev)
 			continue;
 
-		if (stage > 0 && clk.dev != dev)
+		if (stage != CLK_DEFAULTS_PRE && clk.dev != dev)
 			/* do not setup twice the parent clocks */
 			continue;
 
@@ -332,8 +356,9 @@ static int clk_set_default_rates(struct udevice *dev, int stage)
 		ret = clk_set_rate(c, rates[index]);
 
 		if (ret < 0) {
-			debug("%s: failed to set rate on clock index %d (%ld) for %s\n",
-			      __func__, index, clk.id, dev_read_name(dev));
+			dev_warn(dev,
+				 "failed to set rate on clock index %d (%ld) (error = %d)\n",
+				 index, clk.id, ret);
 			break;
 		}
 	}
@@ -343,16 +368,21 @@ fail:
 	return ret;
 }
 
-int clk_set_defaults(struct udevice *dev, int stage)
+int clk_set_defaults(struct udevice *dev, enum clk_defaults_stage stage)
 {
 	int ret;
 
 	if (!dev_has_ofnode(dev))
 		return 0;
 
-	/* If this not in SPL and pre-reloc state, don't take any action. */
+	/*
+	 * To avoid setting defaults twice, don't set them before relocation.
+	 * However, still set them for SPL. And still set them if explicitly
+	 * asked.
+	 */
 	if (!(IS_ENABLED(CONFIG_SPL_BUILD) || (gd->flags & GD_FLG_RELOC)))
-		return 0;
+		if (stage != CLK_DEFAULTS_POST_FORCE)
+			return 0;
 
 	debug("%s(%s)\n", __func__, dev_read_name(dev));
 
@@ -499,6 +529,8 @@ struct clk *clk_get_parent(struct clk *clk)
 		return NULL;
 
 	pdev = dev_get_parent(clk->dev);
+	if (!pdev)
+		return ERR_PTR(-ENODEV);
 	pclk = dev_get_clk_ptr(pdev);
 	if (!pclk)
 		return ERR_PTR(-ENODEV);
@@ -545,6 +577,22 @@ ulong clk_round_rate(struct clk *clk, ulong rate)
 	return ops->round_rate(clk, rate);
 }
 
+static void clk_clean_rate_cache(struct clk *clk)
+{
+	struct udevice *child_dev;
+	struct clk *clkp;
+
+	if (!clk)
+		return;
+
+	clk->rate = 0;
+
+	list_for_each_entry(child_dev, &clk->dev->child_head, sibling_node) {
+		clkp = dev_get_clk_ptr(child_dev);
+		clk_clean_rate_cache(clkp);
+	}
+}
+
 ulong clk_set_rate(struct clk *clk, ulong rate)
 {
 	const struct clk_ops *ops;
@@ -556,6 +604,9 @@ ulong clk_set_rate(struct clk *clk, ulong rate)
 
 	if (!ops->set_rate)
 		return -ENOSYS;
+
+	/* Clean up cached rates for us and all child clocks */
+	clk_clean_rate_cache(clk);
 
 	return ops->set_rate(clk, rate);
 }
@@ -796,13 +847,17 @@ void devm_clk_put(struct udevice *dev, struct clk *clk)
 
 int clk_uclass_post_probe(struct udevice *dev)
 {
+	int ret;
+
 	/*
 	 * when a clock provider is probed. Call clk_set_defaults()
 	 * also after the device is probed. This takes care of cases
 	 * where the DT is used to setup default parents and rates
 	 * using assigned-clocks
 	 */
-	clk_set_defaults(dev, 1);
+	ret = clk_set_defaults(dev, CLK_DEFAULTS_POST);
+	if (ret)
+		return log_ret(ret);
 
 	return 0;
 }

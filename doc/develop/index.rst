@@ -10,9 +10,12 @@ Implementation
    :maxdepth: 1
 
    commands
+   driver-model/index
    global_data
    logging
+   makefiles
    menus
+   uefi/index
    version
 
 Debugging
@@ -24,6 +27,14 @@ Debugging
    crash_dumps
    trace
 
+Packaging
+---------
+
+.. toctree::
+   :maxdepth: 1
+
+   package/index
+
 Testing
 -------
 
@@ -33,3 +44,5 @@ Testing
    coccinelle
    testing
    py_testing
+   tests_writing
+   tests_sandbox

@@ -118,8 +118,8 @@ F:	cmd/arm/
 ARM ALTERA SOCFPGA
 M:	Marek Vasut <marex@denx.de>
 M:	Simon Goldschmidt <simon.k.r.goldschmidt@gmail.com>
-M:	Ley Foon Tan <ley.foon.tan@intel.com>
-S:	Maintainted
+M:	Tien Fong Chee <tien.fong.chee@intel.com>
+S:	Maintained
 T:	git https://source.denx.de/u-boot/custodians/u-boot-socfpga.git
 F:	arch/arm/mach-socfpga/
 F:	drivers/sysreset/sysreset_socfpga*
@@ -352,7 +352,7 @@ F:	arch/arm/mach-rmobile/
 
 ARM ROCKCHIP
 M:	Simon Glass <sjg@chromium.org>
-M:	Philipp Tomsich <philipp.tomsich@theobroma-systems.com>
+M:	Philipp Tomsich <philipp.tomsich@vrull.eu>
 M:	Kever Yang <kever.yang@rock-chips.com>
 S:	Maintained
 T:	git https://source.denx.de/u-boot/custodians/u-boot-rockchip.git
@@ -478,6 +478,9 @@ F:	arch/arm/cpu/armv7/sunxi/
 F:	arch/arm/include/asm/arch-sunxi/
 F:	arch/arm/mach-sunxi/
 F:	board/sunxi/
+F:	drivers/clk/sunxi/
+F:	drivers/phy/allwinner/
+F:	drivers/video/sunxi/
 
 ARM TEGRA
 M:	Tom Warren <twarren@nvidia.com>
@@ -510,6 +513,7 @@ F:	drivers/phy/phy-ti-am654.c
 F:	drivers/phy/ti-pipe3-phy.c
 F:	drivers/ram/k3*
 F:	drivers/remoteproc/k3_system_controller.c
+F:	drivers/remoteproc/pruc_rpoc.c
 F:	drivers/remoteproc/ti*
 F:	drivers/reset/reset-ti-sci.c
 F:	drivers/rtc/davinci.c
@@ -519,6 +523,7 @@ F:	drivers/sysreset/sysreset-ti-sci.c
 F:	drivers/thermal/ti-bandgap.c
 F:	drivers/timer/omap-timer.c
 F:	drivers/watchdog/omap_wdt.c
+F:	include/linux/pruss_driver.h
 F:	include/linux/soc/ti/
 
 ARM U8500
@@ -540,6 +545,7 @@ M:	Michal Simek <michal.simek@xilinx.com>
 S:	Maintained
 T:	git https://source.denx.de/u-boot/custodians/u-boot-microblaze.git
 F:	arch/arm/mach-versal/
+F:	drivers/net/xilinx_axi_mrmac.*
 F:	drivers/watchdog/xilinx_wwdt.c
 N:	(?<!uni)versal
 
@@ -690,7 +696,7 @@ R:	Alexander Graf <agraf@csgraf.de>
 S:	Maintained
 T:	git https://source.denx.de/u-boot/custodians/u-boot-efi.git
 F:	doc/api/efi.rst
-F:	doc/uefi/*
+F:	doc/develop/uefi/*
 F:	doc/usage/bootefi.rst
 F:	drivers/rtc/emul_rtc.c
 F:	include/capitalization.h
@@ -879,6 +885,7 @@ F:	arch/mips/dts/mrvl,cn73xx.dtsi
 
 MMC
 M:	Peng Fan <peng.fan@nxp.com>
+M:	Jaehoon Chung <jh80.chung@samsung.com>
 S:	Maintained
 T:	git https://source.denx.de/u-boot/custodians/u-boot-mmc.git
 F:	drivers/mmc/
@@ -910,11 +917,36 @@ S:	Maintained
 T:	git https://source.denx.de/u-boot/custodians/u-boot-nios.git
 F:	arch/nios2/
 
+NVMe
+M:	Bin Meng <bmeng.cn@gmail.com>
+S:	Maintained
+F:	drivers/nvme/
+F:	cmd/nvme.c
+F:	include/nvme.h
+F:	doc/develop/driver-model/nvme.rst
+
+NXP C45 TJA11XX PHY DRIVER
+M:	Radu Pirea <radu-nicolae.pirea@oss.nxp.com>
+S:	Maintained
+F:	drivers/net/phy/nxp-c45-tja11xx.c
+
 ONENAND
 #M:	Lukasz Majewski <l.majewski@majess.pl>
 S:	Orphaned (Since 2017-01)
 T:	git https://source.denx.de/u-boot/custodians/u-boot-onenand.git
 F:	drivers/mtd/onenand/
+
+OUT4-IMX6ULL-NANO BOARD
+M:	Oleh Kravchenko <oleg@kaa.org.ua>
+S:	Maintained
+T:	git https://github.com/Oleh-Kravchenko/u-boot-out4.git
+F:	arch/arm/dts/ev-imx280-nano-x-mb.dts
+F:	arch/arm/dts/o4-imx-nano.dts
+F:	arch/arm/dts/o4-imx6ull-nano.dtsi
+F:	board/out4
+F:	configs/ev-imx280-nano-x-mb_defconfig
+F:	configs/o4-imx6ull-nano_defconfig
+F:	include/configs/o4-imx6ull-nano.h
 
 PATMAN
 M:	Simon Glass <sjg@chromium.org>
@@ -973,14 +1005,9 @@ S:	Maintained
 T:	git https://source.denx.de/u-boot/custodians/u-boot-mpc85xx.git
 F:	arch/powerpc/cpu/mpc85xx/
 
-POWERPC MPC86XX
-M:	Priyanka Jain <priyanka.jain@nxp.com>
-S:	Maintained
-T:	git https://source.denx.de/u-boot/custodians/u-boot-mpc86xx.git
-F:	arch/powerpc/cpu/mpc86xx/
-
 RISC-V
 M:	Rick Chen <rick@andestech.com>
+M:	Leo <ycliang@andestech.com>
 S:	Maintained
 T:	git https://source.denx.de/u-boot/custodians/u-boot-riscv.git
 F:	arch/riscv/
@@ -995,8 +1022,8 @@ M:	Sean Anderson <seanga2@gmail.com>
 S:	Maintained
 F:	doc/device-tree-bindings/mfd/kendryte,k210-sysctl.txt
 F:	doc/device-tree-bindings/pinctrl/kendryte,k210-fpioa.txt
-F:	drivers/clk/kendryte/
-F:	drivers/pinctrl/kendryte/
+F:	drivers/clk/clk_kendryte.c
+F:	drivers/pinctrl/pinctrl-kendryte.c
 F:	include/kendryte/
 
 RNG
@@ -1061,6 +1088,13 @@ F:	fs/squashfs/
 F:	include/sqfs.h
 F:	cmd/sqfs.c
 F:	test/py/tests/test_fs/test_squashfs/
+
+STACKPROTECTOR
+M:	Joel Peshkin <joel.peshkin@broadcom.com>
+S:	Maintained
+F:	common/stackprot.c
+F:	cmd/stackprot_test.c
+F:	test/py/tests/test_stackprotector.py
 
 TARGET_BCMNS3
 M:	Bharat Gooty <bharat.gooty@broadcom.com>
@@ -1163,6 +1197,18 @@ F:	drivers/video/
 F:	common/lcd*.c
 F:	include/lcd*.h
 F:	include/video*.h
+
+VirtIO
+M:	Bin Meng <bmeng.cn@gmail.com>
+S:	Maintained
+F:	drivers/virtio/
+F:	cmd/virtio.c
+F:	include/config/virtio/
+F:	include/config/virtio.h
+F:	include/config/cmd/virtio.h
+F:	include/virtio*.h
+F:	test/dm/virtio.c
+F:	doc/develop/driver-model/virtio.rst
 
 X86
 M:	Simon Glass <sjg@chromium.org>

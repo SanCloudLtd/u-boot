@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0+ */
 /*
- * Copyright 2018-2020 NXP
+ * Copyright 2018-2021 NXP
  */
 
 #ifndef __LX2_COMMON_H
@@ -129,11 +129,6 @@
 #define CONFIG_PCI_SCAN_SHOW
 #endif
 
-/* MMC */
-#ifdef CONFIG_MMC
-#define CONFIG_SYS_FSL_MMC_HAS_CAPBLT_VS33
-#endif
-
 /* SATA */
 
 #ifdef CONFIG_SCSI
@@ -147,7 +142,7 @@
 #endif
 
 /* USB */
-#ifdef CONFIG_USB
+#ifdef CONFIG_USB_HOST
 #define CONFIG_HAS_FSL_XHCI_USB
 #ifndef CONFIG_TARGET_LX2162AQDS
 #define CONFIG_USB_MAX_CONTROLLER_COUNT	2

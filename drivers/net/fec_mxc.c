@@ -146,7 +146,7 @@ static int fec_get_clk_rate(void *udev, int idx)
 	    CONFIG_IS_ENABLED(CLK_CCF)) {
 		dev = udev;
 		if (!dev) {
-			ret = uclass_get_device(UCLASS_ETH, idx, &dev);
+			ret = uclass_get_device_by_seq(UCLASS_ETH, idx, &dev);
 			if (ret < 0) {
 				debug("Can't get FEC udev: %d\n", ret);
 				return ret;
@@ -457,6 +457,9 @@ static void fec_reg_setup(struct fec_priv *fec)
 		rcntrl |= FEC_RCNTRL_RGMII;
 	else if (fec->xcv_type == RMII)
 		rcntrl |= FEC_RCNTRL_RMII;
+
+	if (fec->promisc)
+		rcntrl |= 0x8;
 
 	writel(rcntrl, &fec->eth->r_cntrl);
 }
@@ -1278,6 +1281,15 @@ static int fecmxc_read_rom_hwaddr(struct udevice *dev)
 	return fec_get_hwaddr(priv->dev_id, pdata->enetaddr);
 }
 
+static int fecmxc_set_promisc(struct udevice *dev, bool enable)
+{
+	struct fec_priv *priv = dev_get_priv(dev);
+
+	priv->promisc = enable;
+
+	return 0;
+}
+
 static int fecmxc_free_pkt(struct udevice *dev, uchar *packet, int length)
 {
 	if (packet)
@@ -1294,21 +1306,29 @@ static const struct eth_ops fecmxc_ops = {
 	.stop			= fecmxc_halt,
 	.write_hwaddr		= fecmxc_set_hwaddr,
 	.read_rom_hwaddr	= fecmxc_read_rom_hwaddr,
+	.set_promisc		= fecmxc_set_promisc,
 };
 
 static int device_get_phy_addr(struct fec_priv *priv, struct udevice *dev)
 {
 	struct ofnode_phandle_args phandle_args;
-	int reg;
+	int reg, ret;
 
-	if (dev_read_phandle_with_args(dev, "phy-handle", NULL, 0, 0,
-				       &phandle_args)) {
-		debug("Failed to find phy-handle");
-		return -ENODEV;
+	ret = dev_read_phandle_with_args(dev, "phy-handle", NULL, 0, 0,
+					 &phandle_args);
+	if (ret) {
+		priv->phy_of_node = ofnode_find_subnode(dev_ofnode(dev),
+							"fixed-link");
+		if (ofnode_valid(priv->phy_of_node))
+			return 0;
+		debug("Failed to find phy-handle (err = %d)\n", ret);
+		return ret;
 	}
 
-	priv->phy_of_node = phandle_args.node;
+	if (!ofnode_is_available(phandle_args.node))
+		return -ENOENT;
 
+	priv->phy_of_node = phandle_args.node;
 	reg = ofnode_read_u32_default(phandle_args.node, "reg", 0);
 
 	return reg;
@@ -1352,6 +1372,7 @@ static void fec_gpio_reset(struct fec_priv *priv)
 
 static int fecmxc_probe(struct udevice *dev)
 {
+	bool dm_mii_bus = true;
 	struct eth_pdata *pdata = dev_get_plat(dev);
 	struct fec_priv *priv = dev_get_priv(dev);
 	struct mii_dev *bus = NULL;
@@ -1459,6 +1480,7 @@ static int fecmxc_probe(struct udevice *dev)
 #endif
 
 	if (!bus) {
+		dm_mii_bus = false;
 #ifdef CONFIG_FEC_MXC_MDIO_BASE
 		bus = fec_get_miibus((ulong)CONFIG_FEC_MXC_MDIO_BASE,
 				     dev_seq(dev));
@@ -1504,8 +1526,10 @@ static int fecmxc_probe(struct udevice *dev)
 	return 0;
 
 err_phy:
-	mdio_unregister(bus);
-	free(bus);
+	if (!dm_mii_bus) {
+		mdio_unregister(bus);
+		free(bus);
+	}
 err_mii:
 err_timeout:
 	fec_free_descs(priv);

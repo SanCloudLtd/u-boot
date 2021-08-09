@@ -176,6 +176,27 @@ static inline const char *spl_phase_name(enum u_boot_phase phase)
 	}
 }
 
+/**
+ * spl_phase_prefix() - Get the prefix  of the current phase
+ *
+ * @phase: Phase to look up
+ * @return phase prefix ("spl", "tpl", etc.)
+ */
+static inline const char *spl_phase_prefix(enum u_boot_phase phase)
+{
+	switch (phase) {
+	case PHASE_TPL:
+		return "tpl";
+	case PHASE_SPL:
+		return "spl";
+	case PHASE_BOARD_F:
+	case PHASE_BOARD_R:
+		return "";
+	default:
+		return "phase?";
+	}
+}
+
 /* A string name for SPL or TPL */
 #ifdef CONFIG_SPL_BUILD
 # ifdef CONFIG_TPL_BUILD
@@ -222,6 +243,15 @@ struct spl_load_info {
 	void *priv;
 	int bl_len;
 	const char *filename;
+	/**
+	 * read() - Read from device
+	 *
+	 * @load: Information about the load state
+	 * @sector: Sector number to read from (each @load->bl_len bytes)
+	 * @count: Number of sectors to read
+	 * @buf: Buffer to read into
+	 * @return number of sectors read, 0 on error
+	 */
 	ulong (*read)(struct spl_load_info *load, ulong sector, ulong count,
 		      void *buf);
 };
@@ -349,14 +379,29 @@ u32 spl_mmc_boot_mode(const u32 boot_device);
  */
 int spl_mmc_boot_partition(const u32 boot_device);
 
+struct mmc;
 /**
- * spl_alloc_bd() - Allocate space for bd_info
+ * default_spl_mmc_emmc_boot_partition() - eMMC boot partition to load U-Boot from.
+ * mmc:			Pointer for the mmc device structure
  *
- * This sets up the gd->bd pointer by allocating memory for it
- *
- * @return 0 if OK, -ENOMEM if out of memory
+ * This function should return the eMMC boot partition number which
+ * the SPL should load U-Boot from (on the given boot_device).
  */
-int spl_alloc_bd(void);
+int default_spl_mmc_emmc_boot_partition(struct mmc *mmc);
+
+/**
+ * spl_mmc_emmc_boot_partition() - eMMC boot partition to load U-Boot from.
+ * mmc:			Pointer for the mmc device structure
+ *
+ * This function should return the eMMC boot partition number which
+ * the SPL should load U-Boot from (on the given boot_device).
+ *
+ * If not overridden, it is weakly defined in common/spl/spl_mmc.c
+ * and calls default_spl_mmc_emmc_boot_partition();
+ */
+int spl_mmc_emmc_boot_partition(struct mmc *mmc);
+
+void spl_set_bd(void);
 
 /**
  * spl_set_header_raw_uboot() - Set up a standard SPL image structure
@@ -459,6 +504,16 @@ struct spl_image_loader {
 	int (*load_image)(struct spl_image_info *spl_image,
 			  struct spl_boot_device *bootdev);
 };
+
+/* Helper function for accessing the name */
+static inline const char *spl_loader_name(const struct spl_image_loader *loader)
+{
+#ifdef CONFIG_SPL_LIBCOMMON_SUPPORT
+	return loader->name;
+#else
+	return NULL;
+#endif
+}
 
 /* Declare an SPL image loader */
 #define SPL_LOAD_IMAGE(__name)					\

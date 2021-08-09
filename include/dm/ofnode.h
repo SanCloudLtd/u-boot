@@ -459,6 +459,16 @@ ofnode ofnode_get_parent(ofnode node);
 const char *ofnode_get_name(ofnode node);
 
 /**
+ * ofnode_get_path() - get the full path of a node
+ *
+ * @node: valid node to look up
+ * @buf: buffer to write the node path into
+ * @buflen: buffer size
+ * @return 0 if OK, -ve on error
+ */
+int ofnode_get_path(ofnode node, char *buf, int buflen);
+
+/**
  * ofnode_get_by_phandle() - get ofnode from phandle
  *
  * @phandle:	phandle to look up
@@ -490,6 +500,23 @@ phys_addr_t ofnode_get_addr_size_index(ofnode node, int index,
 				       fdt_size_t *size);
 
 /**
+ * ofnode_get_addr_size_index_notrans() - get an address/size from a node
+ *					  based on index, without address
+ *					  translation
+ *
+ * This reads the register address/size from a node based on index.
+ * The resulting address is not translated. Useful for example for on-disk
+ * addresses.
+ *
+ * @node: node to read from
+ * @index: Index of address to read (0 for first)
+ * @size: Pointer to size of the address
+ * @return address, or FDT_ADDR_T_NONE if not present or invalid
+ */
+phys_addr_t ofnode_get_addr_size_index_notrans(ofnode node, int index,
+					       fdt_size_t *size);
+
+/**
  * ofnode_get_addr_index() - get an address from a node
  *
  * This reads the register address from a node
@@ -509,6 +536,16 @@ phys_addr_t ofnode_get_addr_index(ofnode node, int index);
  * @return address, or FDT_ADDR_T_NONE if not present or invalid
  */
 phys_addr_t ofnode_get_addr(ofnode node);
+
+/**
+ * ofnode_get_size() - get size from a node
+ *
+ * This reads the register size from a node
+ *
+ * @node: node to read from
+ * @return size of the address, or FDT_SIZE_T_NONE if not present or invalid
+ */
+fdt_size_t ofnode_get_size(ofnode node);
 
 /**
  * ofnode_stringlist_search() - find a string in a string list and return index

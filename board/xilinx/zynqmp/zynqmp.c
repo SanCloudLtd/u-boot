@@ -11,6 +11,8 @@
 #include <env.h>
 #include <env_internal.h>
 #include <init.h>
+#include <image.h>
+#include <lmb.h>
 #include <log.h>
 #include <net.h>
 #include <sata.h>
@@ -183,7 +185,38 @@ static const struct {
 		.device = 49,
 		.variants = ZYNQMP_VARIANT_DR,
 	},
+	{
+		.id = 0x046d0093,
+		.device = 67,
+		.variants = ZYNQMP_VARIANT_DR,
+	},
 };
+
+static const struct {
+	u32 id;
+	char *name;
+} zynqmp_svd_devices[] = {
+	{
+		.id = 0x04714093,
+		.name = "xck24"
+	},
+	{
+		.id = 0x04724093,
+		.name = "xck26",
+	},
+};
+
+static char *zynqmp_detect_svd_name(u32 idcode)
+{
+	u32 i;
+
+	for (i = 0; i < ARRAY_SIZE(zynqmp_svd_devices); i++) {
+		if (zynqmp_svd_devices[i].id == (idcode & 0x0FFFFFFF))
+			return zynqmp_svd_devices[i].name;
+	}
+
+	return "unknown";
+}
 
 static char *zynqmp_get_silicon_idcode_name(void)
 {
@@ -219,7 +252,7 @@ static char *zynqmp_get_silicon_idcode_name(void)
 	}
 
 	if (i >= ARRAY_SIZE(zynqmp_devices))
-		return "unknown";
+		return zynqmp_detect_svd_name(idcode);
 
 	/* Add device prefix to the name */
 	ret = snprintf(name, ZYNQMP_VERSION_SIZE, "zu%d",
@@ -286,6 +319,17 @@ int board_early_init_f(void)
 	ret = psu_init();
 	if (ret)
 		return ret;
+
+	/*
+	 * PS_SYSMON_ANALOG_BUS register determines mapping between SysMon
+	 * supply sense channel to SysMon supply registers inside the IP.
+	 * This register must be programmed to complete SysMon IP
+	 * configuration. The default register configuration after
+	 * power-up is incorrect. Hence, fix this by writing the
+	 * correct value - 0x3210.
+	 */
+	writel(ZYNQMP_PS_SYSMON_ANALOG_BUS_VAL,
+	       ZYNQMP_AMS_PS_SYSMON_ANALOG_BUS);
 
 	/* Delay is required for clocks to be propagated */
 	udelay(1000000);
@@ -416,6 +460,25 @@ int dram_init(void)
 
 	return 0;
 }
+
+ulong board_get_usable_ram_top(ulong total_size)
+{
+	phys_size_t size;
+	phys_addr_t reg;
+	struct lmb lmb;
+
+	/* found enough not-reserved memory to relocated U-Boot */
+	lmb_init(&lmb);
+	lmb_add(&lmb, gd->ram_base, gd->ram_size);
+	boot_fdt_add_mem_rsv_regions(&lmb, (void *)gd->fdt_blob);
+	size = ALIGN(CONFIG_SYS_MALLOC_LEN + total_size, MMU_SECTION_SIZE),
+	reg = lmb_alloc(&lmb, size, MMU_SECTION_SIZE);
+
+	if (!reg)
+		reg = gd->ram_top - size;
+
+	return reg + size;
+}
 #else
 int dram_init_banksize(void)
 {
@@ -436,9 +499,11 @@ int dram_init(void)
 }
 #endif
 
-void reset_cpu(ulong addr)
+#if !CONFIG_IS_ENABLED(SYSRESET)
+void reset_cpu(void)
 {
 }
+#endif
 
 static u8 __maybe_unused zynqmp_get_bootmode(void)
 {
@@ -571,7 +636,7 @@ int board_late_init(void)
 	switch (bootmode) {
 	case USB_MODE:
 		puts("USB_MODE\n");
-		mode = "usb";
+		mode = "usb_dfu0 usb_dfu1";
 		env_set("modeboot", "usb_dfu_spl");
 		break;
 	case JTAG_MODE:
@@ -683,6 +748,41 @@ int checkboard(void)
 	return 0;
 }
 
+int mmc_get_env_dev(void)
+{
+	struct udevice *dev;
+	int bootseq = 0;
+
+	switch (zynqmp_get_bootmode()) {
+	case EMMC_MODE:
+	case SD_MODE:
+		if (uclass_get_device_by_name(UCLASS_MMC,
+					      "mmc@ff160000", &dev) &&
+		    uclass_get_device_by_name(UCLASS_MMC,
+					      "sdhci@ff160000", &dev)) {
+			return -1;
+		}
+		bootseq = dev_seq(dev);
+		break;
+	case SD1_LSHFT_MODE:
+	case SD_MODE1:
+		if (uclass_get_device_by_name(UCLASS_MMC,
+					      "mmc@ff170000", &dev) &&
+		    uclass_get_device_by_name(UCLASS_MMC,
+					      "sdhci@ff170000", &dev)) {
+			return -1;
+		}
+		bootseq = dev_seq(dev);
+		break;
+	default:
+		break;
+	}
+
+	debug("bootseq %d\n", bootseq);
+
+	return bootseq;
+}
+
 enum env_location env_get_location(enum env_operation op, int prio)
 {
 	u32 bootmode = zynqmp_get_bootmode();
@@ -699,18 +799,18 @@ enum env_location env_get_location(enum env_operation op, int prio)
 			return ENVL_FAT;
 		if (IS_ENABLED(CONFIG_ENV_IS_IN_EXT4))
 			return ENVL_EXT4;
-		return ENVL_UNKNOWN;
+		return ENVL_NOWHERE;
 	case NAND_MODE:
 		if (IS_ENABLED(CONFIG_ENV_IS_IN_NAND))
 			return ENVL_NAND;
 		if (IS_ENABLED(CONFIG_ENV_IS_IN_UBI))
 			return ENVL_UBI;
-		return ENVL_UNKNOWN;
+		return ENVL_NOWHERE;
 	case QSPI_MODE_24BIT:
 	case QSPI_MODE_32BIT:
 		if (IS_ENABLED(CONFIG_ENV_IS_IN_SPI_FLASH))
 			return ENVL_SPI_FLASH;
-		return ENVL_UNKNOWN;
+		return ENVL_NOWHERE;
 	case JTAG_MODE:
 	default:
 		return ENVL_NOWHERE;

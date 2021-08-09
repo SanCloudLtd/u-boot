@@ -50,13 +50,12 @@
 /* SPL support */
 #ifdef CONFIG_SPL
 /* SPL use DDR */
-#define CONFIG_SPL_BSS_START_ADDR	0xC0200000
-#define CONFIG_SPL_BSS_MAX_SIZE		0x00100000
 #define CONFIG_SYS_SPL_MALLOC_START	0xC0300000
-#define CONFIG_SYS_SPL_MALLOC_SIZE	0x00100000
+#define CONFIG_SYS_SPL_MALLOC_SIZE	0x01D00000
 
-/* limit SYSRAM usage to first 128 KB */
-#define CONFIG_SPL_MAX_SIZE		0x00020000
+/* Restrict SPL to fit within SYSRAM */
+#define STM32_SYSRAM_END		(STM32_SYSRAM_BASE + STM32_SYSRAM_SIZE)
+#define CONFIG_SPL_MAX_FOOTPRINT	(STM32_SYSRAM_END - CONFIG_SPL_TEXT_BASE)
 #define CONFIG_SPL_STACK		(STM32_SYSRAM_BASE + \
 					 STM32_SYSRAM_SIZE)
 #endif /* #ifdef CONFIG_SPL */
@@ -102,7 +101,7 @@
 #define BOOT_TARGET_UBIFS(func)
 #endif
 
-#ifdef CONFIG_USB
+#ifdef CONFIG_CMD_USB
 #define BOOT_TARGET_USB(func)	func(USB, usb, 0)
 #else
 #define BOOT_TARGET_USB(func)
@@ -156,7 +155,7 @@
 
 /*
  * memory layout for 32M uncompressed/compressed kernel,
- * 1M fdt, 1M script, 1M pxe and 1M for splashimage
+ * 1M fdt, 1M script, 1M pxe and 1M for overlay
  * and the ramdisk at the end.
  */
 #define CONFIG_EXTRA_ENV_SETTINGS \
@@ -164,7 +163,7 @@
 	"fdt_addr_r=0xc4000000\0" \
 	"scriptaddr=0xc4100000\0" \
 	"pxefile_addr_r=0xc4200000\0" \
-	"splashimage=0xc4300000\0"  \
+	"fdtoverlay_addr_r=0xc4300000\0" \
 	"ramdisk_addr_r=0xc4400000\0" \
 	"altbootcmd=run bootcmd\0" \
 	"env_check=if env info -p -d -q; then env save; fi\0" \

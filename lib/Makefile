@@ -53,6 +53,7 @@ endif
 obj-$(CONFIG_$(SPL_TPL_)TPM) += tpm-common.o
 ifeq ($(CONFIG_$(SPL_TPL_)TPM),y)
 obj-y += crc8.o
+obj-$(CONFIG_TPM) += tpm_api.o
 obj-$(CONFIG_TPM_V1) += tpm-v1.o
 obj-$(CONFIG_TPM_V2) += tpm-v2.o
 endif
@@ -60,9 +61,11 @@ endif
 obj-$(CONFIG_$(SPL_)ACPIGEN) += acpi/
 obj-$(CONFIG_$(SPL_)MD5) += md5.o
 obj-$(CONFIG_$(SPL_)RSA) += rsa/
+obj-$(CONFIG_HASH) += hash-checksum.o
 obj-$(CONFIG_SHA1) += sha1.o
 obj-$(CONFIG_SHA256) += sha256.o
 obj-$(CONFIG_SHA512_ALGO) += sha512.o
+obj-$(CONFIG_CRYPT_PW) += crypt/
 
 obj-$(CONFIG_$(SPL_)ZLIB) += zlib/
 obj-$(CONFIG_$(SPL_)ZSTD) += zstd/
@@ -70,6 +73,8 @@ obj-$(CONFIG_$(SPL_)GZIP) += gunzip.o
 obj-$(CONFIG_$(SPL_)LZO) += lzo/
 obj-$(CONFIG_$(SPL_)LZMA) += lzma/
 obj-$(CONFIG_$(SPL_)LZ4) += lz4_wrapper.o
+
+obj-$(CONFIG_$(SPL_)LIB_RATIONAL) += rational.o
 
 obj-$(CONFIG_LIBAVB) += libavb/
 
@@ -131,6 +136,7 @@ obj-$(CONFIG_SSCANF) += sscanf.o
 endif
 
 obj-y += date.o
+obj-y += rtc-lib.o
 obj-$(CONFIG_LIB_ELF) += elf.o
 
 #

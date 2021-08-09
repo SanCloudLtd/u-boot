@@ -125,29 +125,18 @@ enum {
 
 static struct udevice *gsc_get_dev(int busno, int slave)
 {
-	struct udevice *dev;
+	static const char * const i2c[] = { "i2c@30a20000", "i2c@30a30000" };
+	struct udevice *dev, *bus;
 	int ret;
 
-#if (IS_ENABLED(CONFIG_SPL_BUILD))
-	ret = i2c_get_chip_for_busnum(busno + 1, slave, 1, &dev);
+	ret = uclass_get_device_by_name(UCLASS_I2C, i2c[busno - 1], &bus);
+	if (ret) {
+		printf("GSC     : failed I2C%d probe: %d\n", busno, ret);
+		return NULL;
+	}
+	ret = dm_i2c_probe(bus, slave, 0, &dev);
 	if (ret)
 		return NULL;
-#else
-	struct udevice *bus;
-
-	busno--;
-
-	ret = uclass_get_device_by_seq(UCLASS_I2C, busno, &bus);
-	if (ret) {
-		printf("i2c%d: no bus %d\n", busno + 1, ret);
-		return NULL;
-	}
-	ret = i2c_get_chip(bus, slave, 1, &dev);
-	if (ret) {
-		printf("i2c%d@0x%02x: no chip %d\n", busno + 1, slave, ret);
-		return NULL;
-	}
-#endif
 
 	return dev;
 }
@@ -187,7 +176,7 @@ static int gsc_read_eeprom(int bus, int slave, int alen, struct venice_board_inf
 		chksum += buf[i];
 	if ((info->chksum[0] != chksum >> 8) ||
 	    (info->chksum[1] != (chksum & 0xff))) {
-		printf("EEPROM: I2C%d@0x%02x: Invalid Model in EEPROM\n", bus, slave);
+		printf("EEPROM: I2C%d@0x%02x: Invalid Checksum\n", bus, slave);
 		print_hex_dump_bytes("", DUMP_PREFIX_NONE, buf, sizeof(*info));
 		memset(info, 0, sizeof(*info));
 		return -EINVAL;
@@ -232,9 +221,11 @@ static const char *gsc_get_rst_cause(struct udevice *dev)
 
 	/* thermal protection */
 	if (!dm_i2c_read(dev, GSC_SC_THERM_PROTECT, &reg, 1)) {
-		reg |= 1;
-		dm_i2c_write(dev, GSC_SC_THERM_PROTECT, &reg, 1);
-		strcat(str, " Thermal Protection Enabled");
+		strcat(str, " Thermal Protection ");
+		if (reg & BIT(0))
+			strcat(str, "Enabled");
+		else
+			strcat(str, "Disabled");
 	}
 
 	return str;
@@ -309,7 +300,7 @@ int gsc_hwmon(void)
 				}
 
 				/* adjust by offset */
-				val += offset;
+				val += (offset / 1000);
 
 				printf("%-8s: %d.%03dV\n", label, val / 1000, val % 1000);
 				break;

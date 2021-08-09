@@ -19,6 +19,7 @@
 
 #define DEFAULT_ADDRESS		0xFFFFFFFF
 
+#define CMD_SIZE		512
 #define OTP_SIZE		1024
 #define PMIC_SIZE		8
 
@@ -37,8 +38,14 @@ enum stm32prog_link_t {
 	LINK_UNDEFINED,
 };
 
+enum stm32prog_header_t {
+	HEADER_NONE,
+	HEADER_STM32IMAGE,
+	HEADER_FIP,
+};
+
 struct image_header_s {
-	bool	present;
+	enum stm32prog_header_t type;
 	u32	image_checksum;
 	u32	image_length;
 };
@@ -126,14 +133,9 @@ struct stm32prog_data {
 	u32			*otp_part;
 	u8			pmic_part[PMIC_SIZE];
 
-	/* STM32 header information */
-	struct raw_header_s	*header_data;
-	struct image_header_s	header;
-
 	/* SERIAL information */
 	u32	cursor;
 	u32	packet_number;
-	u32	checksum;
 	u8	*buffer; /* size = USART_RAM_BUFFER_SIZE*/
 	int	dfu_seq;
 	u8	read_phase;
@@ -141,6 +143,8 @@ struct stm32prog_data {
 	/* bootm information */
 	u32	uimage;
 	u32	dtb;
+	u32	initrd;
+	u32	initrd_size;
 };
 
 extern struct stm32prog_data *stm32prog_data;
@@ -160,8 +164,8 @@ int stm32prog_pmic_read(struct stm32prog_data *data, u32 offset,
 int stm32prog_pmic_start(struct stm32prog_data *data);
 
 /* generic part*/
-u8 stm32prog_header_check(struct raw_header_s *raw_header,
-			  struct image_header_s *header);
+void stm32prog_header_check(struct raw_header_s *raw_header,
+			    struct image_header_s *header);
 int stm32prog_dfu_init(struct stm32prog_data *data);
 void stm32prog_next_phase(struct stm32prog_data *data);
 void stm32prog_do_reset(struct stm32prog_data *data);

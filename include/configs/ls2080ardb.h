@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0+ */
 /*
- * Copyright 2017, 2019-2020 NXP
+ * Copyright 2017, 2019-2021 NXP
  * Copyright 2015 Freescale Semiconductor
  */
 
@@ -300,11 +300,6 @@ unsigned long get_board_sys_clk(void);
 #define CONFIG_PCI_SCAN_SHOW
 #endif
 
-/*  MMC  */
-#ifdef CONFIG_MMC
-#define CONFIG_SYS_FSL_MMC_HAS_CAPBLT_VS33
-#endif
-
 #define BOOT_TARGET_DEVICES(func) \
 	func(USB, usb, 0) \
 	func(MMC, mmc, 0) \
@@ -319,11 +314,11 @@ unsigned long get_board_sys_clk(void);
 	"env exists secureboot && "			\
 	"esbc_validate 0x80640000 && "			\
 	"esbc_validate 0x80680000; "			\
-	"sf read 0x80a00000 0xa00000 0x300000; "	\
+	"sf read 0x80a00000 0xa00000 0x200000; "	\
 	"sf read 0x80e00000 0xe00000 0x100000; "	\
 	"fsl_mc start mc 0x80a00000 0x80e00000 \0"
 #define SD_MC_INIT_CMD				\
-	"mmcinfo;mmc read 0x80a00000 0x5000 0x1200;" \
+	"mmcinfo;mmc read 0x80a00000 0x5000 0x1000;" \
 	"mmc read 0x80e00000 0x7000 0x800;"	\
 	"env exists secureboot && "		\
 	"mmc read 0x80640000 0x3200 0x20 && "	\
@@ -344,19 +339,19 @@ unsigned long get_board_sys_clk(void);
 	"env exists secureboot && "			\
 	"esbc_validate 0x80640000 && "			\
 	"esbc_validate 0x80680000; "			\
-	"sf read 0x80a00000 0xa00000 0x300000; "	\
+	"sf read 0x80a00000 0xa00000 0x200000; "	\
 	"sf read 0x80e00000 0xe00000 0x100000; "	\
 	"fsl_mc start mc 0x80a00000 0x80e00000 \0"
 #elif defined(CONFIG_SD_BOOT)
 #define MC_INIT_CMD                             \
-	"mcinitcmd=mmcinfo;mmc read 0x80000000 0x5000 0x800;" \
-	"mmc read 0x80100000 0x7000 0x800;"	\
+	"mcinitcmd=mmcinfo;mmc read 0x80a00000 0x5000 0x1000;" \
+	"mmc read 0x80e00000 0x7000 0x800;"	\
 	"env exists secureboot && "		\
 	"mmc read 0x80640000 0x3200 0x20 && "	\
 	"mmc read 0x80680000 0x3400 0x20 && "	\
 	"esbc_validate 0x80640000 && "		\
 	"esbc_validate 0x80680000 ;"		\
-	"fsl_mc start mc 0x80000000 0x80100000\0" \
+	"fsl_mc start mc 0x80a00000 0x80e00000\0" \
 	"mcmemsize=0x70000000\0"
 #else
 #define MC_INIT_CMD				\

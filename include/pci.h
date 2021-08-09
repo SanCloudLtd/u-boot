@@ -578,7 +578,6 @@ typedef int pci_dev_t;
 #define PCI_MASK_BUS(bdf)	((bdf) & 0xffff)
 #define PCI_ADD_BUS(bus, devfn)	(((bus) << 16) | (devfn))
 #define PCI_BDF(b, d, f)	((b) << 16 | PCI_DEVFN(d, f))
-#define PCI_VENDEV(v, d)	(((v) << 16) | (d))
 #define PCI_ANY_ID		(~0)
 
 /* Convert from Linux format to U-Boot format */
@@ -828,12 +827,6 @@ int pci_find_next_ext_capability(struct pci_controller *hose,
 int pci_hose_find_ext_capability(struct pci_controller *hose,
 				 pci_dev_t dev, int cap);
 
-#ifdef CONFIG_PCI_FIXUP_DEV
-extern void board_pci_fixup_dev(struct pci_controller *hose, pci_dev_t dev,
-				unsigned short vendor,
-				unsigned short device,
-				unsigned short class);
-#endif
 #endif /* !defined(CONFIG_DM_PCI) || defined(CONFIG_DM_PCI_COMPAT) */
 
 const char * pci_class_str(u8 class);
@@ -1070,7 +1063,7 @@ int pci_get_ff(enum pci_size_t size);
  * @devp:	Returns matching device if found
  * @return 0 if found, -ENODEV if not
  */
-int pci_bus_find_devices(struct udevice *bus, struct pci_device_id *ids,
+int pci_bus_find_devices(struct udevice *bus, const struct pci_device_id *ids,
 			 int *indexp, struct udevice **devp);
 
 /**
@@ -1082,7 +1075,7 @@ int pci_bus_find_devices(struct udevice *bus, struct pci_device_id *ids,
  * @devp:	Returns matching device if found
  * @return 0 if found, -ENODEV if not
  */
-int pci_find_device_id(struct pci_device_id *ids, int index,
+int pci_find_device_id(const struct pci_device_id *ids, int index,
 		       struct udevice **devp);
 
 /**
@@ -1689,6 +1682,14 @@ int sandbox_pci_get_emul(const struct udevice *bus, pci_dev_t find_devfn,
  * @return 0 if OK, -ENOENT if the device has no client yet
  */
 int sandbox_pci_get_client(struct udevice *emul, struct udevice **devp);
+
+/**
+ * board_pci_fixup_dev() - Board callback for PCI device fixups
+ *
+ * @bus:	PCI bus
+ * @dev:	PCI device
+ */
+extern void board_pci_fixup_dev(struct udevice *bus, struct udevice *dev);
 
 #endif /* CONFIG_DM_PCI */
 
