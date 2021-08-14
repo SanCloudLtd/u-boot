@@ -16,7 +16,7 @@ jobs:
       vmImage: $(windows_vm)
     steps:
       - powershell: |
-          (New-Object Net.WebClient).DownloadFile("https://github.com/msys2/msys2-installer/releases/download/2020-07-20/msys2-base-x86_64-20200720.sfx.exe", "sfx.exe")
+          (New-Object Net.WebClient).DownloadFile("https://github.com/msys2/msys2-installer/releases/download/2021-06-04/msys2-base-x86_64-20210604.sfx.exe", "sfx.exe")
         displayName: 'Install MSYS2'
       - script: |
           sfx.exe -y -o%CD:~0,2%\
@@ -144,11 +144,11 @@ jobs:
           export USER=azure
           virtualenv -p /usr/bin/python3 /tmp/venv
           . /tmp/venv/bin/activate
-          pip install pyelftools pytest pygit2
+          pip install -r test/py/requirements.txt
           export UBOOT_TRAVIS_BUILD_DIR=/tmp/sandbox_spl
           export PYTHONPATH=${UBOOT_TRAVIS_BUILD_DIR}/scripts/dtc/pylibfdt
           export PATH=${UBOOT_TRAVIS_BUILD_DIR}/scripts/dtc:${PATH}
-          ./tools/buildman/buildman -T0 -o ${UBOOT_TRAVIS_BUILD_DIR} -w sandbox_spl
+          ./tools/buildman/buildman -T0 -o ${UBOOT_TRAVIS_BUILD_DIR} -w --board sandbox_spl
           ./tools/binman/binman --toolpath ${UBOOT_TRAVIS_BUILD_DIR}/tools test
           ./tools/buildman/buildman -t
           ./tools/dtoc/dtoc -t
@@ -187,16 +187,13 @@ jobs:
         sandbox_spl:
           TEST_PY_BD: "sandbox_spl"
           TEST_PY_TEST_SPEC: "test_ofplatdata or test_handoff or test_spl"
+        sandbox_noinst:
+          TEST_PY_BD: "sandbox_noinst"
+          TEST_PY_TEST_SPEC: "test_ofplatdata or test_handoff or test_spl"
         sandbox_flattree:
           TEST_PY_BD: "sandbox_flattree"
         evb_ast2500:
           TEST_PY_BD: "evb-ast2500"
-          TEST_PY_ID: "--id qemu"
-        vexpress_ca15_tc2:
-          TEST_PY_BD: "vexpress_ca15_tc2"
-          TEST_PY_ID: "--id qemu"
-        vexpress_ca9x4:
-          TEST_PY_BD: "vexpress_ca9x4"
           TEST_PY_ID: "--id qemu"
         integratorcp_cm926ejs:
           TEST_PY_BD: "integratorcp_cm926ejs"
@@ -207,18 +204,6 @@ jobs:
           TEST_PY_TEST_SPEC: "not sleep"
         qemu_arm64:
           TEST_PY_BD: "qemu_arm64"
-          TEST_PY_TEST_SPEC: "not sleep"
-        qemu_mips:
-          TEST_PY_BD: "qemu_mips"
-          TEST_PY_TEST_SPEC: "not sleep"
-        qemu_mipsel:
-          TEST_PY_BD: "qemu_mipsel"
-          TEST_PY_TEST_SPEC: "not sleep"
-        qemu_mips64:
-          TEST_PY_BD: "qemu_mips64"
-          TEST_PY_TEST_SPEC: "not sleep"
-        qemu_mips64el:
-          TEST_PY_BD: "qemu_mips64el"
           TEST_PY_TEST_SPEC: "not sleep"
         qemu_malta:
           TEST_PY_BD: "malta"
@@ -301,12 +286,12 @@ jobs:
           grub-mkimage --prefix=\"\" -o ~/grub_x86.efi -O i386-efi normal  echo lsefimmap lsefi lsefisystab efinet tftp minicmd
           grub-mkimage --prefix=\"\" -o ~/grub_x64.efi -O x86_64-efi normal  echo lsefimmap lsefi lsefisystab efinet tftp minicmd
           if [[ "${TEST_PY_BD}" == "qemu-riscv32_spl" ]]; then
-              wget -O - https://github.com/riscv/opensbi/releases/download/v0.8/opensbi-0.8-rv-bin.tar.xz | tar -C /tmp -xJ;
-              export OPENSBI=/tmp/opensbi-0.8-rv-bin/share/opensbi/ilp32/generic/firmware/fw_dynamic.bin;
+              wget -O - https://github.com/riscv/opensbi/releases/download/v0.9/opensbi-0.9-rv-bin.tar.xz | tar -C /tmp -xJ;
+              export OPENSBI=/tmp/opensbi-0.9-rv-bin/share/opensbi/ilp32/generic/firmware/fw_dynamic.bin;
           fi
           if [[ "${TEST_PY_BD}" == "qemu-riscv64_spl" ]]; then
-              wget -O - https://github.com/riscv/opensbi/releases/download/v0.8/opensbi-0.8-rv-bin.tar.xz | tar -C /tmp -xJ;
-              export OPENSBI=/tmp/opensbi-0.8-rv-bin/share/opensbi/lp64/generic/firmware/fw_dynamic.bin;
+              wget -O - https://github.com/riscv/opensbi/releases/download/v0.9/opensbi-0.9-rv-bin.tar.xz | tar -C /tmp -xJ;
+              export OPENSBI=/tmp/opensbi-0.9-rv-bin/share/opensbi/lp64/generic/firmware/fw_dynamic.bin;
           fi
           # the below corresponds to .gitlab-ci.yml "script"
           cd ${WORK_DIR}
@@ -398,7 +383,7 @@ jobs:
         sun50i:
           BUILDMAN: "sun50i"
         arm_catch_all:
-          BUILDMAN: "arm -x arm11,arm7,arm9,aarch64,at91,bcm,freescale,kirkwood,mvebu,siemens,tegra,uniphier,mx,samsung,sunxi,am33xx,omap,rk,toradex,socfpga,k2,k3,zynq"
+          BUILDMAN: "arm -x arm11,arm7,arm9,aarch64,at91,bcm,freescale,kirkwood,mvebu,renesas,siemens,tegra,uniphier,mx,samsung,sunxi,am33xx,omap,rk,toradex,socfpga,k2,k3,zynq"
         sandbox_x86:
           BUILDMAN: "sandbox x86"
         technexion:
@@ -436,11 +421,11 @@ jobs:
         uniphier:
           BUILDMAN: "uniphier"
         aarch64_catch_all:
-          BUILDMAN: "aarch64 -x bcm,k3,tegra,ls1,ls2,lx216,mvebu,uniphier,sunxi,samsung,socfpga,rk,versal,zynq"
+          BUILDMAN: "aarch64 -x bcm,k3,tegra,ls1,ls2,lx216,mvebu,uniphier,renesas,sunxi,samsung,socfpga,rk,versal,zynq"
         rockchip:
           BUILDMAN: "rk"
-        sh:
-          BUILDMAN: "sh -x arm"
+        renesas:
+          BUILDMAN: "renesas"
         zynq:
           BUILDMAN: "zynq&armv7"
         zynqmp_versal:
