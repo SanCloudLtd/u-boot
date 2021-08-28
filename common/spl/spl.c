@@ -167,6 +167,10 @@ __weak void spl_board_prepare_for_linux(void)
 	/* Nothing to do! */
 }
 
+__weak void spl_board_prepare_for_optee(void *fdt)
+{
+}
+
 __weak void spl_board_prepare_for_boot(void)
 {
 	/* Nothing to do! */
@@ -296,6 +300,12 @@ static int spl_load_fit_image(struct spl_image_info *spl_image,
 }
 #endif
 
+__weak int spl_parse_board_header(struct spl_image_info *spl_image,
+				  const void *image_header, size_t size)
+{
+	return -EINVAL;
+}
+
 __weak int spl_parse_legacy_header(struct spl_image_info *spl_image,
 				   const struct image_header *header)
 {
@@ -347,6 +357,9 @@ int spl_parse_image_header(struct spl_image_info *spl_image,
 			return 0;
 		}
 #endif
+
+		if (!spl_parse_board_header(spl_image, (const void *)header, sizeof(*header)))
+			return 0;
 
 #ifdef CONFIG_SPL_RAW_IMAGE_SUPPORT
 		/* Signature not found - assume u-boot.bin */
@@ -703,7 +716,7 @@ void board_init_r(gd_t *dummy1, ulong dummy2)
 	spl_board_init();
 #endif
 
-#if defined(CONFIG_SPL_WATCHDOG_SUPPORT) && CONFIG_IS_ENABLED(WDT)
+#if defined(CONFIG_SPL_WATCHDOG) && CONFIG_IS_ENABLED(WDT)
 	initr_watchdog();
 #endif
 
@@ -763,6 +776,7 @@ void board_init_r(gd_t *dummy1, ulong dummy2)
 #if CONFIG_IS_ENABLED(OPTEE)
 	case IH_OS_TEE:
 		debug("Jumping to U-Boot via OP-TEE\n");
+		spl_board_prepare_for_optee(spl_image.fdt_addr);
 		spl_optee_entry(NULL, NULL, spl_image.fdt_addr,
 				(void *)spl_image.entry_point);
 		break;

@@ -59,17 +59,17 @@ static int do_stm32prog(struct cmd_tbl *cmdtp, int flag, int argc,
 		return CMD_RET_USAGE;
 	}
 
-	dev = (int)simple_strtoul(argv[2], NULL, 10);
+	dev = (int)dectoul(argv[2], NULL);
 
 	addr = STM32_DDR_BASE;
 	size = 0;
 	if (argc > 3) {
-		addr = simple_strtoul(argv[3], NULL, 16);
+		addr = hextoul(argv[3], NULL);
 		if (!addr)
 			return CMD_RET_FAILURE;
 	}
 	if (argc > 4)
-		size = simple_strtoul(argv[4], NULL, 16);
+		size = hextoul(argv[4], NULL);
 
 	/* check STM32IMAGE presence */
 	if (size == 0) {
@@ -185,6 +185,7 @@ U_BOOT_CMD(stm32prog, 5, 0, do_stm32prog,
 	   "  <size> = size of flashlayout (optional for image with STM32 header)\n"
 );
 
+#ifdef CONFIG_STM32MP15x_STM32IMAGE
 bool stm32prog_get_tee_partitions(void)
 {
 	if (stm32prog_data)
@@ -192,6 +193,7 @@ bool stm32prog_get_tee_partitions(void)
 
 	return false;
 }
+#endif
 
 bool stm32prog_get_fsbl_nor(void)
 {

@@ -661,6 +661,7 @@ config ARCH_EXYNOS
 	select DM
 	select DM_GPIO
 	select DM_I2C
+	select DM_ETH
 	select DM_KEYBOARD
 	select DM_SERIAL
 	select DM_SPI
@@ -798,6 +799,15 @@ config ARCH_IMX8M
 	select SYS_FSL_SEC_LE
 	select DM
 	select SUPPORT_SPL
+	imply CMD_DM
+
+config ARCH_IMX8ULP
+	bool "NXP i.MX8ULP platform"
+	select ARM64
+	select DM
+	select OF_CONTROL
+	select SUPPORT_SPL
+	select GPIO_EXTRA_HEADER
 	imply CMD_DM
 
 config ARCH_IMXRT
@@ -954,7 +964,7 @@ config ARCH_SOCFPGA
 	select SPL_SEPARATE_BSS if TARGET_SOCFPGA_SOC64
 	select SPL_SERIAL_SUPPORT
 	select SPL_SYSRESET
-	select SPL_WATCHDOG_SUPPORT
+	select SPL_WATCHDOG
 	select SUPPORT_SPL
 	select SYS_NS16550
 	select SYS_THUMB_BUILD if TARGET_SOCFPGA_GEN5 || TARGET_SOCFPGA_ARRIA10
@@ -1019,11 +1029,11 @@ config ARCH_SUNXI
 	imply FIT
 	imply OF_LIBFDT_OVERLAY
 	imply PRE_CONSOLE_BUFFER
-	imply SPL_GPIO_SUPPORT
+	imply SPL_GPIO
 	imply SPL_LIBCOMMON_SUPPORT
 	imply SPL_LIBGENERIC_SUPPORT
 	imply SPL_MMC_SUPPORT if MMC
-	imply SPL_POWER_SUPPORT
+	imply SPL_POWER
 	imply SPL_SERIAL_SUPPORT
 	imply USB_GADGET
 
@@ -1791,7 +1801,7 @@ config ARCH_STM32MP
 config ARCH_ROCKCHIP
 	bool "Support Rockchip SoCs"
 	select BLK
-	select BINMAN if SPL_OPTEE
+	select BINMAN if SPL_OPTEE || (SPL && !ARM64)
 	select DM
 	select DM_GPIO
 	select DM_I2C
@@ -1969,6 +1979,8 @@ source "arch/arm/mach-imx/mx7ulp/Kconfig"
 source "arch/arm/mach-imx/imx8/Kconfig"
 
 source "arch/arm/mach-imx/imx8m/Kconfig"
+
+source "arch/arm/mach-imx/imx8ulp/Kconfig"
 
 source "arch/arm/mach-imx/imxrt/Kconfig"
 

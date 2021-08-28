@@ -177,6 +177,20 @@ static int dm_test_autobind_uclass_pdata_alloc(struct unit_test_state *uts)
 }
 DM_TEST(dm_test_autobind_uclass_pdata_alloc, UT_TESTF_SCAN_PDATA);
 
+/* compare node names ignoring the unit address */
+static int dm_test_compare_node_name(struct unit_test_state *uts)
+{
+	ofnode node;
+
+	node = ofnode_path("/mmio-bus@0");
+	ut_assert(ofnode_valid(node));
+	ut_assert(ofnode_name_eq(node, "mmio-bus"));
+
+	return 0;
+}
+
+DM_TEST(dm_test_compare_node_name, UT_TESTF_SCAN_PDATA);
+
 /* Test that binding with uclass plat setting occurs correctly */
 static int dm_test_autobind_uclass_pdata_valid(struct unit_test_state *uts)
 {
@@ -980,6 +994,7 @@ static int dm_test_uclass_before_ready(struct unit_test_state *uts)
 	memset(&gd->uclass_root, '\0', sizeof(gd->uclass_root));
 
 	ut_asserteq_ptr(NULL, uclass_find(UCLASS_TEST));
+	ut_asserteq(-EDEADLK, uclass_get(UCLASS_TEST, &uc));
 
 	return 0;
 }

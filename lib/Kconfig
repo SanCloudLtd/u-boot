@@ -40,6 +40,14 @@ config CC_OPTIMIZE_LIBS_FOR_SPEED
 
 	  If unsure, say N.
 
+config CHARSET
+	bool
+	default y if UT_UNICODE || EFI_LOADER || UFS
+	help
+	  Enables support for various conversions between different
+	  character sets, such as between unicode representations and
+	  different 'code pages'.
+
 config DYNAMIC_CRC_TABLE
 	bool "Enable Dynamic tables for CRC"
 	help
@@ -295,6 +303,7 @@ config AES
 	  supported by the algorithm but only a 128-bit key is supported at
 	  present.
 
+source lib/ecdsa/Kconfig
 source lib/rsa/Kconfig
 source lib/crypto/Kconfig
 source lib/crypt/Kconfig
@@ -558,8 +567,7 @@ config HEXDUMP
 
 config SPL_HEXDUMP
 	bool "Enable hexdump in SPL"
-	depends on HEXDUMP
-	default y
+	depends on SPL && HEXDUMP
 	help
 	  This enables functions for printing dumps of binary data in
 	  SPL.

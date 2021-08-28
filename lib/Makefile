@@ -25,7 +25,7 @@ obj-$(CONFIG_AES) += aes/
 obj-$(CONFIG_$(SPL_TPL_)BINMAN_FDT) += binman.o
 
 ifndef API_BUILD
-ifneq ($(CONFIG_UT_UNICODE)$(CONFIG_EFI_LOADER),)
+ifneq ($(CONFIG_CHARSET),)
 obj-y += charset.o
 endif
 endif
@@ -60,6 +60,7 @@ endif
 
 obj-$(CONFIG_$(SPL_)ACPIGEN) += acpi/
 obj-$(CONFIG_$(SPL_)MD5) += md5.o
+obj-$(CONFIG_ECDSA) += ecdsa/
 obj-$(CONFIG_$(SPL_)RSA) += rsa/
 obj-$(CONFIG_HASH) += hash-checksum.o
 obj-$(CONFIG_SHA1) += sha1.o
