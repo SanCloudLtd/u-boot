@@ -10,6 +10,7 @@ config EFI_LOADER
 	depends on !EFI_STUB || !X86_64 || EFI_STUB_64BIT
 	# We need EFI_STUB_32BIT to be set on x86_32 with EFI_STUB
 	depends on !EFI_STUB || !X86 || X86_64 || EFI_STUB_32BIT
+	depends on BLK
 	default y if !ARM || SYS_CPU = armv7 || SYS_CPU = armv8
 	select LIB_UUID
 	select PARTITION_UUIDS
@@ -214,13 +215,6 @@ config EFI_CAPSULE_AUTHENTICATE
 	  Select this option if you want to enable capsule
 	  authentication
 
-config EFI_CAPSULE_KEY_PATH
-	string "Path to .esl cert for capsule authentication"
-	depends on EFI_CAPSULE_AUTHENTICATE
-	help
-	  Provide the EFI signature list (esl) certificate used for capsule
-	  authentication
-
 config EFI_DEVICE_PATH_TO_TEXT
 	bool "Device path to text protocol"
 	default y
@@ -323,7 +317,6 @@ config EFI_TCG2_PROTOCOL
 	depends on TPM_V2
 	select SHA1
 	select SHA256
-	select SHA512_ALGO
 	select SHA384
 	select SHA512
 	select HASH

@@ -575,9 +575,10 @@ static efi_status_t tcg2_create_digest(const u8 *input, u32 length,
 			EFI_PRINT("Unsupported algorithm %x\n", hash_alg);
 			return EFI_INVALID_PARAMETER;
 		}
+		digest_list->digests[digest_list->count].hash_alg = hash_alg;
+		memcpy(&digest_list->digests[digest_list->count].digest, final,
+		       (u32)alg_to_len(hash_alg));
 		digest_list->count++;
-		digest_list->digests[i].hash_alg = hash_alg;
-		memcpy(&digest_list->digests[i].digest, final, (u32)alg_to_len(hash_alg));
 	}
 
 	return EFI_SUCCESS;
@@ -607,8 +608,8 @@ efi_tcg2_get_capability(struct efi_tcg2_protocol *this,
 		goto out;
 	}
 
-	if (capability->size < boot_service_capability_min) {
-		capability->size = boot_service_capability_min;
+	if (capability->size < BOOT_SERVICE_CAPABILITY_MIN) {
+		capability->size = BOOT_SERVICE_CAPABILITY_MIN;
 		efi_ret = EFI_BUFFER_TOO_SMALL;
 		goto out;
 	}
@@ -708,6 +709,18 @@ efi_tcg2_get_eventlog(struct efi_tcg2_protocol *this,
 	EFI_ENTRY("%p, %u, %p, %p,  %p", this, log_format, event_log_location,
 		  event_log_last_entry, event_log_truncated);
 
+	if (!this || !event_log_location || !event_log_last_entry ||
+	    !event_log_truncated) {
+		ret = EFI_INVALID_PARAMETER;
+		goto out;
+	}
+
+	/* Only support TPMV2 */
+	if (log_format != TCG2_EVENT_LOG_FORMAT_TCG_2) {
+		ret = EFI_INVALID_PARAMETER;
+		goto out;
+	}
+
 	ret = platform_get_tpm2_device(&dev);
 	if (ret != EFI_SUCCESS) {
 		event_log_location = NULL;
@@ -786,8 +799,9 @@ static efi_status_t tcg2_hash_pe_image(void *efi, u64 efi_size,
 			EFI_PRINT("Unsupported algorithm %x\n", hash_alg);
 			return EFI_INVALID_PARAMETER;
 		}
-		digest_list->digests[i].hash_alg = hash_alg;
-		memcpy(&digest_list->digests[i].digest, hash, (u32)alg_to_len(hash_alg));
+		digest_list->digests[digest_list->count].hash_alg = hash_alg;
+		memcpy(&digest_list->digests[digest_list->count].digest, hash,
+		       (u32)alg_to_len(hash_alg));
 		digest_list->count++;
 	}
 
@@ -853,20 +867,19 @@ efi_status_t tcg2_measure_pe_image(void *efi, u64 efi_size,
 	if (ret != EFI_SUCCESS)
 		return ret;
 
-	ret = EFI_CALL(efi_search_protocol(&handle->header,
-					   &efi_guid_loaded_image_device_path,
-					   &handler));
+	ret = efi_search_protocol(&handle->header,
+				  &efi_guid_loaded_image_device_path, &handler);
 	if (ret != EFI_SUCCESS)
 		return ret;
 
-	device_path = EFI_CALL(handler->protocol_interface);
+	device_path = handler->protocol_interface;
 	device_path_length = efi_dp_size(device_path);
 	if (device_path_length > 0) {
 		/* add end node size */
 		device_path_length += sizeof(struct efi_device_path);
 	}
 	event_size = sizeof(struct uefi_image_load_event) + device_path_length;
-	image_load_event = (struct uefi_image_load_event *)malloc(event_size);
+	image_load_event = calloc(1, event_size);
 	if (!image_load_event)
 		return EFI_OUT_OF_RESOURCES;
 
@@ -889,10 +902,8 @@ efi_status_t tcg2_measure_pe_image(void *efi, u64 efi_size,
 		goto out;
 	}
 
-	if (device_path_length > 0) {
-		memcpy(image_load_event->device_path, device_path,
-		       device_path_length);
-	}
+	/* device_path_length might be zero */
+	memcpy(image_load_event->device_path, device_path, device_path_length);
 
 	ret = tcg2_agile_log_append(pcr_index, event_type, &digest_list,
 				    event_size, (u8 *)image_load_event);
@@ -946,7 +957,7 @@ efi_tcg2_hash_log_extend_event(struct efi_tcg2_protocol *this, u64 flags,
 		goto out;
 	}
 
-	if (efi_tcg_event->header.pcr_index > TPM2_MAX_PCRS) {
+	if (efi_tcg_event->header.pcr_index > EFI_TCG2_MAX_PCR_INDEX) {
 		ret = EFI_INVALID_PARAMETER;
 		goto out;
 	}
@@ -965,6 +976,7 @@ efi_tcg2_hash_log_extend_event(struct efi_tcg2_protocol *this, u64 flags,
 				   data_to_hash_len, (void **)&nt);
 		if (ret != EFI_SUCCESS) {
 			log_err("Not a valid PE-COFF file\n");
+			ret = EFI_UNSUPPORTED;
 			goto out;
 		}
 		ret = tcg2_hash_pe_image((void *)(uintptr_t)data_to_hash,
@@ -1038,9 +1050,15 @@ efi_tcg2_get_active_pcr_banks(struct efi_tcg2_protocol *this,
 {
 	efi_status_t ret;
 
+	if (!this || !active_pcr_banks) {
+		ret = EFI_INVALID_PARAMETER;
+		goto out;
+	}
+
 	EFI_ENTRY("%p, %p", this, active_pcr_banks);
 	ret = __get_active_pcr_banks(active_pcr_banks);
 
+out:
 	return EFI_EXIT(ret);
 }
 
@@ -1104,7 +1122,7 @@ static efi_status_t create_specid_event(struct udevice *dev, void *buffer,
 	struct tcg_efi_spec_id_event *spec_event;
 	size_t spec_event_size;
 	efi_status_t ret = EFI_DEVICE_ERROR;
-	u32 active = 0, supported = 0;
+	u32 active = 0, supported = 0, pcr_count = 0, alg_count = 0;
 	int err;
 	size_t i;
 
@@ -1126,25 +1144,29 @@ static efi_status_t create_specid_event(struct udevice *dev, void *buffer,
 		TCG_EFI_SPEC_ID_EVENT_SPEC_VERSION_ERRATA_TPM2;
 	spec_event->uintn_size = sizeof(efi_uintn_t) / sizeof(u32);
 
-	err = tpm2_get_pcr_info(dev, &supported, &active,
-				&spec_event->number_of_algorithms);
+	err = tpm2_get_pcr_info(dev, &supported, &active, &pcr_count);
+
 	if (err)
 		goto out;
+
+	for (i = 0; i < pcr_count; i++) {
+		u16 hash_alg = hash_algo_list[i].hash_alg;
+		u16 hash_len = hash_algo_list[i].hash_len;
+
+		if (active & alg_to_mask(hash_alg)) {
+			put_unaligned_le16(hash_alg,
+					   &spec_event->digest_sizes[alg_count].algorithm_id);
+			put_unaligned_le16(hash_len,
+					   &spec_event->digest_sizes[alg_count].digest_size);
+			alg_count++;
+		}
+	}
+
+	spec_event->number_of_algorithms = alg_count;
 	if (spec_event->number_of_algorithms > MAX_HASH_COUNT ||
 	    spec_event->number_of_algorithms < 1)
 		goto out;
 
-	for (i = 0; i < spec_event->number_of_algorithms; i++) {
-		u16 hash_alg = hash_algo_list[i].hash_alg;
-		u16 hash_len = hash_algo_list[i].hash_len;
-
-		if (active && alg_to_mask(hash_alg)) {
-			put_unaligned_le16(hash_alg,
-					   &spec_event->digest_sizes[i].algorithm_id);
-			put_unaligned_le16(hash_len,
-					   &spec_event->digest_sizes[i].digest_size);
-		}
-	}
 	/*
 	 * the size of the spec event and placement of vendor_info_size
 	 * depends on supported algoriths
@@ -1153,9 +1175,9 @@ static efi_status_t create_specid_event(struct udevice *dev, void *buffer,
 		offsetof(struct tcg_efi_spec_id_event, digest_sizes) +
 		spec_event->number_of_algorithms * sizeof(spec_event->digest_sizes[0]);
 	/* no vendor info for us */
-	memset(buffer + spec_event_size, 0,
-	       sizeof(spec_event->vendor_info_size));
-	spec_event_size += sizeof(spec_event->vendor_info_size);
+	memset(buffer + spec_event_size, 0, 1);
+	/* add a byte for vendor_info_size in the spec event */
+	spec_event_size += 1;
 	*event_size = spec_event_size;
 
 	return EFI_SUCCESS;

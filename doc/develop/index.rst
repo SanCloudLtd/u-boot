@@ -9,8 +9,10 @@ Implementation
 .. toctree::
    :maxdepth: 1
 
+   bloblist
    ci_testing
    commands
+   config_binding
    devicetree/index
    driver-model/index
    global_data

@@ -400,6 +400,7 @@ dtb-$(CONFIG_ARCH_SOCFPGA) +=				\
 	socfpga_cyclone5_socrates.dtb			\
 	socfpga_cyclone5_sr1500.dtb			\
 	socfpga_cyclone5_vining_fpga.dtb		\
+	socfpga_n5x_socdk.dtb				\
 	socfpga_stratix10_socdk.dtb
 
 dtb-$(CONFIG_TARGET_DRA7XX_EVM) += dra72-evm.dtb dra7-evm.dtb	\
@@ -1132,7 +1133,7 @@ dtb-$(CONFIG_TARGET_EA_LPC3250DEVKITV2) += lpc3250-ea3250.dtb
 targets += $(dtb-y)
 
 # Add any required device tree compiler flags here
-DTC_FLAGS +=
+DTC_FLAGS += -a 0x8
 
 PHONY += dtbs
 dtbs: $(addprefix $(obj)/, $(dtb-y))

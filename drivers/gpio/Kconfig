@@ -179,6 +179,16 @@ config LPC32XX_GPIO
 	help
 	  Support for the LPC32XX GPIO driver.
 
+config MCP230XX_GPIO
+	bool "MCP230XX GPIO driver"
+	depends on DM
+	help
+	  Support for Microchip's MCP230XX I2C connected GPIO devices.
+	  The following chips are supported:
+	   - MCP23008
+	   - MCP23017
+	   - MCP23018
+
 config MSCC_SGPIO
 	bool "Microsemi Serial GPIO driver"
 	depends on DM_GPIO && SOC_VCOREIII
@@ -348,7 +358,7 @@ config PIC32_GPIO
 
 config OCTEON_GPIO
 	bool "Octeon II/III/TX/TX2 GPIO driver"
-	depends on DM_GPIO && DM_PCI &&	(ARCH_OCTEON || ARCH_OCTEONTX || ARCH_OCTEONTX2)
+	depends on DM_GPIO && PCI && (ARCH_OCTEON || ARCH_OCTEONTX || ARCH_OCTEONTX2)
 	default y
 	help
 	  Add support for the Marvell Octeon GPIO driver. This is used with
