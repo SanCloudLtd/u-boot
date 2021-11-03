@@ -43,6 +43,7 @@
 #include <power/tps65910.h>
 #include <env_internal.h>
 #include <watchdog.h>
+#include <fdt_support.h>
 #include "../common/board_detect.h"
 #include "../common/cape_detect.h"
 #include "board.h"
