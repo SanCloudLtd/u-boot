@@ -456,6 +456,32 @@ int ofnode_read_string_count(ofnode node, const char *property)
 	}
 }
 
+int ofnode_read_string_list(ofnode node, const char *property,
+			    const char ***listp)
+{
+	const char **prop;
+	int count;
+	int i;
+
+	*listp = NULL;
+	count = ofnode_read_string_count(node, property);
+	if (count < 0)
+		return count;
+	if (!count)
+		return 0;
+
+	prop = calloc(count + 1, sizeof(char *));
+	if (!prop)
+		return -ENOMEM;
+
+	for (i = 0; i < count; i++)
+		ofnode_read_string_index(node, property, i, &prop[i]);
+	prop[count] = NULL;
+	*listp = prop;
+
+	return count;
+}
+
 static void ofnode_from_fdtdec_phandle_args(struct fdtdec_phandle_args *in,
 					    struct ofnode_phandle_args *out)
 {
@@ -1102,4 +1128,37 @@ int ofnode_set_enabled(ofnode node, bool value)
 		return ofnode_write_string(node, "status", "okay");
 	else
 		return ofnode_write_string(node, "status", "disabled");
+}
+
+bool ofnode_conf_read_bool(const char *prop_name)
+{
+	ofnode node;
+
+	node = ofnode_path("/config");
+	if (!ofnode_valid(node))
+		return false;
+
+	return ofnode_read_bool(node, prop_name);
+}
+
+int ofnode_conf_read_int(const char *prop_name, int default_val)
+{
+	ofnode node;
+
+	node = ofnode_path("/config");
+	if (!ofnode_valid(node))
+		return default_val;
+
+	return ofnode_read_u32_default(node, prop_name, default_val);
+}
+
+const char *ofnode_conf_read_str(const char *prop_name)
+{
+	ofnode node;
+
+	node = ofnode_path("/config");
+	if (!ofnode_valid(node))
+		return NULL;
+
+	return ofnode_read_string(node, prop_name);
 }

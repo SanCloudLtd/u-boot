@@ -71,7 +71,6 @@ menuconfig PHY_AQUANTIA
 
 config PHY_AQUANTIA_UPLOAD_FW
 	bool "Aquantia firmware loading support"
-	default n
 	depends on PHY_AQUANTIA
 	help
 		Aquantia PHYs use firmware which can be either loaded automatically
@@ -102,7 +101,6 @@ config PHY_CORTINA
 
 config SYS_CORTINA_NO_FW_UPLOAD
 	bool "Cortina firmware loading support"
-	default n
 	depends on PHY_CORTINA
 	help
 		Cortina phy has provision to store phy firmware in attached dedicated
@@ -216,16 +214,6 @@ config PHY_NXP_C45_TJA11XX
 config PHY_REALTEK
 	bool "Realtek Ethernet PHYs support"
 
-config RTL8211E_PINE64_GIGABIT_FIX
-	bool "Fix gigabit throughput on some Pine64+ models"
-	depends on PHY_REALTEK
-	help
-	  Configure the Realtek RTL8211E found on some Pine64+ models differently to
-	  fix throughput on Gigabit links, turning off all internal delays in the
-	  process. The settings that this touches are not documented in the CONFREG
-	  section of the RTL8211E datasheet, but come from Realtek by way of the
-	  Pine64 engineering team.
-
 config RTL8211X_PHY_FORCE_MASTER
 	bool "Ethernet PHY RTL8211x: force 1000BASE-T master mode"
 	depends on PHY_REALTEK
@@ -250,7 +238,6 @@ config RTL8211X_PHY_FORCE_MASTER
 config RTL8211F_PHY_FORCE_EEE_RXC_ON
 	bool "Ethernet PHY RTL8211F: do not stop receiving the xMII clock during LPI"
 	depends on PHY_REALTEK
-	default n
 	help
 	  The IEEE 802.3az-2010 (EEE) standard provides a protocol to coordinate
 	  transitions to/from a lower power consumption level (Low Power Idle
@@ -292,6 +279,12 @@ config PHY_TI_DP83867
 	bool "Texas Instruments Ethernet DP83867 PHY support"
 	---help---
 	  Adds support for the TI DP83867 1Gbit PHY.
+
+config PHY_TI_DP83869
+	select PHY_TI
+	bool "Texas Instruments Ethernet DP83869 PHY support"
+	---help---
+	  Adds support for the TI DP83869 1Gbit PHY.
 
 config PHY_TI_GENERIC
 	select PHY_TI

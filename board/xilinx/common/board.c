@@ -319,11 +319,12 @@ __maybe_unused int xilinx_read_eeprom(void)
 	return 0;
 }
 
-#if defined(CONFIG_OF_BOARD) || defined(CONFIG_OF_SEPARATE)
-void *board_fdt_blob_setup(void)
+#if defined(CONFIG_OF_BOARD)
+void *board_fdt_blob_setup(int *err)
 {
 	void *fdt_blob;
 
+	*err = 0;
 	if (!IS_ENABLED(CONFIG_SPL_BUILD) &&
 	    !IS_ENABLED(CONFIG_VERSAL_NO_DDR) &&
 	    !IS_ENABLED(CONFIG_ZYNQMP_NO_DDR)) {
@@ -354,6 +355,7 @@ void *board_fdt_blob_setup(void)
 
 	debug("DTB is also not passed via %p\n", fdt_blob);
 
+	*err = -EINVAL;
 	return NULL;
 }
 #endif
@@ -376,7 +378,7 @@ int board_late_init_xilinx(void)
 	u32 ret = 0;
 	int i, id, macid = 0;
 	struct xilinx_board_description *desc;
-	phys_size_t bootm_size = gd->ram_size;
+	phys_size_t bootm_size = gd->ram_top - gd->ram_base;
 
 	if (!CONFIG_IS_ENABLED(MICROBLAZE)) {
 		ulong scriptaddr;

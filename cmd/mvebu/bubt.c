@@ -85,11 +85,11 @@ struct mvebu_image_info {
 };
 #endif
 
-/* Structure of the main header, version 1 (Armada 370/38x/XP) */
+/* Structure of the main header, version 1 (Armada 370/XP/375/38x/39x) */
 struct a38x_main_hdr_v1 {
 	u8  blockid;               /* 0x0       */
 	u8  flags;                 /* 0x1       */
-	u16 reserved2;             /* 0x2-0x3   */
+	u16 nandpagesize;          /* 0x2-0x3   */
 	u32 blocksize;             /* 0x4-0x7   */
 	u8  version;               /* 0x8       */
 	u8  headersz_msb;          /* 0x9       */
@@ -271,8 +271,8 @@ static int spi_burn_image(size_t image_size)
 	u32 erase_bytes;
 
 	/* Probe the SPI bus to get the flash device */
-	flash = spi_flash_probe(CONFIG_ENV_SPI_BUS,
-				CONFIG_ENV_SPI_CS,
+	flash = spi_flash_probe(CONFIG_SF_DEFAULT_BUS,
+				CONFIG_SF_DEFAULT_CS,
 				CONFIG_SF_DEFAULT_SPEED,
 				CONFIG_SF_DEFAULT_MODE);
 	if (!flash) {

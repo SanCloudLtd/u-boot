@@ -6,6 +6,8 @@
 #ifndef _CONFIG_THEADORABLE_H
 #define _CONFIG_THEADORABLE_H
 
+#include <linux/sizes.h>
+
 /*
  * High Level Configuration Options (easy to change)
  */
@@ -23,15 +25,10 @@
  */
 
 /* I2C */
-#define CONFIG_SYS_I2C_LEGACY
-#define CONFIG_SYS_I2C_MVTWSI
 #define CONFIG_I2C_MVTWSI_BASE0		MVEBU_TWSI_BASE
 #define CONFIG_I2C_MVTWSI_BASE1		MVEBU_TWSI1_BASE
-#define CONFIG_SYS_I2C_SLAVE		0x0
-#define CONFIG_SYS_I2C_SPEED		100000
 
 /* USB/EHCI configuration */
-#define CONFIG_EHCI_IS_TDI
 #define CONFIG_USB_MAX_CONTROLLER_COUNT 3
 
 /* Environment in SPI NOR flash */
@@ -44,7 +41,6 @@
 	"initrd_high=0x10000000\0"
 
 /* SATA support */
-#define CONFIG_SYS_SATA_MAX_DEVICE	1
 #define CONFIG_LBA48
 
 /* Enable LCD and reserve 512KB from top of memory*/
@@ -80,7 +76,7 @@
 
 /* SPL */
 /* Defines for SPL */
-#define CONFIG_SPL_MAX_SIZE		((128 << 10) - 0x4030)
+#define CONFIG_SPL_MAX_SIZE		((128 << 10) - (CONFIG_SPL_TEXT_BASE - 0x40000000))
 
 #define CONFIG_SPL_BSS_START_ADDR	(0x40000000 + (128 << 10))
 #define CONFIG_SPL_BSS_MAX_SIZE		(16 << 10)
@@ -93,6 +89,6 @@
 #define CONFIG_SPL_BOOTROM_SAVE		(CONFIG_SPL_STACK + 4)
 
 /* Enable DDR support in SPL (DDR3 training from Marvell bin_hdr) */
-#define CONFIG_DDR_FIXED_SIZE		(2 << 20)	/* 2GiB */
+#define CONFIG_SYS_SDRAM_SIZE		SZ_2G
 
 #endif /* _CONFIG_THEADORABLE_H */

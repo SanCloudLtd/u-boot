@@ -11,6 +11,7 @@
 
 #include <common.h>
 #include <cpu_func.h>
+#include <clock_legacy.h>
 #include <ppc_asm.tmpl>
 #include <asm/global_data.h>
 #include <linux/compiler.h>
@@ -74,7 +75,7 @@ void get_sys_info(sys_info_t *sys_info)
 	uint rcw_tmp;
 #endif
 	uint ratio[CONFIG_SYS_FSL_NUM_CC_PLLS];
-	unsigned long sysclk = CONFIG_SYS_CLK_FREQ;
+	unsigned long sysclk = get_board_sys_clk();
 	uint mem_pll_rat;
 
 	sys_info->freq_systembus = sysclk;
@@ -101,11 +102,11 @@ void get_sys_info(sys_info_t *sys_info)
 	 * are driven by differential sysclock.
 	 */
 	if (ddr_refclk_sel == FSL_CORENET2_RCWSR5_DDR_REFCLK_SINGLE_CLK)
-		sys_info->freq_ddrbus = CONFIG_SYS_CLK_FREQ;
+		sys_info->freq_ddrbus = get_board_sys_clk();
 	else
 #endif
-#ifdef CONFIG_DDR_CLK_FREQ
-		sys_info->freq_ddrbus = CONFIG_DDR_CLK_FREQ;
+#if defined(CONFIG_DYNAMIC_DDR_CLK_FREQ) || defined(CONFIG_STATIC_DDR_CLK_FREQ)
+		sys_info->freq_ddrbus = get_board_ddr_clk();
 #else
 		sys_info->freq_ddrbus = sysclk;
 #endif
@@ -525,7 +526,7 @@ void get_sys_info(sys_info_t *sys_info)
 
 	plat_ratio = (gur->porpllsr) & 0x0000003e;
 	plat_ratio >>= 1;
-	sys_info->freq_systembus = plat_ratio * CONFIG_SYS_CLK_FREQ;
+	sys_info->freq_systembus = plat_ratio * get_board_sys_clk();
 
 	/* Divide before multiply to avoid integer
 	 * overflow for processor speeds above 2GHz */
@@ -538,12 +539,12 @@ void get_sys_info(sys_info_t *sys_info)
 	/* Note: freq_ddrbus is the MCLK frequency, not the data rate. */
 	sys_info->freq_ddrbus = sys_info->freq_systembus;
 
-#ifdef CONFIG_DDR_CLK_FREQ
+#if defined(CONFIG_DYNAMIC_DDR_CLK_FREQ) || defined(CONFIG_STATIC_DDR_CLK_FREQ)
 	{
 		u32 ddr_ratio = ((gur->porpllsr) & MPC85xx_PORPLLSR_DDR_RATIO)
 			>> MPC85xx_PORPLLSR_DDR_RATIO_SHIFT;
 		if (ddr_ratio != 0x7)
-			sys_info->freq_ddrbus = ddr_ratio * CONFIG_DDR_CLK_FREQ;
+			sys_info->freq_ddrbus = ddr_ratio * get_board_ddr_clk();
 	}
 #endif
 
@@ -553,7 +554,7 @@ void get_sys_info(sys_info_t *sys_info)
 #else
 	qe_ratio = ((gur->porpllsr) & MPC85xx_PORPLLSR_QE_RATIO)
 			>> MPC85xx_PORPLLSR_QE_RATIO_SHIFT;
-	sys_info->freq_qe = qe_ratio * CONFIG_SYS_CLK_FREQ;
+	sys_info->freq_qe = qe_ratio * get_board_sys_clk();
 #endif
 #endif
 

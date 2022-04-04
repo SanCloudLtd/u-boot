@@ -12,7 +12,6 @@
 #include <asm/arch/sysmap-apq8016.h>
 
 /* Build new ELF image from u-boot.bin (U-Boot + appended DTB) */
-#define CONFIG_REMAKE_ELF
 
 /* Physical Memory Map */
 #define PHYS_SDRAM_1			0x80000000
@@ -20,7 +19,6 @@
 #define PHYS_SDRAM_1_SIZE		SZ_1G
 #define CONFIG_SYS_SDRAM_BASE		PHYS_SDRAM_1
 #define CONFIG_SYS_INIT_SP_ADDR		(CONFIG_SYS_SDRAM_BASE + 0x7fff0)
-#define CONFIG_SYS_LOAD_ADDR		(CONFIG_SYS_SDRAM_BASE + 0x80000)
 #define CONFIG_SYS_BOOTM_LEN		SZ_64M
 
 /* UART */
@@ -81,9 +79,6 @@ REFLASH(dragonboard/u-boot.img, 8)\
 	"scriptaddr=0x90000000\0"\
 	"pxefile_addr_r=0x90100000\0"\
 	BOOTENV
-
-/* Size of malloc() pool */
-#define CONFIG_SYS_MALLOC_LEN		(CONFIG_ENV_SIZE + SZ_8M)
 
 /* Monitor Command Prompt */
 #define CONFIG_SYS_CBSIZE		512	/* Console I/O Buffer Size */

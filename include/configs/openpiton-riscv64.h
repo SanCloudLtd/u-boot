@@ -16,8 +16,6 @@
 /* Environment options */
 #define CONFIG_SYS_SDRAM_BASE 0x80000000
 #define CONFIG_SYS_INIT_SP_ADDR     (CONFIG_SYS_SDRAM_BASE + SZ_32M)
-#define CONFIG_SYS_LOAD_ADDR        0x87000000
-#define CONFIG_SYS_MALLOC_LEN       SZ_256M
 #define CONFIG_SYS_BOOTM_LEN        SZ_256M
 
 #ifdef CONFIG_SPL
@@ -34,12 +32,6 @@
 #define CONFIG_SPL_GD_ADDR 0x85000000
 #endif
 
-/* -------------------------------------------------
- * Environment
- */
-//Disable persistent environment variable storage
-#define CONFIG_ENV_IS_NOWHERE   1
-
 /* ---------------------------------------------------------------------
  * Board boot configuration
  */
@@ -50,12 +42,5 @@
 	"image=boot/Image\0" \
 	"mmcdev=0\0" \
 	"mmcpart=1\0"
-
-#define CONFIG_USE_BOOTCOMMAND
-#define CONFIG_BOOTCOMMAND \
-	"fdt addr ${fdtcontroladdr}; " \
-	"fdt move ${fdtcontroladdr} ${fdt_addr_r}; " \
-	"load mmc ${mmcdev}:${mmcpart} ${kernel_addr_r} ${image}; " \
-	"booti ${kernel_addr_r} - ${fdt_addr_r}; "
 
 #endif/* __CONFIG_H */

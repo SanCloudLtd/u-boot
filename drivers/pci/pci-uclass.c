@@ -76,7 +76,7 @@ pci_dev_t dm_pci_get_bdf(const struct udevice *dev)
 /**
  * pci_get_bus_max() - returns the bus number of the last active bus
  *
- * @return last bus number, or -1 if no active buses
+ * Return: last bus number, or -1 if no active buses
  */
 static int pci_get_bus_max(void)
 {
@@ -304,8 +304,8 @@ int pci_bus_clrset_config32(struct udevice *bus, pci_dev_t bdf, int offset,
 	return pci_bus_write_config(bus, bdf, offset, val, PCI_SIZE_32);
 }
 
-int pci_write_config(pci_dev_t bdf, int offset, unsigned long value,
-		     enum pci_size_t size)
+static int pci_write_config(pci_dev_t bdf, int offset, unsigned long value,
+			    enum pci_size_t size)
 {
 	struct udevice *bus;
 	int ret;
@@ -369,8 +369,8 @@ int pci_bus_read_config(const struct udevice *bus, pci_dev_t bdf, int offset,
 	return ops->read_config(bus, bdf, offset, valuep, size);
 }
 
-int pci_read_config(pci_dev_t bdf, int offset, unsigned long *valuep,
-		    enum pci_size_t size)
+static int pci_read_config(pci_dev_t bdf, int offset, unsigned long *valuep,
+			   enum pci_size_t size)
 {
 	struct udevice *bus;
 	int ret;
@@ -560,6 +560,8 @@ int pci_auto_config_devices(struct udevice *bus)
 		if (pplat->class == (PCI_CLASS_DISPLAY_VGA << 8))
 			set_vga_bridge_bits(dev);
 	}
+	if (hose->last_busno < sub_bus)
+		hose->last_busno = sub_bus;
 	debug("%s: done\n", __func__);
 
 	return log_msg_ret("sub", sub_bus);
@@ -627,12 +629,21 @@ int pci_generic_mmap_read_config(
 
 int dm_pci_hose_probe_bus(struct udevice *bus)
 {
+	u8 header_type;
 	int sub_bus;
 	int ret;
 	int ea_pos;
 	u8 reg;
 
 	debug("%s\n", __func__);
+
+	dm_pci_read_config8(bus, PCI_HEADER_TYPE, &header_type);
+	header_type &= 0x7f;
+	if (header_type != PCI_HEADER_TYPE_BRIDGE) {
+		debug("%s: Skipping PCI device %d with Non-Bridge Header Type 0x%x\n",
+		      __func__, PCI_DEV(dm_pci_get_bdf(bus)), header_type);
+		return log_msg_ret("probe", -EINVAL);
+	}
 
 	ea_pos = dm_pci_find_capability(bus, PCI_CAP_ID_EA);
 	if (ea_pos) {
@@ -691,7 +702,7 @@ static bool pci_match_one_id(const struct pci_device_id *id,
  * @bus: Bus to check
  * @vendor: Vendor ID to check
  * @device: Device ID to check
- * @return true if the vendor/device is in the list, false if not
+ * Return: true if the vendor/device is in the list, false if not
  */
 static bool pci_need_device_pre_reloc(struct udevice *bus, uint vendor,
 				      uint device)
@@ -719,7 +730,7 @@ static bool pci_need_device_pre_reloc(struct udevice *bus, uint vendor,
  * @find_id:	Specification of the driver to find
  * @bdf:	Bus/device/function addreess - see PCI_BDF()
  * @devp:	Returns a pointer to the device created
- * @return 0 if OK, -EPERM if the device is not needed before relocation and
+ * Return: 0 if OK, -EPERM if the device is not needed before relocation and
  *	   therefore was not created, other -ve value on error
  */
 static int pci_find_and_bind_driver(struct udevice *parent,
@@ -856,10 +867,7 @@ int pci_bind_bus_devices(struct udevice *bus)
 		/* Check only the first access, we don't expect problems */
 		ret = pci_bus_read_config(bus, bdf, PCI_VENDOR_ID, &vendor,
 					  PCI_SIZE_16);
-		if (ret)
-			goto error;
-
-		if (vendor == 0xffff || vendor == 0x0000)
+		if (ret || vendor == 0xffff || vendor == 0x0000)
 			continue;
 
 		pci_bus_read_config(bus, bdf, PCI_HEADER_TYPE,
@@ -940,10 +948,6 @@ int pci_bind_bus_devices(struct udevice *bus)
 	}
 
 	return 0;
-error:
-	printf("Cannot read bus configuration: %d\n", ret);
-
-	return ret;
 }
 
 static void decode_regions(struct pci_controller *hose, ofnode parent_node,
@@ -1433,9 +1437,9 @@ phys_addr_t dm_pci_bus_to_phys(struct udevice *dev, pci_addr_t bus_addr,
 	return phys_addr;
 }
 
-int _dm_pci_phys_to_bus(struct udevice *dev, phys_addr_t phys_addr,
-			unsigned long flags, unsigned long skip_mask,
-			pci_addr_t *ba)
+static int _dm_pci_phys_to_bus(struct udevice *dev, phys_addr_t phys_addr,
+			       unsigned long flags, unsigned long skip_mask,
+			       pci_addr_t *ba)
 {
 	struct pci_region *res;
 	struct udevice *ctlr;
