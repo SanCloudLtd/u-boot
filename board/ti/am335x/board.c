@@ -828,15 +828,16 @@ int board_late_init(void)
 		name = "BBG1";
 	if (board_is_bben()) {
 		char subtype_id = board_ti_get_config()[1];
+
 		switch (subtype_id) {
-			case 'L':
-				name = "BBELITE";
-				break;
-			case 'I':
-				name = "BBE_EX_WIFI";
-				break;
-			default:
-				name = "BBEN";
+		case 'L':
+			name = "BBELITE";
+			break;
+		case 'I':
+			name = "BBE_EX_WIFI";
+			break;
+		default:
+			name = "BBEN";
 		}
 	}
 	set_board_info_env(name);
@@ -902,7 +903,7 @@ int board_late_init(void)
 #endif
 
 /* CPSW plat */
-#if !CONFIG_IS_ENABLED(OF_CONTROL)
+#if CONFIG_IS_ENABLED(NET) && !CONFIG_IS_ENABLED(OF_CONTROL)
 struct cpsw_slave_data slave_data[] = {
 	{
 		.slave_reg_ofs  = CPSW_SLAVE0_OFFSET,
@@ -966,10 +967,20 @@ int board_fit_config_name_match(const char *name)
 		return 0;
 	else if (board_is_icev2() && !strcmp(name, "am335x-icev2"))
 		return 0;
-	else if (board_is_bben() && !strcmp(name, "am335x-sancloud-bbe"))
-		return 0;
-	else
-		return -1;
+	else if (board_is_bben()) {
+		char subtype_id = board_ti_get_config()[1];
+
+		if (subtype_id == 'L') {
+			if (!strcmp(name, "am335x-sancloud-bbe-lite"))
+				return 0;
+		} else if (subtype_id == 'I') {
+			if (!strcmp(name, "am335x-sancloud-bbe-extended-wifi"))
+				return 0;
+		} else if (!strcmp(name, "am335x-sancloud-bbe")) {
+			return 0;
+		}
+	}
+	return -1;
 }
 #endif
 
