@@ -36,6 +36,7 @@ obj-$(CONFIG_$(SPL_)SYSINFO) += sysinfo/
 obj-$(CONFIG_$(SPL_TPL_)TPM) += tpm/
 obj-$(CONFIG_XEN) += xen/
 obj-$(CONFIG_$(SPL_)FPGA) += fpga/
+obj-y += bus/
 
 ifndef CONFIG_TPL_BUILD
 ifndef CONFIG_VPL_BUILD
@@ -76,7 +77,6 @@ ifeq ($(CONFIG_SPL_BUILD)$(CONFIG_TPL_BUILD),)
 
 obj-y += adc/
 obj-y += ata/
-obj-y += bus/
 obj-$(CONFIG_DM_DEMO) += demo/
 obj-$(CONFIG_BIOSEMU) += bios_emulator/
 obj-y += block/
