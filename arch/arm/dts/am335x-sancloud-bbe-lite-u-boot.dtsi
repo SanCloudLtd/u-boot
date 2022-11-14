@@ -33,12 +33,12 @@
 		target-module@30000 {
 			u-boot,dm-pre-reloc;
 		};
-    };
+	};
 };
 
 &spi0 {
 	u-boot,dm-pre-reloc;
 	channel@0 {
 		u-boot,dm-pre-reloc;
-    };
+	};
 };
