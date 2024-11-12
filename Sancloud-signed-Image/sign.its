@@ -1,0 +1,42 @@
+/dts-v1/;
+
+/ {
+    description = "Beaglebone black";
+    #address-cells = <1>;
+    images {
+        kernel {
+            data = /incbin/("vmlinuz-5.10.168-ti-r71");
+            type = "kernel";
+            arch = "arm";
+            os = "linux";
+            load = <0x82000000>;
+            entry = <0x80008000>;
+            compression = "none";
+            hash-1 {
+                algo = "sha256";
+            };
+        };
+        fdt-1 {
+            description = "sancloud-bb";
+            data = /incbin/("am335x-sancloud-bbe-lite-uboot.dtb");
+            type = "flat_dt";
+            arch = "arm";
+            compression = "none";
+            hash-1 {
+                algo = "sha256";
+            };
+        };
+    };
+    configurations {
+        default = "conf-1";
+        conf-1 {
+            kernel = "kernel";
+            fdt = "fdt-1";
+            signature-1 {
+                algo = "sha256,rsa2048";
+                key-name-hint = "dev";
+                sign-images = "fdt", "kernel";
+            };
+        };
+    };
+};
