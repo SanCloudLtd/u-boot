@@ -6,7 +6,7 @@
  * Based on CAAM driver in drivers/crypto/caam in Linux
  */
 
-#include <common.h>
+#include <config.h>
 #include <cpu_func.h>
 #include <linux/kernel.h>
 #include <log.h>
@@ -33,8 +33,8 @@
 uint32_t sec_offset[CONFIG_SYS_FSL_MAX_NUM_OF_SEC] = {
 	0,
 #if defined(CONFIG_ARCH_C29X)
-	CONFIG_SYS_FSL_SEC_IDX_OFFSET,
-	2 * CONFIG_SYS_FSL_SEC_IDX_OFFSET
+	CFG_SYS_FSL_SEC_IDX_OFFSET,
+	2 * CFG_SYS_FSL_SEC_IDX_OFFSET
 #endif
 };
 
@@ -42,11 +42,11 @@ uint32_t sec_offset[CONFIG_SYS_FSL_MAX_NUM_OF_SEC] = {
 struct udevice *caam_dev;
 #else
 #define SEC_ADDR(idx)	\
-	(ulong)((CONFIG_SYS_FSL_SEC_ADDR + sec_offset[idx]))
+	(ulong)((CFG_SYS_FSL_SEC_ADDR + sec_offset[idx]))
 
 #define SEC_JR0_ADDR(idx)	\
 	(ulong)(SEC_ADDR(idx) +	\
-	 (CONFIG_SYS_FSL_JR0_OFFSET - CONFIG_SYS_FSL_SEC_OFFSET))
+	 (CFG_SYS_FSL_JR0_OFFSET - CFG_SYS_FSL_SEC_OFFSET))
 struct caam_regs caam_st;
 #endif
 
@@ -328,7 +328,7 @@ static inline int run_descriptor_jr_idx(uint32_t *desc, uint8_t sec_idx)
 	caam = &caam_st;
 #endif
 	unsigned long long timeval = 0;
-	unsigned long long timeout = CONFIG_USEC_DEQ_TIMEOUT;
+	unsigned long long timeout = CFG_USEC_DEQ_TIMEOUT;
 	struct result op;
 	int ret = 0;
 
@@ -673,6 +673,21 @@ static int rng_init(uint8_t sec_idx, ccsr_sec_t *sec)
 	return ret;
 }
 
+#if CONFIG_IS_ENABLED(FSL_CAAM_JR_NTZ_ACCESS)
+static void jr_setown_non_trusted(ccsr_sec_t *sec)
+{
+	u32 jrown_ns;
+	int i;
+
+	/* Set ownership of job rings to non-TrustZone mode */
+	for (i = 0; i < ARRAY_SIZE(sec->jrliodnr); i++) {
+		jrown_ns = sec_in32(&sec->jrliodnr[i].ms);
+		jrown_ns |= JROWN_NS | JRMID_NS;
+		sec_out32(&sec->jrliodnr[i].ms, jrown_ns);
+	}
+}
+#endif
+
 int sec_init_idx(uint8_t sec_idx)
 {
 	int ret = 0;
@@ -743,8 +758,8 @@ int sec_init_idx(uint8_t sec_idx)
 	 * creating PAMU entries corresponding to these.
 	 * For normal build, these are set in set_liodns().
 	 */
-	liodn_ns = CONFIG_SPL_JR0_LIODN_NS & JRNSLIODN_MASK;
-	liodn_s = CONFIG_SPL_JR0_LIODN_S & JRSLIODN_MASK;
+	liodn_ns = CFG_SPL_JR0_LIODN_NS & JRNSLIODN_MASK;
+	liodn_s = CFG_SPL_JR0_LIODN_S & JRSLIODN_MASK;
 
 	liodnr = sec_in32(&sec->jrliodnr[caam->jrid].ls) &
 		 ~(JRNSLIODN_MASK | JRSLIODN_MASK);
@@ -761,6 +776,10 @@ int sec_init_idx(uint8_t sec_idx)
 #if CONFIG_IS_ENABLED(OF_CONTROL)
 init:
 #endif
+#if CONFIG_IS_ENABLED(FSL_CAAM_JR_NTZ_ACCESS)
+	jr_setown_non_trusted(sec);
+#endif
+
 	ret = jr_init(sec_idx, caam);
 	if (ret < 0) {
 		printf("SEC%u:  initialization failed\n", sec_idx);
@@ -768,7 +787,7 @@ init:
 	}
 #if CONFIG_IS_ENABLED(OF_CONTROL)
 	if (ofnode_valid(scu_node)) {
-		if (IS_ENABLED(CONFIG_DM_RNG)) {
+		if (CONFIG_IS_ENABLED(DM_RNG)) {
 			ret = device_bind_driver(NULL, "caam-rng", "caam-rng", NULL);
 			if (ret)
 				printf("Couldn't bind rng driver (%d)\n", ret);
@@ -791,7 +810,7 @@ init:
 			return -1;
 		}
 
-		if (IS_ENABLED(CONFIG_DM_RNG)) {
+		if (CONFIG_IS_ENABLED(DM_RNG)) {
 			ret = device_bind_driver(NULL, "caam-rng", "caam-rng",
 						 NULL);
 			if (ret)
@@ -853,7 +872,7 @@ static int caam_jr_probe(struct udevice *dev)
 
 	/* Check for enabled job ring node */
 	ofnode_for_each_subnode(node, dev_ofnode(dev)) {
-		if (!ofnode_is_available(node))
+		if (!ofnode_is_enabled(node))
 			continue;
 
 		jr_node = ofnode_read_u32_default(node, "reg", -1);

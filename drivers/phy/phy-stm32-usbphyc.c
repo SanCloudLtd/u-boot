@@ -5,7 +5,6 @@
 
 #define LOG_CATEGORY UCLASS_PHY
 
-#include <common.h>
 #include <clk.h>
 #include <clk-uclass.h>
 #include <div64.h>
@@ -23,6 +22,7 @@
 #include <linux/bitfield.h>
 #include <linux/bitops.h>
 #include <linux/delay.h>
+#include <linux/printk.h>
 #include <power/regulator.h>
 
 /* USBPHYC registers */
@@ -375,7 +375,7 @@ static int stm32_usbphyc_phy_power_off(struct phy *phy)
 		return 0;
 
 	if (usbphyc_phy->vbus) {
-		ret = regulator_set_enable(usbphyc_phy->vbus, false);
+		ret = regulator_set_enable_if_allowed(usbphyc_phy->vbus, false);
 		if (ret)
 			return ret;
 	}
@@ -583,8 +583,8 @@ static int stm32_usbphyc_probe(struct udevice *dev)
 
 		phy_id = ofnode_read_u32_default(node, "reg", FDT_ADDR_T_NONE);
 		if (phy_id >= MAX_PHYS) {
-			dev_err(dev, "invalid reg value %lx for %s\n",
-				phy_id, ofnode_get_name(node));
+			dev_err(dev, "invalid reg value %llx for %s\n",
+				(fdt64_t)phy_id, ofnode_get_name(node));
 			return -ENOENT;
 		}
 

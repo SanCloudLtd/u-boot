@@ -7,7 +7,6 @@
  */
 
 #include <bootm.h>
-#include <common.h>
 #include <dm.h>
 #include <init.h>
 #include <log.h>
@@ -310,7 +309,7 @@ void arch_preboot_os(void)
 	/* disable video before launching O/S */
 	ipuv3_fb_shutdown();
 #endif
-#if defined(CONFIG_VIDEO_MXS) && !defined(CONFIG_DM_VIDEO)
+#if defined(CONFIG_VIDEO_MXS) && !defined(CONFIG_VIDEO)
 	lcdif_power_down();
 #endif
 }
@@ -510,3 +509,7 @@ char nxp_board_rev_string(void)
 	return (*rev + nxp_board_rev() - 1);
 }
 #endif
+
+__weak void reset_cpu(void)
+{
+}

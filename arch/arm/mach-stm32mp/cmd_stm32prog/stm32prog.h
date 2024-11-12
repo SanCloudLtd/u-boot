@@ -6,6 +6,8 @@
 #ifndef _STM32PROG_H_
 #define _STM32PROG_H_
 
+#include <linux/printk.h>
+
 /* - phase defines ------------------------------------------------*/
 #define PHASE_FLASHLAYOUT	0x00
 #define PHASE_FIRST_USER	0x10
@@ -20,8 +22,21 @@
 #define DEFAULT_ADDRESS		0xFFFFFFFF
 
 #define CMD_SIZE		512
+/* SMC is only supported in SPMIN for STM32MP15x */
+#ifdef CONFIG_STM32MP15X
 #define OTP_SIZE_SMC		1024
-#define OTP_SIZE_TA		776
+#else
+#define OTP_SIZE_SMC		0
+#endif
+/* size of the OTP struct in NVMEM PTA */
+#define _OTP_SIZE_TA(otp)	(((otp) * 2 + 2) * 4)
+#if defined(CONFIG_STM32MP13X) || defined(CONFIG_STM32MP15X)
+/* STM32MP1 with BSEC2 */
+#define OTP_SIZE_TA		_OTP_SIZE_TA(96)
+#else
+/* STM32MP2 with BSEC3 */
+#define OTP_SIZE_TA		_OTP_SIZE_TA(368)
+#endif
 #define PMIC_SIZE		8
 
 enum stm32prog_target {
@@ -91,12 +106,20 @@ struct stm32_header_v2 {
 	u8 extension_padding[376];
 };
 
-/* partition type in flashlayout file */
+/*
+ * partition type in flashlayout file
+ * SYSTEM = linux partition, bootable
+ * FILESYSTEM = linux partition
+ * ESP = EFI system partition
+ */
 enum stm32prog_part_type {
 	PART_BINARY,
 	PART_FIP,
+	PART_FWU_MDATA,
+	PART_ENV,
 	PART_SYSTEM,
 	PART_FILESYSTEM,
+	PART_ESP,
 	RAW_IMAGE,
 };
 
@@ -144,9 +167,6 @@ struct stm32prog_data {
 	struct stm32prog_dev_t	dev[STM32PROG_MAX_DEV];	/* array of device */
 	int			part_nb;	/* nb of partition */
 	struct stm32prog_part_t	*part_array;	/* array of partition */
-#ifdef CONFIG_STM32MP15x_STM32IMAGE
-	bool			tee_detected;
-#endif
 	bool			fsbl_nor_detected;
 
 	/* command internal information */
@@ -154,7 +174,7 @@ struct stm32prog_data {
 	u32			offset;
 	char			error[255];
 	struct stm32prog_part_t	*cur_part;
-	u32			*otp_part;
+	void			*otp_part;
 	u8			pmic_part[PMIC_SIZE];
 
 	/* SERIAL information */
@@ -165,12 +185,12 @@ struct stm32prog_data {
 	u8	read_phase;
 
 	/* bootm information */
-	u32	uimage;
-	u32	dtb;
-	u32	initrd;
-	u32	initrd_size;
+	uintptr_t	uimage;
+	uintptr_t	dtb;
+	uintptr_t	initrd;
+	size_t		initrd_size;
 
-	u32	script;
+	uintptr_t	script;
 
 	/* OPTEE PTA NVMEM */
 	struct udevice *tee;
@@ -209,7 +229,7 @@ char *stm32prog_get_error(struct stm32prog_data *data);
 	}
 
 /* Main function */
-int stm32prog_init(struct stm32prog_data *data, ulong addr, ulong size);
+int stm32prog_init(struct stm32prog_data *data, uintptr_t addr, ulong size);
 void stm32prog_clean(struct stm32prog_data *data);
 
 #ifdef CONFIG_CMD_STM32PROG_SERIAL

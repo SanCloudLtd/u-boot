@@ -20,8 +20,8 @@ LWN article `How to Get Your Change Into the Linux Kernel
 Using patman
 ------------
 
-You can use a tool called patman to prepare, check and sent patches. It creates
-change logs, cover letters and patch notes. It also simplified the process of
+You can use a tool called patman to prepare, check and send patches. It creates
+change logs, cover letters and patch notes. It also simplifies the process of
 sending multiple versions of a series.
 
 See more details at :doc:`patman`.
@@ -41,7 +41,7 @@ General Patch Submission Rules
   past commits might have input to your change, so also CC them if you think
   they may have feedback.
 
-* Patches should always contain exactly one complete logical change, i. e.
+* Patches should always contain exactly one complete logical change, i.e.
 
    * Changes that contain different, unrelated modifications shall be submitted
      as *separate* patches, one patch per changeset.
@@ -68,17 +68,18 @@ General Patch Submission Rules
      as such -- that *precedes* your substantive patch.
 
    * For minor modifications (e.g. changed arguments of a function call),
-     adhere to the present codingstyle of the module. Relating checkpatch
+     adhere to the present coding style of the module. Relating checkpatch
      warnings can be ignored in this case. A respective note in the commit or
      cover letter why they are ignored is desired.
 
 * Send your patches as plain text messages: no HTML, no MIME, no links, no
-  compression, no attachments. Just plain text. The best way the generate
-  patches is by using the ``git format-patch`` command. Please use the
-  ``master`` branch of the mainline U-Boot git repository
-  (``https://source.denx.de/u-boot/u-boot.git``) as reference, unless (usually
-  late in a release cycle) there has been an announcement to use the ``next``
-  branch of this repository instead.
+  compression, no attachments. Just plain text. The best way to generate
+  patches is by using the ``git format-patch`` command. For a patch that is
+  fixing a bug or regression of some sort, please use the ``master`` branch of
+  the mainline U-Boot git repository located at
+  https://source.denx.de/u-boot/u-boot.git as reference. For new features, if
+  the ``next`` branch has been opened (which happens with the release of
+  ``-rc2``) that branch should be used, otherwise ``master`` is acceptable.
 
 * Make sure that your mailer does not mangle the patch by automatic changes
   like wrapping of longer lines etc.
@@ -93,7 +94,7 @@ General Patch Submission Rules
   visible as headline of your commit message. Make sure the subject does not
   exceed 60 characters or so.
 
-* The start of the subject should be a meaningfull tag (arm:, ppc:, tegra:,
+* The start of the subject should be a meaningful tag (arm:, ppc:, tegra:,
   net:, ext2:, etc)
 
 * Include the string "PATCH" in the Subject: line of your message, e. g.
@@ -121,7 +122,7 @@ General Patch Submission Rules
    * For new features: a description of the feature and your implementation.
 
 * Additional comments which you don't want included in U-Boot's history can be
-  included below the first "---" in the message body.
+  included below the first "``---``" in the message body.
 
 * If your description gets too long, that's a strong indication that you should
   split up your patch.
@@ -247,14 +248,14 @@ When re-posting such a new version of your patch(es), please always make sure
 to observe the following rules.
 
 * Make an appropriate note that this is a re-submission in the subject line,
-  eg. "[PATCH v2] Add support for feature X". ``git format-patch
+  e.g. "[PATCH v2] Add support for feature X". ``git format-patch
   --subject-prefix="PATCH v2"`` can be used in this case (see the example
   below).
 
-* Please make sure to keep a "change log", i. e. a description of what you have
+* Please make sure to keep a "change log", i.e. a description of what you have
   changed compared to previous versions of this patch. This change log should
-  be added below the "---" line in the patch, which starts the "comment
-  section", i. e. which contains text that does not get included into the
+  be added below the "``---``" line in the patch, which starts the "comment
+  section", i.e. which contains text that does not get included into the
   actual commit message.
   Note: it is *not* sufficient to provide a change log in some cover letter
   that gets sent as a separate message with the patch series. The reason is
@@ -312,7 +313,7 @@ Notes
 2. All code must follow the :doc:`codingstyle` requirements.
 
 3. Before sending the patch, you *must* run some form of local testing.
-   Submitting a patch that does not build or function correct is a mistake. For
+   Submitting a patch that does not build or function correctly is a mistake. For
    non-trivial patches, either building a number of platforms locally or making
    use of :doc:`ci_testing` is strongly encouraged in order to avoid problems
    that can be found when attempting to merge the patch.
@@ -363,7 +364,7 @@ A Custodian has additional privileges and can:
 
    * Awaiting Upstream
 
-   * Superseeded
+   * Superseded
 
    * Deferred
 
@@ -399,7 +400,7 @@ today. Not all states are used by all custodians.
   and has not merged yet to master, or has queued the patch up to be submitted
   to be merged, but has not yet.
 
-* Superseeded: Patches are marked as 'superseeded' when the poster submits a
+* Superseded: Patches are marked as 'superseded' when the poster submits a
   new version of these patches.
 
 * Deferred: Deferred usually means the patch depends on something else that

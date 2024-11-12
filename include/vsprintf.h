@@ -225,23 +225,6 @@ char *simple_xtoa(ulong num);
  * @size: The size of the buffer, including the trailing null space
  * @fmt: The format string to use
  * @...: Arguments for the format string
- * Return: the number of characters which would be
- * generated for the given input, excluding the trailing null,
- * as per ISO C99.  If the return is greater than or equal to
- * @size, the resulting string is truncated.
- *
- * See the vsprintf() documentation for format string extensions over C99.
- */
-int snprintf(char *buf, size_t size, const char *fmt, ...)
-		__attribute__ ((format (__printf__, 3, 4)));
-
-/**
- * Format a string and place it in a buffer
- *
- * @buf: The buffer to place the result into
- * @size: The size of the buffer, including the trailing null space
- * @fmt: The format string to use
- * @...: Arguments for the format string
  *
  * The return value is the number of characters written into @buf not including
  * the trailing '\0'. If @size is == 0 the function returns 0.
@@ -327,6 +310,30 @@ char *strmhz(char *buf, unsigned long hz);
  * @len: Number of bytes available in @out (SIZE_MAX for all)
  */
 void str_to_upper(const char *in, char *out, size_t len);
+
+/**
+ * str_to_list() - Convert a string to a list of string pointers
+ *
+ * Splits a string containing space-delimited substrings into a number of
+ * separate strings, e.g. "this is" becomes {"this", "is", NULL}. If @instr is
+ * empty then this returns just {NULL}. The string should have only a single
+ * space between items, with no leading or trailing spaces.
+ *
+ * @instr: String to process (this is alloced by this function)
+ * Returns: List of string pointers, terminated by NULL. Each entry points to
+ * a string. If @instr is empty, the list consists just of a single NULL entry.
+ * Note that the first entry points to the alloced string.
+ * Returns NULL if out of memory
+ */
+const char **str_to_list(const char *instr);
+
+/**
+ * str_free_list() - Free a string list
+ *
+ * @ptr: String list to free, as created by str_to_list(). This can also be
+ * NULL, in which case the function does nothing
+ */
+void str_free_list(const char **ptr);
 
 /**
  * vsscanf - Unformat a buffer into a list of arguments

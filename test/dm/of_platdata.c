@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0+
 
-#include <common.h>
 #include <clk.h>
 #include <dm.h>
 #include <dt-structs.h>
@@ -150,7 +149,7 @@ static int dm_test_of_plat_dev(struct unit_test_state *uts)
 
 	/* Skip this test if there is no platform data */
 	if (!CONFIG_IS_ENABLED(OF_PLATDATA_DRIVER_RT))
-		return 0;
+		return -EAGAIN;
 
 	/* Record the indexes that are found */
 	memset(found, '\0', sizeof(found));

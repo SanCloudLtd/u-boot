@@ -4,10 +4,9 @@
  *
  * clocks for AM33XX based boards
  *
- * Copyright (C) 2013, Texas Instruments, Incorporated - http://www.ti.com/
+ * Copyright (C) 2013, Texas Instruments, Incorporated - https://www.ti.com/
  */
 
-#include <common.h>
 #include <asm/arch/cpu.h>
 #include <asm/arch/sys_proto.h>
 #include <asm/arch/clock.h>
@@ -227,10 +226,6 @@ void enable_basic_clocks(void)
 		&cmper->usb0clkctrl,
 		&cmper->emiffwclkctrl,
 		&cmper->emifclkctrl,
-#if CONFIG_IS_ENABLED(AM335X_LCD) && !CONFIG_IS_ENABLED(DM_VIDEO)
-		&cmper->lcdclkctrl,
-		&cmper->lcdcclkstctrl,
-#endif
 		0
 	};
 

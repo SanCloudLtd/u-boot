@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright (C) 2009 Texas Instruments Incorporated - http://www.ti.com/
+ * Copyright (C) 2009 Texas Instruments Incorporated - https://www.ti.com/
  *
  * Driver for SPI controller on DaVinci. Based on atmel_spi.c
  * by Atmel Corporation
@@ -8,7 +8,7 @@
  * Copyright (C) 2007 Atmel Corporation
  */
 
-#include <common.h>
+#include <config.h>
 #include <log.h>
 #include <spi.h>
 #include <malloc.h>
@@ -207,7 +207,6 @@ static int davinci_spi_read_write(struct davinci_spi_slave *ds, unsigned
 	return 0;
 }
 
-
 static int __davinci_spi_claim_bus(struct davinci_spi_slave *ds, int cs)
 {
 	unsigned int mode = 0, scalar;
@@ -225,7 +224,7 @@ static int __davinci_spi_claim_bus(struct davinci_spi_slave *ds, int cs)
 		SPIPC0_DOFUN_MASK | SPIPC0_DIFUN_MASK), &ds->regs->pc0);
 
 	/* setup format */
-	scalar = ((CONFIG_SYS_SPI_CLK / ds->freq) - 1) & 0xFF;
+	scalar = ((CFG_SYS_SPI_CLK / ds->freq) - 1) & 0xFF;
 
 	/*
 	 * Use following format:
@@ -314,7 +313,7 @@ static int davinci_spi_set_speed(struct udevice *bus, uint max_hz)
 	struct davinci_spi_slave *ds = dev_get_priv(bus);
 
 	debug("%s speed %u\n", __func__, max_hz);
-	if (max_hz > CONFIG_SYS_SPI_CLK / 2)
+	if (max_hz > CFG_SYS_SPI_CLK / 2)
 		return -EINVAL;
 
 	ds->freq = max_hz;

@@ -8,7 +8,6 @@
  *
  * (C) Copyright 2008 Atmel Corporation
  */
-#include <common.h>
 #include <dm.h>
 #include <env.h>
 #include <env_internal.h>
@@ -39,14 +38,24 @@ static ulong env_new_offset	= CONFIG_ENV_OFFSET_REDUND;
 
 DECLARE_GLOBAL_DATA_PTR;
 
+__weak int spi_get_env_dev(void)
+{
+#ifdef CONFIG_ENV_SPI_BUS
+	return CONFIG_ENV_SPI_BUS;
+#else
+	return 0;
+#endif
+}
+
 static int setup_flash_device(struct spi_flash **env_flash)
 {
 #if CONFIG_IS_ENABLED(DM_SPI_FLASH)
 	struct udevice *new;
 	int	ret;
+	int dev = spi_get_env_dev();
 
 	/* speed and mode will be read from DT */
-	ret = spi_flash_probe_bus_cs(CONFIG_ENV_SPI_BUS, CONFIG_ENV_SPI_CS,
+	ret = spi_flash_probe_bus_cs(dev, CONFIG_ENV_SPI_CS,
 				     &new);
 	if (ret) {
 		env_set_default("spi_flash_probe_bus_cs() failed", 0);
@@ -210,8 +219,10 @@ static int env_sf_save(void)
 		saved_size = sect_size - CONFIG_ENV_SIZE;
 		saved_offset = CONFIG_ENV_OFFSET + CONFIG_ENV_SIZE;
 		saved_buffer = malloc(saved_size);
-		if (!saved_buffer)
+		if (!saved_buffer) {
+			ret = -ENOMEM;
 			goto done;
+		}
 
 		ret = spi_flash_read(env_flash, saved_offset,
 			saved_size, saved_buffer);

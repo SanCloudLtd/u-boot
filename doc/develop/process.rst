@@ -23,9 +23,8 @@ Management Summary
 Phases of the Development Process
 ---------------------------------
 
-U-Boot development takes place in `Release Cycles
-<https://www.denx.de/wiki/U-Boot/ReleaseCycle>`_.  A Release Cycle lasts
-normally for three months.
+U-Boot development takes place in a :doc:`release_cycle`. A Release Cycle
+lasts normally for three months.
 
 The first three weeks of each Release Cycle are called *Merge Window*.
 
@@ -34,7 +33,7 @@ It is followed by a *Stabilization Period*.
 The end of a Release Cycle is marked by the release of a new U-Boot version.
 
 Merge Window
-------------
+^^^^^^^^^^^^
 
 The Merge Window is the period when new patches get submitted (and hopefully
 accepted) for inclusion into U-Boot mainline. This period lasts for 21 days (3
@@ -44,7 +43,7 @@ This is the only time when new code (like support for new processors or new
 boards, or other new features or reorganization of code) is accepted.
 
 Twilight Time
--------------
+^^^^^^^^^^^^^
 
 Usually patches do not get accepted as they are - the peer review that takes
 place will usually require changes and resubmissions of the patches before they
@@ -65,13 +64,13 @@ the Merge Window does not preclude patches that were already posted from being
 merged for the upcoming release.
 
 Stabilization Period
---------------------
+^^^^^^^^^^^^^^^^^^^^
 
 During the Stabilization Period only patches containing bug fixes get
 applied.
 
 Corner Cases
-------------
+^^^^^^^^^^^^
 
 Sometimes it is not clear if a patch contains a bug fix or not.
 For example, changes that remove dead code, unused macros etc. or
@@ -107,6 +106,19 @@ Differences to the Linux Development Process
   next ``"-rc1"``
   In U-Boot, ``"-rc1"`` will only be released after all (or at least most of
   the) patches that were submitted during the merge window have been applied.
+
+Resyncing of the device tree subtree
+------------------------------------
+
+As explained in :doc:`devicetree/control` some platforms make use of device tree
+files which come from a git subtree that mirrors the Linux Kernel sources
+itself. For our purposes, we only track releases and not release candidates for
+merging in our tree. These merges follow the normal merge window rules.
+
+In the case of specific changes, such as bug fixes or new platform support,
+these can be "cherry-picked" and are subject to the normal merge rules. For
+example, a bug fix can come in later in the window but a full re-sync only
+happens within the merge window itself.
 
 .. _custodians:
 
@@ -165,8 +177,8 @@ document.
   <https://www.kernel.org/doc/html/latest/process/submitting-patches.html#using-reported-by-tested-by-reviewed-by-suggested-by-and-fixes>`_
   and similar additional tags.
 
-* Reviewed-by: The patch has been reviewed and found acceptible according to
-  the `Reveiwer's statement of oversight
+* Reviewed-by: The patch has been reviewed and found acceptable according to
+  the `Reviewer's statement of oversight
   <https://www.kernel.org/doc/html/latest/process/submitting-patches.html#reviewer-s-statement-of-oversight>`_.
   A *Reviewed-by:* tag is a statement of opinion that the patch is an
   appropriate modification of the code without any remaining serious technical
@@ -193,8 +205,8 @@ document.
 
 * Cc: If a person should have the opportunity to comment on a patch, you may
   optionally add a *Cc:* tag to the patch. Git tools (git send-email) will then
-  automatically arrange that they receives a copy of the patch when you submit it
-  to the mainling list. This is the only tag which might be added without an
+  automatically arrange that they receives a copy of the patch when you submit
+  it to the mailing list. This is the only tag which might be added without an
   explicit action by the person it names. This tag documents that potentially
   interested parties have been included in the discussion.
   For example, when your change affects a specific board or driver, then makes
@@ -209,7 +221,7 @@ like this:
 #. The responsible custodian inspects this patch, especially for:
 
    #. The commit message is useful, descriptive and makes correct and
-      appropraite usage of required *git tags*.
+      appropriate usage of required *git tags*.
 
    #. :doc:`codingstyle`
 
@@ -251,7 +263,7 @@ like this:
    workflows and environments however.
 
 #. Although a custodian is supposed to perform their own tests it is a
-   well-known and accepted fact that they needs help from other developers who
+   well-known and accepted fact that they need help from other developers who
    - for example - have access to the required hardware or other relevant
    environments.  Custodians are expected to ask for assistance with testing
    when required.

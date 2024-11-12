@@ -3,7 +3,6 @@
  * Copyright (c) 2011, Google Inc. All rights reserved.
  */
 
-
 /*
  * This module records the progress of boot and arbitrary commands, and
  * permits accurate timestamping of each.
@@ -11,7 +10,6 @@
 
 #define LOG_CATEGORY	LOGC_BOOT
 
-#include <common.h>
 #include <bootstage.h>
 #include <hang.h>
 #include <log.h>
@@ -137,7 +135,7 @@ ulong bootstage_add_record(enum bootstage_id id, const char *name,
 			rec->flags = flags;
 			rec->id = id;
 		} else {
-			log_warning("Bootstage space exhasuted\n");
+			log_warning("Bootstage space exhausted\n");
 		}
 	}
 
@@ -501,6 +499,22 @@ int bootstage_unstash(const void *base, int size)
 
 	return 0;
 }
+
+#if IS_ENABLED(CONFIG_BOOTSTAGE_STASH)
+int _bootstage_stash_default(void)
+{
+	return bootstage_stash(map_sysmem(CONFIG_BOOTSTAGE_STASH_ADDR, 0),
+			       CONFIG_BOOTSTAGE_STASH_SIZE);
+}
+
+int _bootstage_unstash_default(void)
+{
+	const void *stash = map_sysmem(CONFIG_BOOTSTAGE_STASH_ADDR,
+				       CONFIG_BOOTSTAGE_STASH_SIZE);
+
+	return bootstage_unstash(stash, CONFIG_BOOTSTAGE_STASH_SIZE);
+}
+#endif
 
 int bootstage_get_size(void)
 {

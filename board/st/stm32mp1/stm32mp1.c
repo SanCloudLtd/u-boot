@@ -5,12 +5,13 @@
 
 #define LOG_CATEGORY LOGC_BOARD
 
-#include <common.h>
 #include <adc.h>
 #include <bootm.h>
+#include <button.h>
 #include <clk.h>
 #include <config.h>
 #include <dm.h>
+#include <efi_loader.h>
 #include <env.h>
 #include <env_internal.h>
 #include <fdt_simplefb.h>
@@ -24,7 +25,6 @@
 #include <log.h>
 #include <malloc.h>
 #include <misc.h>
-#include <mtd_node.h>
 #include <net.h>
 #include <netdev.h>
 #include <phy.h>
@@ -38,12 +38,14 @@
 #include <asm/gpio.h>
 #include <asm/arch/stm32.h>
 #include <asm/arch/sys_proto.h>
+#include <dm/device-internal.h>
 #include <dm/ofnode.h>
 #include <jffs2/load_kernel.h>
 #include <linux/bitops.h>
 #include <linux/delay.h>
 #include <linux/err.h>
 #include <linux/iopoll.h>
+#include <linux/printk.h>
 #include <power/regulator.h>
 #include <usb/dwc2_udc.h>
 
@@ -51,12 +53,10 @@
 
 /* SYSCFG registers */
 #define SYSCFG_BOOTR		0x00
-#define SYSCFG_PMCSETR		0x04
 #define SYSCFG_IOCTRLSETR	0x18
 #define SYSCFG_ICNR		0x1C
 #define SYSCFG_CMPCR		0x20
 #define SYSCFG_CMPENSETR	0x24
-#define SYSCFG_PMCCLRR		0x44
 
 #define SYSCFG_BOOTR_BOOT_MASK		GENMASK(2, 0)
 #define SYSCFG_BOOTR_BOOTPD_SHIFT	4
@@ -72,20 +72,20 @@
 
 #define SYSCFG_CMPENSETR_MPU_EN		BIT(0)
 
-#define SYSCFG_PMCSETR_ETH_CLK_SEL	BIT(16)
-#define SYSCFG_PMCSETR_ETH_REF_CLK_SEL	BIT(17)
-
-#define SYSCFG_PMCSETR_ETH_SELMII	BIT(20)
-
-#define SYSCFG_PMCSETR_ETH_SEL_MASK	GENMASK(23, 21)
-#define SYSCFG_PMCSETR_ETH_SEL_GMII_MII	0
-#define SYSCFG_PMCSETR_ETH_SEL_RGMII	BIT(21)
-#define SYSCFG_PMCSETR_ETH_SEL_RMII	BIT(23)
-
 #define USB_LOW_THRESHOLD_UV		200000
 #define USB_WARNING_LOW_THRESHOLD_UV	660000
 #define USB_START_LOW_THRESHOLD_UV	1230000
 #define USB_START_HIGH_THRESHOLD_UV	2150000
+
+#if IS_ENABLED(CONFIG_EFI_HAVE_CAPSULE_SUPPORT)
+struct efi_fw_image fw_images[1];
+
+struct efi_capsule_update_info update_info = {
+	.num_images = ARRAY_SIZE(fw_images),
+	.images = fw_images,
+};
+
+#endif /* EFI_HAVE_CAPSULE_SUPPORT */
 
 int board_early_init_f(void)
 {
@@ -103,7 +103,7 @@ int checkboard(void)
 	int fdt_compat_len;
 
 	if (IS_ENABLED(CONFIG_TFABOOT)) {
-		if (IS_ENABLED(CONFIG_STM32MP15x_STM32IMAGE))
+		if (IS_ENABLED(CONFIG_STM32MP15X_STM32IMAGE))
 			mode = "trusted - stm32image";
 		else
 			mode = "trusted";
@@ -118,7 +118,7 @@ int checkboard(void)
 		 fdt_compat && fdt_compat_len ? fdt_compat : "");
 
 	/* display the STMicroelectronics board identification */
-	if (CONFIG_IS_ENABLED(CMD_STBOARD)) {
+	if (IS_ENABLED(CONFIG_CMD_STBOARD)) {
 		ret = uclass_get_device_by_driver(UCLASS_MISC,
 						  DM_DRIVER_GET(stm32mp_bsec),
 						  &dev);
@@ -139,45 +139,55 @@ int checkboard(void)
 
 static void board_key_check(void)
 {
-	ofnode node;
-	struct gpio_desc gpio;
+	struct udevice *button1 = NULL, *button2 = NULL;
 	enum forced_boot_mode boot_mode = BOOT_NORMAL;
+	int ret;
+
+	if (!IS_ENABLED(CONFIG_BUTTON))
+		return;
 
 	if (!IS_ENABLED(CONFIG_FASTBOOT) && !IS_ENABLED(CONFIG_CMD_STM32PROG))
 		return;
 
-	node = ofnode_path("/config");
-	if (!ofnode_valid(node)) {
-		log_debug("no /config node?\n");
-		return;
-	}
-	if (IS_ENABLED(CONFIG_FASTBOOT)) {
-		if (gpio_request_by_name_nodev(node, "st,fastboot-gpios", 0,
-					       &gpio, GPIOD_IS_IN)) {
-			log_debug("could not find a /config/st,fastboot-gpios\n");
-		} else {
-			udelay(20);
-			if (dm_gpio_get_value(&gpio)) {
-				log_notice("Fastboot key pressed, ");
-				boot_mode = BOOT_FASTBOOT;
-			}
+	if (IS_ENABLED(CONFIG_CMD_STM32PROG))
+		button_get_by_label("User-1", &button1);
 
-			dm_gpio_free(NULL, &gpio);
+	if (IS_ENABLED(CONFIG_FASTBOOT))
+		button_get_by_label("User-2", &button2);
+
+	if (!button1 && !button2)
+		return;
+
+	if (button2) {
+		if (button_get_state(button2) == BUTTON_ON) {
+			log_notice("Fastboot key pressed, ");
+			boot_mode = BOOT_FASTBOOT;
 		}
+		/*
+		 * On some boards, same gpio is shared betwwen gpio-keys and
+		 * leds, remove the button device to free the gpio for led
+		 * usage
+		 */
+		ret = device_remove(button2, DM_REMOVE_NORMAL);
+		if (ret)
+			log_err("Can't remove button2 (%d)\n", ret);
 	}
-	if (IS_ENABLED(CONFIG_CMD_STM32PROG)) {
-		if (gpio_request_by_name_nodev(node, "st,stm32prog-gpios", 0,
-					       &gpio, GPIOD_IS_IN)) {
-			log_debug("could not find a /config/st,stm32prog-gpios\n");
-		} else {
-			udelay(20);
-			if (dm_gpio_get_value(&gpio)) {
-				log_notice("STM32Programmer key pressed, ");
-				boot_mode = BOOT_STM32PROG;
-			}
-			dm_gpio_free(NULL, &gpio);
+
+	if (button1) {
+		if (button_get_state(button1) == BUTTON_ON) {
+			log_notice("STM32Programmer key pressed, ");
+			boot_mode = BOOT_STM32PROG;
 		}
+		/*
+		 * On some boards, same gpio is shared betwwen gpio-keys and
+		 * leds, remove the button device to free the gpio for led
+		 * usage
+		 */
+		ret = device_remove(button1, DM_REMOVE_NORMAL);
+		if (ret)
+			log_err("Can't remove button1 (%d)\n", ret);
 	}
+
 	if (boot_mode != BOOT_NORMAL) {
 		log_notice("entering download mode...\n");
 		clrsetbits_le32(TAMP_BOOT_CONTEXT,
@@ -289,7 +299,7 @@ static void __maybe_unused led_error_blink(u32 nb_blink)
 			for (i = 0; i < 2 * nb_blink; i++) {
 				led_set_state(led, LEDST_TOGGLE);
 				mdelay(125);
-				WATCHDOG_RESET();
+				schedule();
 			}
 			led_set_state(led, LEDST_ON);
 		}
@@ -605,7 +615,7 @@ error:
 
 static bool board_is_stm32mp15x_dk2(void)
 {
-	if (CONFIG_IS_ENABLED(TARGET_ST_STM32MP15x) &&
+	if (CONFIG_IS_ENABLED(TARGET_ST_STM32MP15X) &&
 	    of_machine_is_compatible("st,stm32mp157c-dk2"))
 		return true;
 
@@ -614,7 +624,7 @@ static bool board_is_stm32mp15x_dk2(void)
 
 static bool board_is_stm32mp15x_ev1(void)
 {
-	if (CONFIG_IS_ENABLED(TARGET_ST_STM32MP15x) &&
+	if (CONFIG_IS_ENABLED(TARGET_ST_STM32MP15X) &&
 	    (of_machine_is_compatible("st,stm32mp157a-ev1") ||
 	     of_machine_is_compatible("st,stm32mp157c-ev1") ||
 	     of_machine_is_compatible("st,stm32mp157d-ev1") ||
@@ -666,6 +676,13 @@ int board_init(void)
 
 	setup_led(LEDST_ON);
 
+#if IS_ENABLED(CONFIG_EFI_HAVE_CAPSULE_SUPPORT)
+	efi_guid_t image_type_guid = STM32MP_FIP_IMAGE_GUID;
+
+	guidcpy(&fw_images[0].image_type_id, &image_type_guid);
+	fw_images[0].fw_name = u"STM32MP-FIP";
+	fw_images[0].image_index = 1;
+#endif
 	return 0;
 }
 
@@ -724,76 +741,6 @@ void board_quiesce_devices(void)
 	setup_led(LEDST_OFF);
 }
 
-/* eth init function : weak called in eqos driver */
-int board_interface_eth_init(struct udevice *dev,
-			     phy_interface_t interface_type)
-{
-	u8 *syscfg;
-	u32 value;
-	bool eth_clk_sel_reg = false;
-	bool eth_ref_clk_sel_reg = false;
-
-	/* Gigabit Ethernet 125MHz clock selection. */
-	eth_clk_sel_reg = dev_read_bool(dev, "st,eth-clk-sel");
-
-	/* Ethernet 50Mhz RMII clock selection */
-	eth_ref_clk_sel_reg =
-		dev_read_bool(dev, "st,eth-ref-clk-sel");
-
-	syscfg = (u8 *)syscon_get_first_range(STM32MP_SYSCON_SYSCFG);
-
-	if (!syscfg)
-		return -ENODEV;
-
-	switch (interface_type) {
-	case PHY_INTERFACE_MODE_MII:
-		value = SYSCFG_PMCSETR_ETH_SEL_GMII_MII |
-			SYSCFG_PMCSETR_ETH_REF_CLK_SEL;
-		log_debug("PHY_INTERFACE_MODE_MII\n");
-		break;
-	case PHY_INTERFACE_MODE_GMII:
-		if (eth_clk_sel_reg)
-			value = SYSCFG_PMCSETR_ETH_SEL_GMII_MII |
-				SYSCFG_PMCSETR_ETH_CLK_SEL;
-		else
-			value = SYSCFG_PMCSETR_ETH_SEL_GMII_MII;
-		log_debug("PHY_INTERFACE_MODE_GMII\n");
-		break;
-	case PHY_INTERFACE_MODE_RMII:
-		if (eth_ref_clk_sel_reg)
-			value = SYSCFG_PMCSETR_ETH_SEL_RMII |
-				SYSCFG_PMCSETR_ETH_REF_CLK_SEL;
-		else
-			value = SYSCFG_PMCSETR_ETH_SEL_RMII;
-		log_debug("PHY_INTERFACE_MODE_RMII\n");
-		break;
-	case PHY_INTERFACE_MODE_RGMII:
-	case PHY_INTERFACE_MODE_RGMII_ID:
-	case PHY_INTERFACE_MODE_RGMII_RXID:
-	case PHY_INTERFACE_MODE_RGMII_TXID:
-		if (eth_clk_sel_reg)
-			value = SYSCFG_PMCSETR_ETH_SEL_RGMII |
-				SYSCFG_PMCSETR_ETH_CLK_SEL;
-		else
-			value = SYSCFG_PMCSETR_ETH_SEL_RGMII;
-		log_debug("PHY_INTERFACE_MODE_RGMII\n");
-		break;
-	default:
-		log_debug("Do not manage %d interface\n",
-			  interface_type);
-		/* Do not manage others interfaces */
-		return -EINVAL;
-	}
-
-	/* clear and set ETH configuration bits */
-	writel(SYSCFG_PMCSETR_ETH_SEL_MASK | SYSCFG_PMCSETR_ETH_SELMII |
-	       SYSCFG_PMCSETR_ETH_REF_CLK_SEL | SYSCFG_PMCSETR_ETH_CLK_SEL,
-	       syscfg + SYSCFG_PMCCLRR);
-	writel(value, syscfg + SYSCFG_PMCSETR);
-
-	return 0;
-}
-
 enum env_location env_get_location(enum env_operation op, int prio)
 {
 	u32 bootmode = get_bootmode();
@@ -813,7 +760,7 @@ enum env_location env_get_location(enum env_operation op, int prio)
 
 	case BOOT_FLASH_NAND:
 	case BOOT_FLASH_SPINAND:
-		if (CONFIG_IS_ENABLED(ENV_IS_IN_UBI))
+		if (IS_ENABLED(CONFIG_ENV_IS_IN_UBI))
 			return ENVL_UBI;
 		else
 			return ENVL_NOWHERE;
@@ -854,7 +801,7 @@ int mmc_get_boot(void)
 		STM32_SDMMC3_BASE
 	};
 
-	if (instance > ARRAY_SIZE(sdmmc_addr))
+	if (instance >= ARRAY_SIZE(sdmmc_addr))
 		return 0;
 
 	/* search associated sdmmc node in devicetree */
@@ -897,22 +844,9 @@ int mmc_get_env_dev(void)
 #if defined(CONFIG_OF_BOARD_SETUP)
 int ft_board_setup(void *blob, struct bd_info *bd)
 {
-	static const struct node_info nodes[] = {
-		{ "st,stm32f469-qspi",		MTD_DEV_TYPE_NOR,  },
-		{ "st,stm32f469-qspi",		MTD_DEV_TYPE_SPINAND},
-		{ "st,stm32mp15-fmc2",		MTD_DEV_TYPE_NAND, },
-		{ "st,stm32mp1-fmc2-nfc",	MTD_DEV_TYPE_NAND, },
-	};
-	char *boot_device;
+	fdt_copy_fixed_partitions(blob);
 
-	/* Check the boot-source and don't update MTD for serial or usb boot */
-	boot_device = env_get("boot_device");
-	if (!boot_device ||
-	    (strcmp(boot_device, "serial") && strcmp(boot_device, "usb")))
-		if (IS_ENABLED(CONFIG_FDT_FIXUP_PARTITIONS))
-			fdt_fixup_mtdparts(blob, nodes, ARRAY_SIZE(nodes));
-
-	if (CONFIG_IS_ENABLED(FDT_SIMPLEFB))
+	if (IS_ENABLED(CONFIG_FDT_SIMPLEFB))
 		fdt_simplefb_enable_and_mem_rsv(blob);
 
 	return 0;
@@ -939,3 +873,24 @@ static void board_copro_image_process(ulong fw_image, size_t fw_size)
 }
 
 U_BOOT_FIT_LOADABLE_HANDLER(IH_TYPE_COPRO, board_copro_image_process);
+
+#if defined(CONFIG_FWU_MULTI_BANK_UPDATE)
+
+#include <fwu.h>
+
+/**
+ * fwu_plat_get_bootidx() - Get the value of the boot index
+ * @boot_idx: Boot index value
+ *
+ * Get the value of the bank(partition) from which the platform
+ * has booted. This value is passed to U-Boot from the earlier
+ * stage bootloader which loads and boots all the relevant
+ * firmware images
+ *
+ */
+void fwu_plat_get_bootidx(uint *boot_idx)
+{
+	*boot_idx = (readl(TAMP_FWU_BOOT_INFO_REG) >>
+		    TAMP_FWU_BOOT_IDX_OFFSET) & TAMP_FWU_BOOT_IDX_MASK;
+}
+#endif /* CONFIG_FWU_MULTI_BANK_UPDATE */

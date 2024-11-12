@@ -7,7 +7,7 @@
  * Yasushi SHOJI <yashi@atmark-techno.com>
  */
 
-#include <common.h>
+#include <bootm.h>
 #include <bootstage.h>
 #include <command.h>
 #include <cpu_func.h>
@@ -37,7 +37,7 @@ void arch_lmb_reserve(struct lmb *lmb)
 	arch_lmb_reserve_generic(lmb, get_sp(), gd->ram_top, 4096);
 }
 
-static void boot_jump_linux(bootm_headers_t *images, int flag)
+static void boot_jump_linux(struct bootm_headers *images, int flag)
 {
 	void (*thekernel)(char *cmdline, ulong rd, ulong dt);
 	ulong dt = (ulong)images->ft_addr;
@@ -71,9 +71,9 @@ static void boot_jump_linux(bootm_headers_t *images, int flag)
 	}
 }
 
-static void boot_prep_linux(bootm_headers_t *images)
+static void boot_prep_linux(struct bootm_headers *images)
 {
-	if (CONFIG_IS_ENABLED(OF_LIBFDT) && CONFIG_IS_ENABLED(LMB) && images->ft_len) {
+	if (CONFIG_IS_ENABLED(OF_LIBFDT) && IS_ENABLED(CONFIG_LMB) && images->ft_len) {
 		debug("using: FDT\n");
 		if (image_setup_linux(images)) {
 			printf("FDT creation failed! hanging...");
@@ -82,9 +82,10 @@ static void boot_prep_linux(bootm_headers_t *images)
 	}
 }
 
-int do_bootm_linux(int flag, int argc, char *const argv[],
-		   bootm_headers_t *images)
+int do_bootm_linux(int flag, struct bootm_info *bmi)
 {
+	struct bootm_headers *images = bmi->images;
+
 	images->cmdline_start = (ulong)env_get("bootargs");
 
 	/* cmdline init is the part of 'prep' and nothing to do for 'bdt' */

@@ -3,7 +3,6 @@
  * (C) Copyright 2022 Broadcom Ltd.
  */
 
-#include <common.h>
 #include <fdtdec.h>
 
 int board_init(void)
@@ -30,6 +29,6 @@ int print_cpuinfo(void)
 	return 0;
 }
 
-void reset_cpu(ulong addr)
+__weak void reset_cpu(void)
 {
 }

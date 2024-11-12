@@ -1,4 +1,3 @@
-#include <common.h>
 #include <exports.h>
 #include <linux/compiler.h>
 
@@ -14,7 +13,7 @@ struct cmd_tbl;
  * from flash memory. The global_data address is passed as argv[-1]
  * to the application program.
  */
-static struct jt_funcs *jt;
+struct jt_funcs *jt;
 gd_t *global_data;
 
 #define EXPORT_FUNC(f, a, x, ...) \

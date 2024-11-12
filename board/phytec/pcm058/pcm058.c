@@ -9,7 +9,6 @@
  * Both NAND and eMMC cannot be set because they share the
  * same pins (SD4)
  */
-#include <common.h>
 #include <init.h>
 #include <net.h>
 #include <asm/arch/crm_regs.h>
@@ -17,6 +16,7 @@
 #include <asm/global_data.h>
 #include <asm/mach-imx/boot_mode.h>
 #include <asm/arch/sys_proto.h>
+#include <asm/sections.h>
 #include <dm.h>
 
 DECLARE_GLOBAL_DATA_PTR;

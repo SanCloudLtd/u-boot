@@ -6,7 +6,6 @@
  * arch/x86/kernel/tsc_msr.c and arch/x86/kernel/tsc.c
  */
 
-#include <common.h>
 #include <bootstage.h>
 #include <dm.h>
 #include <log.h>
@@ -404,6 +403,15 @@ static void tsc_timer_ensure_setup(bool early)
 	if (!gd->arch.clock_rate) {
 		unsigned long fast_calibrate;
 
+		/**
+		 * There is no obvious way to obtain this information from EFI
+		 * boot services. This value was measured on a Framework Laptop
+		 * which has a 12th Gen Intel Core
+		 */
+		if (IS_ENABLED(CONFIG_EFI_APP)) {
+			fast_calibrate = 2750;
+			goto done;
+		}
 		fast_calibrate = native_calibrate_tsc();
 		if (fast_calibrate)
 			goto done;

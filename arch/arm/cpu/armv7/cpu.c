@@ -14,7 +14,6 @@
  * CPU specific code
  */
 
-#include <common.h>
 #include <command.h>
 #include <cpu_func.h>
 #include <irq_func.h>
@@ -82,4 +81,9 @@ int cleanup_before_linux_select(int flags)
 int cleanup_before_linux(void)
 {
 	return cleanup_before_linux_select(CBL_ALL);
+}
+
+void allow_unaligned(void)
+{
+	v7_arch_cp15_allow_unaligned();
 }

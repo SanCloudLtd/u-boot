@@ -13,7 +13,6 @@
 
 /* Altera/Xilinx FPGA configuration support for the ASTRO "URMEL" board */
 
-#include <common.h>
 #include <console.h>
 #include <watchdog.h>
 #include <altera.h>
@@ -123,7 +122,7 @@ int altera_write_fn(const void *buf, size_t len, int flush, int cookie)
 
 		if (bytecount % len_40 == 0) {
 #if defined(CONFIG_HW_WATCHDOG) || defined(CONFIG_WATCHDOG)
-			WATCHDOG_RESET();
+			schedule();
 #endif
 #ifdef CONFIG_SYS_FPGA_PROG_FEEDBACK
 			putc('.');	/* let them know we are alive */
@@ -343,7 +342,7 @@ int xilinx_fastwr_config_fn(void *buf, size_t len, int flush, int cookie)
 		}
 		if (bytecount % len_40 == 0) {
 #if defined(CONFIG_HW_WATCHDOG) || defined(CONFIG_WATCHDOG)
-			WATCHDOG_RESET();
+			schedule();
 #endif
 #ifdef CONFIG_SYS_FPGA_PROG_FEEDBACK
 			putc('.');	/* let them know we are alive */

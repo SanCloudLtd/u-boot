@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright (C) 2020 Texas Instruments Incorporated - http://www.ti.com/
+ * Copyright (C) 2020 Texas Instruments Incorporated - https://www.ti.com/
  * Pratyush Yadav <p.yadav@ti.com>
  */
-#include <common.h>
 #include <dm.h>
 #include <mux.h>
 #include <mux-internal.h>

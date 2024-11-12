@@ -69,8 +69,10 @@
 /*
  * CNTHCTL_EL2 bits definitions
  */
-#define CNTHCTL_EL2_EL1PCEN_EN	(1 << 1)  /* Physical timer regs accessible   */
-#define CNTHCTL_EL2_EL1PCTEN_EN	(1 << 0)  /* Physical counter accessible      */
+#define CNTHCTL_EL2_EVNT_EN	BIT(2)	     /* Enable the event stream       */
+#define CNTHCTL_EL2_EVNT_I(val)	((val) << 4) /* Event stream trigger bits     */
+#define CNTHCTL_EL2_EL1PCEN_EN	(1 << 1)     /* Physical timer regs accessible */
+#define CNTHCTL_EL2_EL1PCTEN_EN	(1 << 0)     /* Physical counter accessible   */
 
 /*
  * HCR_EL2 bits definitions
@@ -84,6 +86,7 @@
 #define HCR_EL2_HCD_DIS		(1 << 29) /* Hypervisor Call disabled         */
 #define HCR_EL2_AMO_EL2		(1 <<  5) /* Route SErrors to EL2             */
 
+#define ID_AA64ISAR0_EL1_RNDR	(0xFUL << 60) /* RNDR random registers */
 /*
  * ID_AA64ISAR1_EL1 bits definitions
  */
@@ -152,6 +155,13 @@ enum dcache_option {
 	({asm volatile(			\
 	"wfi" : : : "memory");		\
 	})
+
+#define wfe()				\
+	({asm volatile(			\
+	"wfe" : : : "memory");		\
+	})
+
+#define sev() asm volatile("sev")
 
 static inline unsigned int current_el(void)
 {
@@ -368,6 +378,8 @@ void switch_to_hypervisor_ret(void);
 
 #ifdef __ARM_ARCH_7A__
 #define wfi() __asm__ __volatile__ ("wfi" : : : "memory")
+#define wfe() __asm__ __volatile__ ("wfe" : : : "memory")
+#define sev() __asm__ __volatile__ ("sev")
 #else
 #define wfi()
 #endif
@@ -512,14 +524,6 @@ enum dcache_option {
 };
 #endif
 
-#if defined(CONFIG_SYS_ARM_CACHE_WRITETHROUGH)
-#define DCACHE_DEFAULT_OPTION	DCACHE_WRITETHROUGH
-#elif defined(CONFIG_SYS_ARM_CACHE_WRITEALLOC)
-#define DCACHE_DEFAULT_OPTION	DCACHE_WRITEALLOC
-#elif defined(CONFIG_SYS_ARM_CACHE_WRITEBACK)
-#define DCACHE_DEFAULT_OPTION	DCACHE_WRITEBACK
-#endif
-
 /* Size of an MMU section */
 enum {
 #ifdef CONFIG_ARMV7_LPAE
@@ -576,6 +580,14 @@ void psci_system_reset(void);
 #endif /* __KERNEL__ */
 
 #endif /* CONFIG_ARM64 */
+
+#if defined(CONFIG_SYS_ARM_CACHE_WRITETHROUGH)
+#define DCACHE_DEFAULT_OPTION	DCACHE_WRITETHROUGH
+#elif defined(CONFIG_SYS_ARM_CACHE_WRITEALLOC)
+#define DCACHE_DEFAULT_OPTION	DCACHE_WRITEALLOC
+#elif defined(CONFIG_SYS_ARM_CACHE_WRITEBACK)
+#define DCACHE_DEFAULT_OPTION	DCACHE_WRITEBACK
+#endif
 
 #ifndef __ASSEMBLY__
 /**

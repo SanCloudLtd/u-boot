@@ -4,7 +4,7 @@
  * Copyright 2021 NXP
  */
 
-#include <common.h>
+#include <config.h>
 #include <i2c.h>
 #include <hwconfig.h>
 #include <init.h>
@@ -115,7 +115,7 @@ found:
 #if defined(CONFIG_DEEP_SLEEP)
 void board_mem_sleep_setup(void)
 {
-	void __iomem *cpld_base = (void *)CONFIG_SYS_CPLD_BASE;
+	void __iomem *cpld_base = (void *)CFG_SYS_CPLD_BASE;
 
 	/* does not provide HW signals for power management */
 	clrbits_8(cpld_base + 0x17, 0x40);

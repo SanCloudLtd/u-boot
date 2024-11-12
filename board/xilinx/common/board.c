@@ -1,13 +1,18 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * (C) Copyright 2014 - 2020 Xilinx, Inc.
- * Michal Simek <michal.simek@xilinx.com>
+ * (C) Copyright 2014 - 2022, Xilinx, Inc.
+ * (C) Copyright 2022 - 2023, Advanced Micro Devices, Inc.
+ *
+ * Michal Simek <michal.simek@amd.com>
  */
 
-#include <common.h>
 #include <efi.h>
 #include <efi_loader.h>
 #include <env.h>
+#include <image.h>
+#include <init.h>
+#include <jffs2/load_kernel.h>
+#include <lmb.h>
 #include <log.h>
 #include <asm/global_data.h>
 #include <asm/sections.h>
@@ -15,11 +20,14 @@
 #include <i2c.h>
 #include <linux/sizes.h>
 #include <malloc.h>
+#include <mtd_node.h>
 #include "board.h"
 #include <dm.h>
 #include <i2c_eeprom.h>
 #include <net.h>
 #include <generated/dt.h>
+#include <rng.h>
+#include <slre.h>
 #include <soc.h>
 #include <linux/ctype.h>
 #include <linux/kernel.h>
@@ -27,7 +35,7 @@
 
 #include "fru.h"
 
-#if CONFIG_IS_ENABLED(EFI_HAVE_CAPSULE_SUPPORT)
+#if IS_ENABLED(CONFIG_EFI_HAVE_CAPSULE_SUPPORT)
 struct efi_fw_image fw_images[] = {
 #if defined(XILINX_BOOT_IMAGE_GUID)
 	{
@@ -36,7 +44,7 @@ struct efi_fw_image fw_images[] = {
 		.image_index = 1,
 	},
 #endif
-#if defined(XILINX_UBOOT_IMAGE_GUID)
+#if defined(XILINX_UBOOT_IMAGE_GUID) && defined(CONFIG_SPL_FS_LOAD_PAYLOAD_NAME)
 	{
 		.image_type_id = XILINX_UBOOT_IMAGE_GUID,
 		.fw_name = u"XILINX-UBOOT",
@@ -46,39 +54,11 @@ struct efi_fw_image fw_images[] = {
 };
 
 struct efi_capsule_update_info update_info = {
+	.num_images = ARRAY_SIZE(fw_images),
 	.images = fw_images,
 };
 
-u8 num_image_type_guids = ARRAY_SIZE(fw_images);
 #endif /* EFI_HAVE_CAPSULE_SUPPORT */
-
-#if defined(CONFIG_ZYNQ_GEM_I2C_MAC_OFFSET)
-int zynq_board_read_rom_ethaddr(unsigned char *ethaddr)
-{
-	int ret = -EINVAL;
-	struct udevice *dev;
-	ofnode eeprom;
-
-	eeprom = ofnode_get_chosen_node("xlnx,eeprom");
-	if (!ofnode_valid(eeprom))
-		return -ENODEV;
-
-	debug("%s: Path to EEPROM %s\n", __func__,
-	      ofnode_read_chosen_string("xlnx,eeprom"));
-
-	ret = uclass_get_device_by_ofnode(UCLASS_I2C_EEPROM, eeprom, &dev);
-	if (ret)
-		return ret;
-
-	ret = dm_i2c_read(dev, CONFIG_ZYNQ_GEM_I2C_MAC_OFFSET, ethaddr, 6);
-	if (ret)
-		debug("%s: I2C EEPROM MAC address read failed\n", __func__);
-	else
-		debug("%s: I2C EEPROM MAC %pM\n", __func__, ethaddr);
-
-	return ret;
-}
-#endif
 
 #define EEPROM_HEADER_MAGIC		0xdaaddeed
 #define EEPROM_HDR_MANUFACTURER_LEN	16
@@ -108,7 +88,7 @@ static struct xilinx_board_description *board_info;
 struct xilinx_legacy_format {
 	char board_sn[18]; /* 0x0 */
 	char unused0[14]; /* 0x12 */
-	char eth_mac[6]; /* 0x20 */
+	char eth_mac[ETH_ALEN]; /* 0x20 */
 	char unused1[170]; /* 0x26 */
 	char board_name[11]; /* 0xd0 */
 	char unused2[5]; /* 0xdc */
@@ -119,14 +99,22 @@ struct xilinx_legacy_format {
 static void xilinx_eeprom_legacy_cleanup(char *eeprom, int size)
 {
 	int i;
-	char byte;
+	unsigned char byte;
 
 	for (i = 0; i < size; i++) {
 		byte = eeprom[i];
 
-		/* Remove all ffs and spaces */
-		if (byte == 0xff || byte == ' ')
+		/* Ignore MAC address */
+		if (i >= offsetof(struct xilinx_legacy_format, eth_mac) &&
+		    i < offsetof(struct xilinx_legacy_format, unused1)) {
+			continue;
+		}
+
+		/* Remove all non printable chars */
+		if (byte < '!' || byte > '~') {
 			eeprom[i] = 0;
+			continue;
+		}
 
 		/* Convert strings to lower case */
 		if (byte >= 'A' && byte <= 'Z')
@@ -159,21 +147,25 @@ static int xilinx_read_eeprom_legacy(struct udevice *dev, char *name,
 
 	xilinx_eeprom_legacy_cleanup((char *)eeprom_content, size);
 
-	printf("Xilinx I2C Legacy format at %s:\n", name);
-	printf(" Board name:\t%s\n", eeprom_content->board_name);
-	printf(" Board rev:\t%s\n", eeprom_content->board_revision);
-	printf(" Board SN:\t%s\n", eeprom_content->board_sn);
+	/* Terminating \0 chars are the part of desc fields already */
+	strlcpy(desc->name, eeprom_content->board_name,
+		sizeof(eeprom_content->board_name) + 1);
+	strlcpy(desc->revision, eeprom_content->board_revision,
+		sizeof(eeprom_content->board_revision) + 1);
+	strlcpy(desc->serial, eeprom_content->board_sn,
+		sizeof(eeprom_content->board_sn) + 1);
 
 	eth_valid = is_valid_ethaddr((const u8 *)eeprom_content->eth_mac);
 	if (eth_valid)
-		printf(" Ethernet mac:\t%pM\n", eeprom_content->eth_mac);
-
-	/* Terminating \0 chars ensure end of string */
-	strcpy(desc->name, eeprom_content->board_name);
-	strcpy(desc->revision, eeprom_content->board_revision);
-	strcpy(desc->serial, eeprom_content->board_sn);
-	if (eth_valid)
 		memcpy(desc->mac_addr[0], eeprom_content->eth_mac, ETH_ALEN);
+
+	printf("Xilinx I2C Legacy format at %s:\n", name);
+	printf(" Board name:\t%s\n", desc->name);
+	printf(" Board rev:\t%s\n", desc->revision);
+	printf(" Board SN:\t%s\n", desc->serial);
+
+	if (eth_valid)
+		printf(" Ethernet mac:\t%pM\n", desc->mac_addr);
 
 	desc->header = EEPROM_HEADER_MAGIC;
 
@@ -222,7 +214,7 @@ static int xilinx_read_eeprom_fru(struct udevice *dev, char *name,
 	}
 
 	fru_capture((unsigned long)fru_content);
-	if (gd->flags & GD_FLG_RELOC || (_DEBUG && CONFIG_IS_ENABLED(DTB_RESELECT))) {
+	if (gd->flags & GD_FLG_RELOC || (_DEBUG && IS_ENABLED(CONFIG_DTB_RESELECT))) {
 		printf("Xilinx I2C FRU format at %s:\n", name);
 		ret = fru_display(0);
 		if (ret) {
@@ -320,7 +312,7 @@ static int xilinx_read_eeprom_single(char *name,
 
 	debug("%s: i2c memory detected: %s\n", __func__, name);
 
-	if (CONFIG_IS_ENABLED(CMD_FRU) && xilinx_detect_fru(buffer))
+	if (IS_ENABLED(CONFIG_CMD_FRU) && xilinx_detect_fru(buffer))
 		return xilinx_read_eeprom_fru(dev, name, desc);
 
 	if (xilinx_detect_legacy(buffer))
@@ -371,6 +363,14 @@ void *board_fdt_blob_setup(int *err)
 	void *fdt_blob;
 
 	*err = 0;
+
+	if (IS_ENABLED(CONFIG_TARGET_XILINX_MBV)) {
+		fdt_blob = (void *)CONFIG_XILINX_OF_BOARD_DTB_ADDR;
+
+		if (fdt_magic(fdt_blob) == FDT_MAGIC)
+			return fdt_blob;
+	}
+
 	if (!IS_ENABLED(CONFIG_SPL_BUILD) &&
 	    !IS_ENABLED(CONFIG_VERSAL_NO_DDR) &&
 	    !IS_ENABLED(CONFIG_ZYNQMP_NO_DDR)) {
@@ -388,12 +388,12 @@ void *board_fdt_blob_setup(int *err)
 		 * region
 		 */
 		if (IS_ENABLED(CONFIG_SPL_SEPARATE_BSS))
-			fdt_blob = (ulong *)&_image_binary_end;
+			fdt_blob = (ulong *)_image_binary_end;
 		else
-			fdt_blob = (ulong *)&__bss_end;
+			fdt_blob = (ulong *)__bss_end;
 	} else {
 		/* FDT is at end of image */
-		fdt_blob = (ulong *)&_end;
+		fdt_blob = (ulong *)_end;
 	}
 
 	if (fdt_magic(fdt_blob) == FDT_MAGIC)
@@ -425,18 +425,43 @@ int board_late_init_xilinx(void)
 	int i, id, macid = 0;
 	struct xilinx_board_description *desc;
 	phys_size_t bootm_size = gd->ram_top - gd->ram_base;
+	u64 bootscr_flash_offset, bootscr_flash_size;
 
-	if (!CONFIG_IS_ENABLED(MICROBLAZE)) {
+	if (!IS_ENABLED(CONFIG_MICROBLAZE)) {
 		ulong scriptaddr;
+		u64 bootscr_address;
+		u64 bootscr_offset;
 
-		scriptaddr = env_get_hex("scriptaddr", 0);
-		ret |= env_set_hex("scriptaddr", gd->ram_base + scriptaddr);
+		/* Fetch bootscr_address/bootscr_offset from DT and update */
+		if (!ofnode_read_bootscript_address(&bootscr_address,
+						    &bootscr_offset)) {
+			if (bootscr_offset)
+				ret |= env_set_hex("scriptaddr",
+						   gd->ram_base +
+						   bootscr_offset);
+			else
+				ret |= env_set_hex("scriptaddr",
+						   bootscr_address);
+		} else {
+			/* Update scriptaddr(bootscr offset) from env */
+			scriptaddr = env_get_hex("scriptaddr", 0);
+			ret |= env_set_hex("scriptaddr",
+					   gd->ram_base + scriptaddr);
+		}
 	}
 
-	if (CONFIG_IS_ENABLED(ARCH_ZYNQ) || CONFIG_IS_ENABLED(MICROBLAZE))
-		bootm_size = min(bootm_size, (phys_size_t)(SZ_512M + SZ_256M));
+	if (!ofnode_read_bootscript_flash(&bootscr_flash_offset,
+					  &bootscr_flash_size)) {
+		ret |= env_set_hex("script_offset_f", bootscr_flash_offset);
+		ret |= env_set_hex("script_size_f", bootscr_flash_size);
+	} else {
+		debug("!!! Please define bootscr-flash-offset via DT !!!\n");
+		ret |= env_set_hex("script_offset_f",
+				   CONFIG_BOOT_SCRIPT_OFFSET);
+	}
 
-	ret |= env_set_hex("script_offset_f", CONFIG_BOOT_SCRIPT_OFFSET);
+	if (IS_ENABLED(CONFIG_ARCH_ZYNQ) || IS_ENABLED(CONFIG_MICROBLAZE))
+		bootm_size = min(bootm_size, (phys_size_t)(SZ_512M + SZ_256M));
 
 	ret |= env_set_addr("bootm_low", (void *)gd->ram_base);
 	ret |= env_set_addr("bootm_size", (void *)bootm_size);
@@ -458,8 +483,8 @@ int board_late_init_xilinx(void)
 							desc->serial);
 
 			if (desc->uuid[0]) {
-				char uuid[UUID_STR_LEN + 1];
-				char *t = desc->uuid;
+				unsigned char uuid[UUID_STR_LEN + 1];
+				unsigned char *t = desc->uuid;
 
 				memset(uuid, 0, UUID_STR_LEN + 1);
 
@@ -474,9 +499,6 @@ int board_late_init_xilinx(void)
 				continue;
 
 			for (i = 0; i < EEPROM_HDR_NO_OF_MAC_ADDR; i++) {
-				if (!desc->mac_addr[i])
-					break;
-
 				if (is_valid_ethaddr((const u8 *)desc->mac_addr[i]))
 					ret |= eth_env_set_enetaddr_by_index("eth",
 							macid++, desc->mac_addr[i]);
@@ -497,13 +519,28 @@ int __maybe_unused board_fit_config_name_match(const char *name)
 {
 	debug("%s: Check %s, default %s\n", __func__, name, board_name);
 
+#if !defined(CONFIG_SPL_BUILD)
+	if (IS_ENABLED(CONFIG_REGEX)) {
+		struct slre slre;
+		int ret;
+
+		ret = slre_compile(&slre, name);
+		if (ret) {
+			ret = slre_match(&slre, board_name, strlen(board_name),
+					 NULL);
+			debug("%s: name match ret = %d\n", __func__,  ret);
+			return !ret;
+		}
+	}
+#endif
+
 	if (!strcmp(name, board_name))
 		return 0;
 
 	return -1;
 }
 
-#if CONFIG_IS_ENABLED(DTB_RESELECT)
+#if IS_ENABLED(CONFIG_DTB_RESELECT)
 #define MAX_NAME_LENGTH	50
 
 char * __maybe_unused __weak board_name_decode(void)
@@ -583,8 +620,33 @@ bool __maybe_unused __weak board_detection(void)
 	return false;
 }
 
+bool __maybe_unused __weak soc_detection(void)
+{
+	return false;
+}
+
+char * __maybe_unused __weak soc_name_decode(void)
+{
+	return NULL;
+}
+
 int embedded_dtb_select(void)
 {
+	if (soc_detection()) {
+		char *soc_local_name;
+
+		soc_local_name = soc_name_decode();
+		if (soc_local_name) {
+			board_name = soc_local_name;
+			printf("Detected SOC name: %s\n", board_name);
+
+			/* Time to change DTB on fly */
+			/* Both ways should work here */
+			/* fdtdec_resetup(&rescan); */
+			return fdtdec_setup();
+		}
+	}
+
 	if (board_detection()) {
 		char *board_local_name;
 
@@ -599,6 +661,53 @@ int embedded_dtb_select(void)
 			fdtdec_setup();
 		}
 	}
+	return 0;
+}
+#endif
+
+#if defined(CONFIG_LMB)
+
+#ifndef MMU_SECTION_SIZE
+#define MMU_SECTION_SIZE        (1 * 1024 * 1024)
+#endif
+
+phys_addr_t board_get_usable_ram_top(phys_size_t total_size)
+{
+	phys_size_t size;
+	phys_addr_t reg;
+	struct lmb lmb;
+
+	if (!total_size)
+		return gd->ram_top;
+
+	if (!IS_ALIGNED((ulong)gd->fdt_blob, 0x8))
+		panic("Not 64bit aligned DT location: %p\n", gd->fdt_blob);
+
+	/* found enough not-reserved memory to relocated U-Boot */
+	lmb_init(&lmb);
+	lmb_add(&lmb, gd->ram_base, gd->ram_size);
+	boot_fdt_add_mem_rsv_regions(&lmb, (void *)gd->fdt_blob);
+	size = ALIGN(CONFIG_SYS_MALLOC_LEN + total_size, MMU_SECTION_SIZE);
+	reg = lmb_alloc(&lmb, size, MMU_SECTION_SIZE);
+
+	if (!reg)
+		reg = gd->ram_top - size;
+
+	return reg + size;
+}
+#endif
+
+#ifdef CONFIG_OF_BOARD_SETUP
+#define MAX_RAND_SIZE 8
+int ft_board_setup(void *blob, struct bd_info *bd)
+{
+	static const struct node_info nodes[] = {
+		{ "arm,pl353-nand-r2p1", MTD_DEV_TYPE_NAND, },
+	};
+
+	if (IS_ENABLED(CONFIG_FDT_FIXUP_PARTITIONS) && IS_ENABLED(CONFIG_NAND_ZYNQ))
+		fdt_fixup_mtdparts(blob, nodes, ARRAY_SIZE(nodes));
+
 	return 0;
 }
 #endif

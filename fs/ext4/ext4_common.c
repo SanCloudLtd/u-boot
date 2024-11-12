@@ -18,7 +18,6 @@
  * ext4write : Based on generic ext4 protocol.
  */
 
-#include <common.h>
 #include <blk.h>
 #include <ext_common.h>
 #include <ext4fs.h>
@@ -765,11 +764,6 @@ int ext4fs_get_parent_inode_num(const char *dirname, char *dname, int flags)
 	struct ext2_inode *first_inode = NULL;
 	struct ext2_inode temp_inode;
 
-	if (*dirname != '/') {
-		printf("Please supply Absolute path\n");
-		return -1;
-	}
-
 	/* TODO: input validation make equivalent to linux */
 	depth_dirname = zalloc(strlen(dirname) + 1);
 	if (!depth_dirname)
@@ -850,15 +844,20 @@ end:
 
 fail:
 	free(depth_dirname);
-	free(parse_dirname);
-	for (i = 0; i < depth; i++) {
-		if (!ptr[i])
-			break;
-		free(ptr[i]);
+	if (parse_dirname)
+		free(parse_dirname);
+	if (ptr) {
+		for (i = 0; i < depth; i++) {
+			if (!ptr[i])
+				break;
+			free(ptr[i]);
+		}
+		free(ptr);
 	}
-	free(ptr);
-	free(parent_inode);
-	free(first_inode);
+	if (parent_inode)
+		free(parent_inode);
+	if (first_inode)
+		free(first_inode);
 
 	return result_inode_no;
 }
@@ -1205,7 +1204,6 @@ fail:
 	return -1;
 
 }
-
 
 static void alloc_single_indirect_block(struct ext2_inode *file_inode,
 					unsigned int *total_remaining_blocks,
@@ -2209,9 +2207,8 @@ static char *ext4fs_read_symlink(struct ext2fs_node *node)
 	return symlink;
 }
 
-static int ext4fs_find_file1(const char *currpath,
-			     struct ext2fs_node *currroot,
-			     struct ext2fs_node **currfound, int *foundtype)
+int ext4fs_find_file1(const char *currpath, struct ext2fs_node *currroot,
+		      struct ext2fs_node **currfound, int *foundtype)
 {
 	char fpath[strlen(currpath) + 1];
 	char *name = fpath;
@@ -2363,7 +2360,7 @@ fail:
 	return -1;
 }
 
-int ext4fs_mount(unsigned part_length)
+int ext4fs_mount(void)
 {
 	struct ext2_data *data;
 	int status;
@@ -2381,7 +2378,6 @@ int ext4fs_mount(unsigned part_length)
 	/* Make sure this is an ext2 filesystem. */
 	if (le16_to_cpu(data->sblock.magic) != EXT2_MAGIC)
 		goto fail_noerr;
-
 
 	if (le32_to_cpu(data->sblock.revision_level) == 0) {
 		fs->inodesz = 128;
@@ -2415,7 +2411,7 @@ int ext4fs_mount(unsigned part_length)
 
 	return 1;
 fail:
-	printf("Failed to mount ext2 filesystem...\n");
+	log_debug("Failed to mount ext2 filesystem...\n");
 fail_noerr:
 	free(data);
 	ext4fs_root = NULL;

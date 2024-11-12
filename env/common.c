@@ -7,7 +7,6 @@
  * Andreas Heppel <aheppel@sysgo.de>
  */
 
-#include <common.h>
 #include <bootstage.h>
 #include <command.h>
 #include <env.h>
@@ -15,6 +14,7 @@
 #include <log.h>
 #include <sort.h>
 #include <asm/global_data.h>
+#include <linux/printk.h>
 #include <linux/stddef.h>
 #include <search.h>
 #include <errno.h>
@@ -36,11 +36,116 @@ struct hsearch_data env_htab = {
 };
 
 /*
- * This env_set() function is defined in cmd/nvedit.c, since it calls
- * _do_env_set(), whis is a static function in that file.
- *
- * int env_set(const char *varname, const char *varvalue);
+ * This variable is incremented each time we set an environment variable so we
+ * can be check via env_get_id() to see if the environment has changed or not.
+ * This makes it possible to reread an environment variable only if the
+ * environment was changed, typically used by networking code.
  */
+static int env_id = 1;
+
+int env_get_id(void)
+{
+	return env_id;
+}
+
+void env_inc_id(void)
+{
+	env_id++;
+}
+
+int env_do_env_set(int flag, int argc, char *const argv[], int env_flag)
+{
+	int   i, len;
+	char  *name, *value, *s;
+	struct env_entry e, *ep;
+
+	debug("Initial value for argc=%d\n", argc);
+
+#if !IS_ENABLED(CONFIG_SPL_BUILD) && IS_ENABLED(CONFIG_CMD_NVEDIT_EFI)
+	if (argc > 1 && argv[1][0] == '-' && argv[1][1] == 'e')
+		return do_env_set_efi(NULL, flag, --argc, ++argv);
+#endif
+
+	while (argc > 1 && **(argv + 1) == '-') {
+		char *arg = *++argv;
+
+		--argc;
+		while (*++arg) {
+			switch (*arg) {
+			case 'f':		/* force */
+				env_flag |= H_FORCE;
+				break;
+			default:
+				return CMD_RET_USAGE;
+			}
+		}
+	}
+	debug("Final value for argc=%d\n", argc);
+	name = argv[1];
+
+	if (strchr(name, '=')) {
+		printf("## Error: illegal character '=' "
+		       "in variable name \"%s\"\n", name);
+		return 1;
+	}
+
+	env_inc_id();
+
+	/* Delete only ? */
+	if (argc < 3 || argv[2] == NULL) {
+		int rc = hdelete_r(name, &env_htab, env_flag);
+
+		/* If the variable didn't exist, don't report an error */
+		return rc && rc != -ENOENT ? 1 : 0;
+	}
+
+	/*
+	 * Insert / replace new value
+	 */
+	for (i = 2, len = 0; i < argc; ++i)
+		len += strlen(argv[i]) + 1;
+
+	value = malloc(len);
+	if (value == NULL) {
+		printf("## Can't malloc %d bytes\n", len);
+		return 1;
+	}
+	for (i = 2, s = value; i < argc; ++i) {
+		char *v = argv[i];
+
+		while ((*s++ = *v++) != '\0')
+			;
+		*(s - 1) = ' ';
+	}
+	if (s != value)
+		*--s = '\0';
+
+	e.key	= name;
+	e.data	= value;
+	hsearch_r(e, ENV_ENTER, &ep, &env_htab, env_flag);
+	free(value);
+	if (!ep) {
+		printf("## Error inserting \"%s\" variable, errno=%d\n",
+			name, errno);
+		return 1;
+	}
+
+	return 0;
+}
+
+int env_set(const char *varname, const char *varvalue)
+{
+	const char * const argv[4] = { "setenv", varname, varvalue, NULL };
+
+	/* before import into hashtable */
+	if (!(gd->flags & GD_FLG_ENV_READY))
+		return 1;
+
+	if (varvalue == NULL || varvalue[0] == '\0')
+		return env_do_env_set(0, 2, (char * const *)argv, H_PROGRAMMATIC);
+	else
+		return env_do_env_set(0, 3, (char * const *)argv, H_PROGRAMMATIC);
+}
 
 /**
  * Set an environment variable to an integer value
@@ -115,7 +220,7 @@ char *env_get(const char *name)
 	if (gd->flags & GD_FLG_ENV_READY) { /* after import into hashtable */
 		struct env_entry e, *ep;
 
-		WATCHDOG_RESET();
+		schedule();
 
 		e.key	= name;
 		e.data	= NULL;
@@ -245,12 +350,22 @@ bool env_get_autostart(void)
  */
 char *env_get_default(const char *name)
 {
-	if (env_get_from_linear(default_environment, name,
-				(char *)(gd->env_buf),
-				sizeof(gd->env_buf)) >= 0)
+	int ret;
+
+	ret = env_get_default_into(name, (char *)(gd->env_buf),
+				   sizeof(gd->env_buf));
+	if (ret >= 0)
 		return (char *)(gd->env_buf);
 
 	return NULL;
+}
+
+/*
+ * Look up the variable from the default environment and store its value in buf
+ */
+int env_get_default_into(const char *name, char *buf, unsigned int len)
+{
+	return env_get_from_linear(default_environment, name, buf, len);
 }
 
 void env_set_default(const char *s, int flags)
@@ -278,7 +393,6 @@ void env_set_default(const char *s, int flags)
 	gd->flags |= GD_FLG_ENV_READY;
 	gd->flags |= GD_FLG_ENV_DEFAULT;
 }
-
 
 /* [re]set individual variables to their value in the default environment */
 int env_set_default_vars(int nvars, char * const vars[], int flags)
@@ -353,6 +467,7 @@ int env_check_redund(const char *buf1, int buf1_read_fail,
 				tmp_env2->crc;
 
 	if (!crc1_ok && !crc2_ok) {
+		gd->env_valid = ENV_INVALID;
 		return -ENOMSG; /* needed for env_load() */
 	} else if (crc1_ok && !crc2_ok) {
 		gd->env_valid = ENV_VALID;
@@ -427,11 +542,6 @@ int env_export(env_t *env_out)
 
 void env_relocate(void)
 {
-#if defined(CONFIG_NEEDS_MANUAL_RELOC)
-	env_reloc();
-	env_fix_drivers();
-	env_htab.change_ok += gd->reloc_off;
-#endif
 	if (gd->env_valid == ENV_INVALID) {
 #if defined(CONFIG_ENV_IS_NOWHERE) || defined(CONFIG_SPL_BUILD)
 		/* Environment not changable */
@@ -476,7 +586,6 @@ int env_complete(char *var, int maxv, char *cmdv[], int bufsz, char *buf,
 	idx = 0;
 	found = 0;
 	cmdv[0] = NULL;
-
 
 	while ((idx = hmatch_r(var, idx, &match, &env_htab))) {
 		int vallen = strlen(match->key) + 1;
@@ -539,12 +648,12 @@ void env_import_fdt(void)
 		return;
 	}
 
-	for (res = ofnode_get_first_property(node, &prop);
+	for (res = ofnode_first_property(node, &prop);
 	     !res;
-	     res = ofnode_get_next_property(&prop)) {
+	     res = ofnode_next_property(&prop)) {
 		const char *name, *val;
 
-		val = ofnode_get_property_by_prop(&prop, &name, NULL);
+		val = ofprop_get_property(&prop, &name, NULL);
 		env_set(name, val);
 	}
 }

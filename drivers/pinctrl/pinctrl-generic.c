@@ -3,7 +3,6 @@
  * Copyright (C) 2015  Masahiro Yamada <yamada.masahiro@socionext.com>
  */
 
-#include <common.h>
 #include <dm.h>
 #include <dm/device_compat.h>
 #include <linux/compat.h>
@@ -237,7 +236,7 @@ enum pinmux_subnode_type {
 static const char *alloc_name_with_prefix(const char *name, const char *prefix)
 {
 	if (prefix) {
-		char *name_with_prefix = malloc(strlen(prefix) + sizeof("pins"));
+		char *name_with_prefix = malloc(strlen(prefix) + strlen(name) + 1);
 		if (name_with_prefix)
 			sprintf(name_with_prefix, "%s%s", prefix, name);
 		return name_with_prefix;

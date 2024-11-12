@@ -14,11 +14,11 @@ choice
 
 config TARGET_MALTA
 	bool "Support malta"
+	select HAS_FIXED_TIMER_FREQUENCY
 	select BOARD_EARLY_INIT_R
 	select DM
 	select DM_SERIAL
 	select PCI
-	select DM_ETH
 	select DYNAMIC_IO_PORT_BASE
 	select MIPS_CM
 	select MIPS_INSERT_BOOT_CONFIG
@@ -28,38 +28,33 @@ config TARGET_MALTA
 	select OF_ISA_BUS
 	select PCI_MAP_SYSTEM_MEMORY
 	select ROM_EXCEPTION_VECTORS
-	select SUPPORTS_BIG_ENDIAN
 	select SUPPORTS_CPU_MIPS32_R1
 	select SUPPORTS_CPU_MIPS32_R2
 	select SUPPORTS_CPU_MIPS32_R6
 	select SUPPORTS_CPU_MIPS64_R1
 	select SUPPORTS_CPU_MIPS64_R2
 	select SUPPORTS_CPU_MIPS64_R6
-	select SUPPORTS_LITTLE_ENDIAN
+	select SUPPORT_BIG_ENDIAN
+	select SUPPORT_LITTLE_ENDIAN
 	select SWAP_IO_SPACE
 	imply CMD_DM
 
-config TARGET_VCT
-	bool "Support vct"
-	select ROM_EXCEPTION_VECTORS
-	select SUPPORTS_BIG_ENDIAN
-	select SUPPORTS_CPU_MIPS32_R1
-	select SUPPORTS_CPU_MIPS32_R2
-	select SYS_MIPS_CACHE_INIT_RAM_LOAD
-
 config ARCH_ATH79
 	bool "Support QCA/Atheros ath79"
+	select HAS_FIXED_TIMER_FREQUENCY
 	select DM
 	select OF_CONTROL
 	imply CMD_DM
 
 config ARCH_MSCC
 	bool "Support MSCC VCore-III"
+	select HAS_FIXED_TIMER_FREQUENCY
 	select OF_CONTROL
 	select DM
 
 config ARCH_BMIPS
 	bool "Support BMIPS SoCs"
+	select HAS_FIXED_TIMER_FREQUENCY
 	select CLK
 	select CPU
 	select DM
@@ -70,11 +65,11 @@ config ARCH_BMIPS
 
 config ARCH_MTMIPS
 	bool "Support MediaTek MIPS platforms"
+	select HAS_FIXED_TIMER_FREQUENCY
 	select CLK
 	imply CMD_DM
 	select DISPLAY_CPUINFO
 	select DM
-	imply DM_ETH
 	imply DM_GPIO
 	select DM_RESET
 	select DM_SERIAL
@@ -82,6 +77,7 @@ config ARCH_MTMIPS
 	select PINMUX
 	select PINCONF
 	select RESET_MTMIPS
+	imply MTD
 	imply DM_SPI
 	imply DM_SPI_FLASH
 	select LAST_STAGE_INIT
@@ -90,12 +86,13 @@ config ARCH_MTMIPS
 	select ROM_EXCEPTION_VECTORS
 	select SUPPORTS_CPU_MIPS32_R1
 	select SUPPORTS_CPU_MIPS32_R2
-	select SUPPORTS_LITTLE_ENDIAN
+	select SUPPORT_LITTLE_ENDIAN
 	select SUPPORT_SPL
 
 config ARCH_JZ47XX
 	bool "Support Ingenic JZ47xx"
 	select SUPPORT_SPL
+	select HAS_FIXED_TIMER_FREQUENCY
 	select OF_CONTROL
 	select DM
 
@@ -106,7 +103,6 @@ config ARCH_OCTEON
 	select DISPLAY_CPUINFO
 	select DMA_ADDR_T_64BIT
 	select DM
-	select DM_ETH
 	select DM_GPIO
 	select DM_I2C
 	select DM_SERIAL
@@ -114,8 +110,9 @@ config ARCH_OCTEON
 	select MIPS_L2_CACHE
 	select MIPS_MACH_EARLY_INIT
 	select MIPS_TUNE_OCTEON3
+	select MTD
 	select ROM_EXCEPTION_VECTORS
-	select SUPPORTS_BIG_ENDIAN
+	select SUPPORT_BIG_ENDIAN
 	select SUPPORTS_CPU_MIPS64_OCTEON
 	select PHYS_64BIT
 	select OF_CONTROL
@@ -124,14 +121,16 @@ config ARCH_OCTEON
 
 config MACH_PIC32
 	bool "Support Microchip PIC32"
+	select HAS_FIXED_TIMER_FREQUENCY
 	select DM
+	select DM_EVENT
 	select OF_CONTROL
 	imply CMD_DM
 
 config TARGET_BOSTON
 	bool "Support Boston"
+	select HAS_FIXED_TIMER_FREQUENCY
 	select DM
-	imply DM_EVENT
 	select DM_SERIAL
 	select MIPS_CM
 	select SYS_CACHE_SHIFT_6
@@ -139,20 +138,20 @@ config TARGET_BOSTON
 	select OF_BOARD_SETUP
 	select OF_CONTROL
 	select ROM_EXCEPTION_VECTORS
-	select SUPPORTS_BIG_ENDIAN
 	select SUPPORTS_CPU_MIPS32_R1
 	select SUPPORTS_CPU_MIPS32_R2
 	select SUPPORTS_CPU_MIPS32_R6
 	select SUPPORTS_CPU_MIPS64_R1
 	select SUPPORTS_CPU_MIPS64_R2
 	select SUPPORTS_CPU_MIPS64_R6
-	select SUPPORTS_LITTLE_ENDIAN
+	select SUPPORT_BIG_ENDIAN
+	select SUPPORT_LITTLE_ENDIAN
 	imply CMD_DM
 
 config TARGET_XILFPGA
 	bool "Support Imagination Xilfpga"
+	select HAS_FIXED_TIMER_FREQUENCY
 	select DM
-	select DM_ETH
 	select DM_GPIO
 	select DM_SERIAL
 	select SYS_CACHE_SHIFT_4
@@ -160,7 +159,7 @@ config TARGET_XILFPGA
 	select ROM_EXCEPTION_VECTORS
 	select SUPPORTS_CPU_MIPS32_R1
 	select SUPPORTS_CPU_MIPS32_R2
-	select SUPPORTS_LITTLE_ENDIAN
+	select SUPPORT_LITTLE_ENDIAN
 	imply CMD_DM
 	help
 	  This supports IMGTEC MIPSfpga platform
@@ -253,6 +252,12 @@ config ROM_EXCEPTION_VECTORS
 	  U-Boot booted from parallel NOR flash).
 	  Disable this, if the U-Boot image is booted from DRAM (e.g. by SPL).
 	  In that case the image size will be reduced by 0x500 bytes.
+
+config SYS_MIPS_TIMER_FREQ
+	int "Fixed MIPS CPU timer frequency in Hz"
+	depends on HAS_FIXED_TIMER_FREQUENCY
+	help
+	  Configures a fixed CPU timer frequency.
 
 config MIPS_CM_BASE
 	hex "MIPS CM GCR Base Address"
@@ -408,12 +413,6 @@ config MIPS_BOOT_FDT
 
 endmenu
 
-config SUPPORTS_BIG_ENDIAN
-	bool
-
-config SUPPORTS_LITTLE_ENDIAN
-	bool
-
 config SUPPORTS_CPU_MIPS32_R1
 	bool
 
@@ -433,6 +432,9 @@ config SUPPORTS_CPU_MIPS64_R6
 	bool
 
 config SUPPORTS_CPU_MIPS64_OCTEON
+	bool
+
+config HAS_FIXED_TIMER_FREQUENCY
 	bool
 
 config CPU_CAVIUM_OCTEON
@@ -463,12 +465,6 @@ config MIPS_TUNE_74KC
 	bool
 
 config MIPS_TUNE_OCTEON3
-	bool
-
-config 32BIT
-	bool
-
-config 64BIT
 	bool
 
 config SWAP_IO_SPACE

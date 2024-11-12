@@ -3,7 +3,6 @@
  * Copyright 2020 Compass Electronics Group, LLC
  */
 
-#include <common.h>
 #include <asm/global_data.h>
 #include <asm/io.h>
 
@@ -12,7 +11,7 @@ DECLARE_GLOBAL_DATA_PTR;
 int board_init(void)
 {
 	/* address of boot parameters */
-	gd->bd->bi_boot_params = CONFIG_SYS_TEXT_BASE + 0x50000;
+	gd->bd->bi_boot_params = CONFIG_TEXT_BASE + 0x50000;
 
 	return 0;
 }

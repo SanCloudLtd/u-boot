@@ -129,74 +129,78 @@
 		};
 
 		fmc: flash-controller@1e620000 {
-			reg = < 0x1e620000 0xc4
-				0x20000000 0x10000000 >;
+			reg = <0x1e620000 0xc4>, <0x20000000 0x10000000>;
 			#address-cells = <1>;
 			#size-cells = <0>;
 			compatible = "aspeed,ast2600-fmc";
 			status = "disabled";
-			interrupts = <GIC_SPI 39 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&scu ASPEED_CLK_AHB>;
 			num-cs = <3>;
+
 			flash@0 {
-				reg = < 0 >;
+				reg = <0>;
 				compatible = "jedec,spi-nor";
 				status = "disabled";
 			};
+
 			flash@1 {
-				reg = < 1 >;
+				reg = <1>;
 				compatible = "jedec,spi-nor";
 				status = "disabled";
 			};
+
 			flash@2 {
-				reg = < 2 >;
+				reg = <2>;
 				compatible = "jedec,spi-nor";
 				status = "disabled";
 			};
 		};
 
 		spi1: flash-controller@1e630000 {
-			reg = < 0x1e630000 0xc4
-				0x30000000 0x08000000 >;
+			reg = <0x1e630000 0xc4>, <0x30000000 0x10000000>;
 			#address-cells = <1>;
 			#size-cells = <0>;
 			compatible = "aspeed,ast2600-spi";
 			clocks = <&scu ASPEED_CLK_AHB>;
 			num-cs = <2>;
 			status = "disabled";
+
 			flash@0 {
-				reg = < 0 >;
+				reg = <0>;
 				compatible = "jedec,spi-nor";
 				status = "disabled";
 			};
+
 			flash@1 {
-				reg = < 1 >;
+				reg = <1>;
 				compatible = "jedec,spi-nor";
 				status = "disabled";
 			};
 		};
 
 		spi2: flash-controller@1e631000 {
-			reg = < 0x1e631000 0xc4
-				0x50000000 0x08000000 >;
+			reg = <0x1e631000 0xc4>, <0x50000000 0x10000000>;
 			#address-cells = <1>;
 			#size-cells = <0>;
 			compatible = "aspeed,ast2600-spi";
 			clocks = <&scu ASPEED_CLK_AHB>;
 			num-cs = <3>;
 			status = "disabled";
+
 			flash@0 {
-				reg = < 0 >;
+				reg = <0>;
 				compatible = "jedec,spi-nor";
 				status = "disabled";
 			};
+
 			flash@1 {
-				reg = < 1 >;
+				reg = <1>;
 				compatible = "jedec,spi-nor";
 				status = "disabled";
 			};
+
 			flash@2 {
-				reg = < 2 >;
+				reg = <2>;
 				compatible = "jedec,spi-nor";
 				status = "disabled";
 			};
@@ -677,6 +681,7 @@
 
 			i2c: bus@1e78a000 {
 				compatible = "simple-bus";
+				reg = <0x1e78a000 0x1000>;
 				#address-cells = <1>;
 				#size-cells = <1>;
 				ranges = <0 0x1e78a000 0x1000>;
@@ -2021,6 +2026,26 @@
 	pinctrl_spi2mosi_default: spi2mosi_default {
 		function = "SPI2MOSI";
 		groups = "SPI2MOSI";
+	};
+
+	pinctrl_thru0_default: thru0_default {
+		function = "THRU0";
+		groups = "THRU0";
+	};
+
+	pinctrl_thru1_default: thru1_default {
+		function = "THRU1";
+		groups = "THRU1";
+	};
+
+	pinctrl_thru2_default: thru2_default {
+		function = "THRU2";
+		groups = "THRU2";
+	};
+
+	pinctrl_thru3_default: thru3_default {
+		function = "THRU3";
+		groups = "THRU3";
 	};
 
 	pinctrl_timer3_default: timer3_default {

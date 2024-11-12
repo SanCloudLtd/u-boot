@@ -178,8 +178,20 @@ static int test_fat_to_str(void)
 
 	boottime->set_mem(str, sizeof(str), 0);
 	unicode_collation_protocol->fat_to_str(unicode_collation_protocol, 6,
-					       "U-BOOT", str);
+					       "U-BOOT!", str);
 	if (efi_st_strcmp_16_8(str, "U-BOOT")) {
+		efi_st_error("fat_to_str returned \"%ps\"\n", str);
+		return EFI_ST_FAILURE;
+	}
+
+	boottime->set_mem(str, sizeof(str), 0);
+	unicode_collation_protocol->fat_to_str(unicode_collation_protocol, 13,
+					       "Kafb\240tur\000xyz", str);
+	if (str[10]) {
+		efi_st_error("fat_to_str returned to many characters\n");
+		return EFI_ST_FAILURE;
+	}
+	if (efi_st_strcmp_16_8(str, "Kafb\341tur")) {
 		efi_st_error("fat_to_str returned \"%ps\"\n", str);
 		return EFI_ST_FAILURE;
 	}
@@ -204,6 +216,18 @@ static int test_str_to_fat(void)
 	ret = unicode_collation_protocol->str_to_fat(unicode_collation_protocol,
 						     u"U\\Boot", 6, fat);
 	if (!ret || efi_st_strcmp_16_8(u"U_BOOT", fat)) {
+		efi_st_error("str_to_fat returned %u, \"%s\"\n", ret, fat);
+		return EFI_ST_FAILURE;
+	}
+
+	/*
+	 * Test unicode code points which map to CP 437 0x01 - 0x1f are
+	 * converted to '_'.
+	 */
+	boottime->set_mem(fat, 16, 0);
+	ret = unicode_collation_protocol->str_to_fat(unicode_collation_protocol,
+		u"\u263a\u2666\u2022\u25d8\u2642\u2194\u00b6\u203c", 8, fat);
+	if (!ret || efi_st_strcmp_16_8(u"________", fat)) {
 		efi_st_error("str_to_fat returned %u, \"%s\"\n", ret, fat);
 		return EFI_ST_FAILURE;
 	}

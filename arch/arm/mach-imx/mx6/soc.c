@@ -7,7 +7,6 @@
  * Copyright 2021 NXP
  */
 
-#include <common.h>
 #include <env.h>
 #include <init.h>
 #include <linux/delay.h>
@@ -598,7 +597,7 @@ const struct boot_mode soc_boot_modes[] = {
 void reset_misc(void)
 {
 #ifndef CONFIG_SPL_BUILD
-#if defined(CONFIG_VIDEO_MXS) && !defined(CONFIG_DM_VIDEO)
+#if defined(CONFIG_VIDEO_MXS) && !defined(CONFIG_VIDEO)
 	lcdif_power_down();
 #endif
 #endif
@@ -746,6 +745,16 @@ int arch_misc_init(void)
 		if (ret)
 			printf("Failed to initialize caam_jr: %d\n", ret);
 	}
+
+	if (IS_ENABLED(CONFIG_FSL_DCP_RNG)) {
+		struct udevice *dev;
+		int ret;
+
+		ret = uclass_get_device_by_driver(UCLASS_RNG, DM_DRIVER_GET(dcp_rng), &dev);
+		if (ret)
+			printf("Failed to initialize dcp rng: %d\n", ret);
+	}
+
 	setup_serial_number();
 	return 0;
 }

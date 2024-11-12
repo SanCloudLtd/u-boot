@@ -30,7 +30,6 @@
 #  endif
 # endif
 #else				/* U-Boot build */
-# include <common.h>
 # include <linux/string.h>
 # include <linux/ctype.h>
 #endif
@@ -58,7 +57,6 @@ struct env_entry_node {
 	int used;
 	struct env_entry entry;
 };
-
 
 static void _hdelete(const char *key, struct hsearch_data *htab,
 		     struct env_entry *ep, int idx);
@@ -127,7 +125,6 @@ int hcreate_r(size_t nel, struct hsearch_data *htab)
 	/* everything went alright */
 	return 1;
 }
-
 
 /*
  * hdestroy()
@@ -429,7 +426,6 @@ int hsearch_r(struct env_entry item, enum env_action action,
 	return 0;
 }
 
-
 /*
  * hdelete()
  */
@@ -719,7 +715,6 @@ ssize_t hexport_r(struct hsearch_data *htab, const char sep, int flag,
 }
 #endif
 
-
 /*
  * himport()
  */
@@ -942,7 +937,7 @@ int himport_r(struct hsearch_data *htab,
 		e.data = value;
 
 		hsearch_r(e, ENV_ENTER, &rv, htab, flag);
-#if !CONFIG_IS_ENABLED(ENV_WRITEABLE_LIST)
+#if !IS_ENABLED(CONFIG_ENV_WRITEABLE_LIST)
 		if (rv == NULL) {
 			printf("himport_r: can't insert \"%s=%s\" into hash table\n",
 				name, value);

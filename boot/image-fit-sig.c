@@ -7,7 +7,6 @@
 #include "mkimage.h"
 #include <time.h>
 #else
-#include <common.h>
 #include <log.h>
 #include <malloc.h>
 #include <asm/global_data.h>
@@ -260,10 +259,10 @@ static int fit_config_check_sig(const void *fit, int noffset, int conf_noffset,
 				char **err_msgp)
 {
 	static char * const exc_prop[] = {
-		"data",
-		"data-size",
-		"data-position",
-		"data-offset"
+		FIT_DATA_PROP,
+		FIT_DATA_SIZE_PROP,
+		FIT_DATA_POSITION_PROP,
+		FIT_DATA_OFFSET_PROP,
 	};
 
 	const char *prop, *end, *name;

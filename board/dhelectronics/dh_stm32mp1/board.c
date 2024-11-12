@@ -3,7 +3,6 @@
  * Copyright (C) 2018, STMicroelectronics - All Rights Reserved
  */
 
-#include <common.h>
 #include <adc.h>
 #include <log.h>
 #include <net.h>
@@ -34,9 +33,11 @@
 #include <phy.h>
 #include <linux/bitops.h>
 #include <linux/delay.h>
+#include <linux/printk.h>
 #include <power/regulator.h>
 #include <remoteproc.h>
 #include <reset.h>
+#include <spl.h>
 #include <syscon.h>
 #include <usb.h>
 #include <usb/dwc2_udc.h>
@@ -47,12 +48,10 @@
 
 /* SYSCFG registers */
 #define SYSCFG_BOOTR		0x00
-#define SYSCFG_PMCSETR		0x04
 #define SYSCFG_IOCTRLSETR	0x18
 #define SYSCFG_ICNR		0x1C
 #define SYSCFG_CMPCR		0x20
 #define SYSCFG_CMPENSETR	0x24
-#define SYSCFG_PMCCLRR		0x44
 
 #define SYSCFG_BOOTR_BOOT_MASK		GENMASK(2, 0)
 #define SYSCFG_BOOTR_BOOTPD_SHIFT	4
@@ -68,16 +67,6 @@
 
 #define SYSCFG_CMPENSETR_MPU_EN		BIT(0)
 
-#define SYSCFG_PMCSETR_ETH_CLK_SEL	BIT(16)
-#define SYSCFG_PMCSETR_ETH_REF_CLK_SEL	BIT(17)
-
-#define SYSCFG_PMCSETR_ETH_SELMII	BIT(20)
-
-#define SYSCFG_PMCSETR_ETH_SEL_MASK	GENMASK(23, 21)
-#define SYSCFG_PMCSETR_ETH_SEL_GMII_MII	0
-#define SYSCFG_PMCSETR_ETH_SEL_RGMII	BIT(21)
-#define SYSCFG_PMCSETR_ETH_SEL_RMII	BIT(23)
-
 #define KS_CCR		0x08
 #define KS_CCR_EEPROM	BIT(9)
 #define KS_BE0		BIT(12)
@@ -87,14 +76,25 @@
 
 static bool dh_stm32_mac_is_in_ks8851(void)
 {
-	ofnode node;
+	struct udevice *udev;
 	u32 reg, cider, ccr;
+	char path[256];
+	ofnode node;
+	int ret;
 
 	node = ofnode_path("ethernet1");
 	if (!ofnode_valid(node))
 		return false;
 
-	if (ofnode_device_is_compatible(node, "micrel,ks8851-mll"))
+	ret = ofnode_get_path(node, path, sizeof(path));
+	if (ret)
+		return false;
+
+	ret = uclass_get_device_by_of_path(UCLASS_ETH, path, &udev);
+	if (ret)
+		return false;
+
+	if (!ofnode_device_is_compatible(node, "micrel,ks8851-mll"))
 		return false;
 
 	/*
@@ -127,6 +127,9 @@ static int dh_stm32_setup_ethaddr(void)
 	if (dh_mac_is_in_env("ethaddr"))
 		return 0;
 
+	if (dh_get_mac_is_enabled("ethernet0"))
+		return 0;
+
 	if (!dh_get_mac_from_eeprom(enetaddr, "eeprom0"))
 		return eth_env_set_enetaddr("ethaddr", enetaddr);
 
@@ -138,6 +141,9 @@ static int dh_stm32_setup_eth1addr(void)
 	unsigned char enetaddr[6];
 
 	if (dh_mac_is_in_env("eth1addr"))
+		return 0;
+
+	if (dh_get_mac_is_enabled("ethernet1"))
 		return 0;
 
 	if (dh_stm32_mac_is_in_ks8851())
@@ -184,9 +190,9 @@ int checkboard(void)
 }
 
 #ifdef CONFIG_BOARD_EARLY_INIT_F
-static u8 brdcode __section("data");
-static u8 ddr3code __section("data");
-static u8 somcode __section("data");
+static u8 brdcode __section(".data");
+static u8 ddr3code __section(".data");
+static u8 somcode __section(".data");
 static u32 opp_voltage_mv __section(".data");
 
 static void board_get_coding_straps(void)
@@ -229,8 +235,9 @@ static void board_get_coding_straps(void)
 
 	gpio_free_list_nodev(gpio, ret);
 
-	printf("Code:  SoM:rev=%d,ddr3=%d Board:rev=%d\n",
-		somcode, ddr3code, brdcode);
+	if (CONFIG_IS_ENABLED(DISPLAY_PRINT))
+		printf("Code:  SoM:rev=%d,ddr3=%d Board:rev=%d\n",
+		       somcode, ddr3code, brdcode);
 }
 
 int board_stm32mp1_ddr_config_name_match(struct udevice *dev,
@@ -423,7 +430,7 @@ static void __maybe_unused led_error_blink(u32 nb_blink)
 		for (i = 0; i < 2 * nb_blink; i++) {
 			led_set_state(led, LEDST_TOGGLE);
 			mdelay(125);
-			WATCHDOG_RESET();
+			schedule();
 		}
 	}
 #endif
@@ -547,7 +554,7 @@ static int board_get_regulator_buck3_nvm_uv_av96(int *uv)
 	if (!prop || !len)
 		return -ENODEV;
 
-	if (!strstr(prop, "avenger96"))
+	if (!strstr(prop, "avenger96") && !strstr(prop, "dhcor-testbench"))
 		return -EINVAL;
 
 	/* Read out STPMIC1 NVM and determine default Buck3 voltage. */
@@ -564,18 +571,32 @@ static int board_get_regulator_buck3_nvm_uv_av96(int *uv)
 	bucks_vout >>= STPMIC_NVM_BUCKS_VOUT_SHR_BUCK_OFFSET(3);
 	bucks_vout &= STPMIC_NVM_BUCKS_VOUT_SHR_BUCK_MASK;
 
-	/*
-	 * Avenger96 board comes in multiple regulator configurations:
-	 * - rev.100 or rev.200 have Buck3 preconfigured to 3V3 operation on
-	 *   boot and contains extra Enpirion EP53A8LQI DCDC converter which
-	 *   supplies the IO. Reduce Buck3 voltage to 2V9 to not waste power.
-	 * - rev.200L have Buck3 preconfigured to 1V8 operation and have no
-	 *   Enpirion EP53A8LQI DCDC anymore, the IO is supplied from Buck3.
-	 */
-	if (bucks_vout == STPMIC_NVM_BUCKS_VOUT_SHR_BUCK_3V3)
-		*uv = 2900000;
-	else
-		*uv = 1800000;
+	if (strstr(prop, "avenger96")) {
+		/*
+		 * Avenger96 board comes in multiple regulator configurations:
+		 * - rev.100 or rev.200 have Buck3 preconfigured to
+		 *   3V3 operation on boot and contains extra Enpirion
+		 *   EP53A8LQI DCDC converter which supplies the IO.
+		 *   Reduce Buck3 voltage to 2V9 to not waste power.
+		 * - rev.200L have Buck3 preconfigured to 1V8 operation
+		 *   and have no Enpirion EP53A8LQI DCDC anymore, the
+		 *   IO is supplied from Buck3.
+		 */
+		if (bucks_vout == STPMIC_NVM_BUCKS_VOUT_SHR_BUCK_3V3)
+			*uv = 2900000;
+		else
+			*uv = 1800000;
+	} else {
+		/* Testbench always respects Buck3 NVM settings */
+		if (bucks_vout == STPMIC_NVM_BUCKS_VOUT_SHR_BUCK_3V3)
+			*uv = 3300000;
+		else if (bucks_vout == STPMIC_NVM_BUCKS_VOUT_SHR_BUCK_3V0)
+			*uv = 3000000;
+		else if (bucks_vout == STPMIC_NVM_BUCKS_VOUT_SHR_BUCK_1V8)
+			*uv = 1800000;
+		else	/* STPMIC_NVM_BUCKS_VOUT_SHR_BUCK_1V2 */
+			*uv = 1200000;
+	}
 
 	return 0;
 }
@@ -595,6 +616,7 @@ static void board_init_regulator_av96(void)
 
 	/* Adjust Buck3 per preconfigured PMIC voltage from NVM. */
 	regulator_set_value(rdev, uv);
+	regulator_set_enable(rdev, true);
 }
 
 static void board_init_regulator(void)
@@ -662,74 +684,59 @@ void board_quiesce_devices(void)
 #endif
 }
 
-/* eth init function : weak called in eqos driver */
-int board_interface_eth_init(struct udevice *dev,
-			     phy_interface_t interface_type)
+static void dh_stm32_ks8851_fixup(void *blob)
 {
-	u8 *syscfg;
-	u32 value;
-	bool eth_clk_sel_reg = false;
-	bool eth_ref_clk_sel_reg = false;
+	struct gpio_desc ks8851intrn;
+	bool compatible = false;
+	int ks8851intrn_value;
+	const char *prop;
+	ofnode node;
+	int idx = 0;
+	int offset;
+	int ret;
 
-	/* Gigabit Ethernet 125MHz clock selection. */
-	eth_clk_sel_reg = dev_read_bool(dev, "st,eth-clk-sel");
-
-	/* Ethernet 50Mhz RMII clock selection */
-	eth_ref_clk_sel_reg =
-		dev_read_bool(dev, "st,eth-ref-clk-sel");
-
-	syscfg = (u8 *)syscon_get_first_range(STM32MP_SYSCON_SYSCFG);
-
-	if (!syscfg)
-		return -ENODEV;
-
-	switch (interface_type) {
-	case PHY_INTERFACE_MODE_MII:
-		value = SYSCFG_PMCSETR_ETH_SEL_GMII_MII |
-			SYSCFG_PMCSETR_ETH_REF_CLK_SEL;
-		debug("%s: PHY_INTERFACE_MODE_MII\n", __func__);
+	/* Do nothing if not STM32MP15xx DHCOM SoM */
+	while ((prop = fdt_stringlist_get(blob, 0, "compatible", idx++, NULL))) {
+		if (!strstr(prop, "dhcom-som"))
+			continue;
+		compatible = true;
 		break;
-	case PHY_INTERFACE_MODE_GMII:
-		if (eth_clk_sel_reg)
-			value = SYSCFG_PMCSETR_ETH_SEL_GMII_MII |
-				SYSCFG_PMCSETR_ETH_CLK_SEL;
-		else
-			value = SYSCFG_PMCSETR_ETH_SEL_GMII_MII;
-		debug("%s: PHY_INTERFACE_MODE_GMII\n", __func__);
-		break;
-	case PHY_INTERFACE_MODE_RMII:
-		if (eth_ref_clk_sel_reg)
-			value = SYSCFG_PMCSETR_ETH_SEL_RMII |
-				SYSCFG_PMCSETR_ETH_REF_CLK_SEL;
-		else
-			value = SYSCFG_PMCSETR_ETH_SEL_RMII;
-		debug("%s: PHY_INTERFACE_MODE_RMII\n", __func__);
-		break;
-	case PHY_INTERFACE_MODE_RGMII:
-	case PHY_INTERFACE_MODE_RGMII_ID:
-	case PHY_INTERFACE_MODE_RGMII_RXID:
-	case PHY_INTERFACE_MODE_RGMII_TXID:
-		if (eth_clk_sel_reg)
-			value = SYSCFG_PMCSETR_ETH_SEL_RGMII |
-				SYSCFG_PMCSETR_ETH_CLK_SEL;
-		else
-			value = SYSCFG_PMCSETR_ETH_SEL_RGMII;
-		debug("%s: PHY_INTERFACE_MODE_RGMII\n", __func__);
-		break;
-	default:
-		debug("%s: Do not manage %d interface\n",
-		      __func__, interface_type);
-		/* Do not manage others interfaces */
-		return -EINVAL;
 	}
 
-	/* clear and set ETH configuration bits */
-	writel(SYSCFG_PMCSETR_ETH_SEL_MASK | SYSCFG_PMCSETR_ETH_SELMII |
-	       SYSCFG_PMCSETR_ETH_REF_CLK_SEL | SYSCFG_PMCSETR_ETH_CLK_SEL,
-	       syscfg + SYSCFG_PMCCLRR);
-	writel(value, syscfg + SYSCFG_PMCSETR);
+	if (!compatible)
+		return;
 
-	return 0;
+	/*
+	 * Read state of INTRN pull up resistor, if this pull up is populated,
+	 * KS8851-16MLL is populated as well and should be enabled, otherwise
+	 * it should be disabled.
+	 */
+	node = ofnode_path("/config");
+	if (!ofnode_valid(node))
+		return;
+
+	ret = gpio_request_by_name_nodev(node, "dh,mac-coding-gpios", 0,
+					 &ks8851intrn, GPIOD_IS_IN);
+	if (ret)
+		return;
+
+	ks8851intrn_value = dm_gpio_get_value(&ks8851intrn);
+
+	dm_gpio_free(NULL, &ks8851intrn);
+
+	/* Set the 'status' property into KS8851-16MLL DT node. */
+	offset = fdt_path_offset(blob, "ethernet1");
+	ret = fdt_node_check_compatible(blob, offset, "micrel,ks8851-mll");
+	if (ret)	/* Not compatible */
+		return;
+
+	/* Add a bit of extra space for new 'status' property */
+	ret = fdt_shrink_to_minimum(blob, 4096);
+	if (!ret)
+		return;
+
+	fdt_setprop_string(blob, offset, "status",
+			   ks8851intrn_value ? "okay" : "disabled");
 }
 
 #if defined(CONFIG_OF_BOARD_SETUP)
@@ -737,6 +744,8 @@ int ft_board_setup(void *blob, struct bd_info *bd)
 {
 	const char *buck3path = "/soc/i2c@5c002000/stpmic@33/regulators/buck3";
 	int buck3off, ret, uv;
+
+	dh_stm32_ks8851_fixup(blob);
 
 	ret = board_get_regulator_buck3_nvm_uv_av96(&uv);
 	if (ret)	/* Not Avenger96 board, do not patch Buck3 in DT. */
@@ -755,6 +764,13 @@ int ft_board_setup(void *blob, struct bd_info *bd)
 		return ret;
 
 	return 0;
+}
+#endif
+
+#if defined(CONFIG_SPL_BUILD)
+void spl_perform_fixups(struct spl_image_info *spl_image)
+{
+	dh_stm32_ks8851_fixup(spl_image_fdt_addr(spl_image));
 }
 #endif
 

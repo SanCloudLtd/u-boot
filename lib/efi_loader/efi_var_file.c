@@ -7,7 +7,6 @@
 
 #define LOG_CATEGORY LOGC_EFI
 
-#include <common.h>
 #include <charset.h>
 #include <fs.h>
 #include <log.h>
@@ -38,82 +37,18 @@ static efi_status_t __maybe_unused efi_set_blk_dev_to_system_partition(void)
 	char part_str[PART_STR_LEN];
 	int r;
 
-	if (!efi_system_partition.if_type) {
+	if (efi_system_partition.uclass_id == UCLASS_INVALID) {
 		log_err("No EFI system partition\n");
 		return EFI_DEVICE_ERROR;
 	}
 	snprintf(part_str, PART_STR_LEN, "%x:%x",
 		 efi_system_partition.devnum, efi_system_partition.part);
-	r = fs_set_blk_dev(blk_get_if_type_name(efi_system_partition.if_type),
+	r = fs_set_blk_dev(blk_get_uclass_name(efi_system_partition.uclass_id),
 			   part_str, FS_TYPE_ANY);
 	if (r) {
 		log_err("Cannot read EFI system partition\n");
 		return EFI_DEVICE_ERROR;
 	}
-	return EFI_SUCCESS;
-}
-
-efi_status_t __maybe_unused efi_var_collect(struct efi_var_file **bufp, loff_t *lenp,
-					    u32 check_attr_mask)
-{
-	size_t len = EFI_VAR_BUF_SIZE;
-	struct efi_var_file *buf;
-	struct efi_var_entry *var, *old_var;
-	size_t old_var_name_length = 2;
-
-	*bufp = NULL; /* Avoid double free() */
-	buf = calloc(1, len);
-	if (!buf)
-		return EFI_OUT_OF_RESOURCES;
-	var = buf->var;
-	old_var = var;
-	for (;;) {
-		efi_uintn_t data_length, var_name_length;
-		u8 *data;
-		efi_status_t ret;
-
-		if ((uintptr_t)buf + len <=
-		    (uintptr_t)var->name + old_var_name_length)
-			return EFI_BUFFER_TOO_SMALL;
-
-		var_name_length = (uintptr_t)buf + len - (uintptr_t)var->name;
-		memcpy(var->name, old_var->name, old_var_name_length);
-		guidcpy(&var->guid, &old_var->guid);
-		ret = efi_get_next_variable_name_int(
-				&var_name_length, var->name, &var->guid);
-		if (ret == EFI_NOT_FOUND)
-			break;
-		if (ret != EFI_SUCCESS) {
-			free(buf);
-			return ret;
-		}
-		old_var_name_length = var_name_length;
-		old_var = var;
-
-		data = (u8 *)var->name + old_var_name_length;
-		data_length = (uintptr_t)buf + len - (uintptr_t)data;
-		ret = efi_get_variable_int(var->name, &var->guid,
-					   &var->attr, &data_length, data,
-					   &var->time);
-		if (ret != EFI_SUCCESS) {
-			free(buf);
-			return ret;
-		}
-		if ((var->attr & check_attr_mask) == check_attr_mask) {
-			var->length = data_length;
-			var = (struct efi_var_entry *)ALIGN((uintptr_t)data + data_length, 8);
-		}
-	}
-
-	buf->reserved = 0;
-	buf->magic = EFI_VAR_FILE_MAGIC;
-	len = (uintptr_t)var - (uintptr_t)buf;
-	buf->crc32 = crc32(0, (u8 *)buf->var,
-			   len - sizeof(struct efi_var_file));
-	buf->length = len;
-	*bufp = buf;
-	*lenp = len;
-
 	return EFI_SUCCESS;
 }
 
@@ -176,7 +111,7 @@ efi_status_t efi_var_restore(struct efi_var_file *buf, bool safe)
 		data = var->name + u16_strlen(var->name) + 1;
 
 		/*
-		 * Secure boot related and non-volatile variables shall only be
+		 * Secure boot related and volatile variables shall only be
 		 * restored from U-Boot's preseed.
 		 */
 		if (!safe &&
@@ -186,6 +121,8 @@ efi_status_t efi_var_restore(struct efi_var_file *buf, bool safe)
 		     !(var->attr & EFI_VARIABLE_NON_VOLATILE)))
 			continue;
 		if (!var->length)
+			continue;
+		if (efi_var_mem_find(&var->guid, var->name, NULL))
 			continue;
 		ret = efi_var_mem_ins(var->name, &var->guid, var->attr,
 				      var->length, data, 0, NULL,
@@ -202,8 +139,11 @@ efi_status_t efi_var_restore(struct efi_var_file *buf, bool safe)
  * File ubootefi.var is read from the EFI system partitions and the variables
  * stored in the file are created.
  *
- * In case the file does not exist yet or a variable cannot be set EFI_SUCCESS
- * is returned.
+ * On first boot the file ubootefi.var does not exist yet. This is why we must
+ * return EFI_SUCCESS in this case.
+ *
+ * If the variable file is corrupted, e.g. incorrect CRC32, we do not want to
+ * stop the boot process. We deliberately return EFI_SUCCESS in this case, too.
  *
  * Return:	status code
  */

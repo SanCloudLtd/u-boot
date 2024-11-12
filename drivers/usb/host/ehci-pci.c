@@ -4,7 +4,6 @@
  * All rights reserved.
  */
 
-#include <common.h>
 #include <dm.h>
 #include <errno.h>
 #include <init.h>
@@ -31,7 +30,7 @@ static int ehci_pci_init(struct udevice *dev, struct ehci_hccr **ret_hccr,
 	int ret;
 	u32 cmd;
 
-	ret = ehci_setup_phy(dev, &priv->phy, 0);
+	ret = generic_setup_phy(dev, &priv->phy, 0);
 	if (ret)
 		return ret;
 
@@ -149,7 +148,7 @@ static int ehci_pci_remove(struct udevice *dev)
 	if (ret)
 		return ret;
 
-	return ehci_shutdown_phy(dev, &priv->phy);
+	return generic_shutdown_phy(&priv->phy);
 }
 
 static const struct udevice_id ehci_pci_ids[] = {

@@ -7,10 +7,9 @@
  * Based on ti/evm/evm.c
  *
  * Copyright (C) 2010
- * Texas Instruments Incorporated - http://www.ti.com/
+ * Texas Instruments Incorporated - https://www.ti.com/
  */
 
-#include <common.h>
 #include <dm.h>
 #include <init.h>
 #include <net.h>

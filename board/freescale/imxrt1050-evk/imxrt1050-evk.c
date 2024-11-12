@@ -4,7 +4,6 @@
  * Author(s): Giulio Benetti <giulio.benetti@benettiengineering.com>
  */
 
-#include <common.h>
 #include <dm.h>
 #include <init.h>
 #include <log.h>
@@ -68,7 +67,12 @@ void spl_board_init(void)
 
 u32 spl_boot_device(void)
 {
-	return BOOT_DEVICE_MMC1;
+	/* There is no way to find the boot device so look if there is a valid IVT in RAM for MMC */
+	u32 nor_ivt = *(u32 *)(CONFIG_SYS_LOAD_ADDR - 0xC00);
+
+	if (nor_ivt == 0x402000d1)
+		return BOOT_DEVICE_MMC1;
+	return BOOT_DEVICE_NOR;
 }
 #endif
 

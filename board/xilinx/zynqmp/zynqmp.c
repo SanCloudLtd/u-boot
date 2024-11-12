@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2014 - 2015 Xilinx, Inc.
- * Michal Simek <michal.simek@xilinx.com>
+ * Michal Simek <michal.simek@amd.com>
  */
 
-#include <common.h>
+#include <config.h>
 #include <command.h>
 #include <cpu_func.h>
 #include <debug_uart.h>
@@ -12,14 +12,13 @@
 #include <env.h>
 #include <env_internal.h>
 #include <init.h>
-#include <image.h>
-#include <lmb.h>
 #include <log.h>
 #include <net.h>
 #include <sata.h>
 #include <ahci.h>
 #include <scsi.h>
 #include <soc.h>
+#include <spl.h>
 #include <malloc.h>
 #include <memalign.h>
 #include <wdt.h>
@@ -147,19 +146,13 @@ int board_init(void)
 	char name[SOC_MAX_STR_SIZE];
 	int ret;
 #endif
-#if defined(CONFIG_ZYNQMP_FIRMWARE)
-	struct udevice *dev;
-
-	uclass_get_device_by_name(UCLASS_FIRMWARE, "zynqmp-power", &dev);
-	if (!dev)
-		panic("PMU Firmware device not found - Enable it");
-#endif
 
 #if defined(CONFIG_SPL_BUILD)
 	/* Check *at build time* if the filename is an non-empty string */
 	if (sizeof(CONFIG_ZYNQMP_SPL_PM_CFG_OBJ_FILE) > 1)
 		zynqmp_pmufw_load_config_object(zynqmp_pm_cfg_obj,
 						zynqmp_pm_cfg_obj_size);
+
 	printf("Silicon version:\t%d\n", zynqmp_get_silicon_version());
 
 	/* the CSU disables the JTAG interface when secure boot is enabled */
@@ -234,7 +227,7 @@ unsigned long do_go_exec(ulong (*entry)(int, char * const []), int argc,
 	return ret;
 }
 
-#if !defined(CONFIG_SYS_SDRAM_BASE) && !defined(CONFIG_SYS_SDRAM_SIZE)
+#if !defined(CFG_SYS_SDRAM_BASE) && !defined(CFG_SYS_SDRAM_SIZE)
 int dram_init_banksize(void)
 {
 	int ret;
@@ -256,37 +249,10 @@ int dram_init(void)
 	return 0;
 }
 
-#if defined(CONFIG_LMB)
-ulong board_get_usable_ram_top(ulong total_size)
-{
-	phys_size_t size;
-	phys_addr_t reg;
-	struct lmb lmb;
-
-	if (!total_size)
-		return gd->ram_top;
-
-	if (!IS_ALIGNED((ulong)gd->fdt_blob, 0x8))
-		panic("Not 64bit aligned DT location: %p\n", gd->fdt_blob);
-
-	/* found enough not-reserved memory to relocated U-Boot */
-	lmb_init(&lmb);
-	lmb_add(&lmb, gd->ram_base, gd->ram_size);
-	boot_fdt_add_mem_rsv_regions(&lmb, (void *)gd->fdt_blob);
-	size = ALIGN(CONFIG_SYS_MALLOC_LEN + total_size, MMU_SECTION_SIZE);
-	reg = lmb_alloc(&lmb, size, MMU_SECTION_SIZE);
-
-	if (!reg)
-		reg = gd->ram_top - size;
-
-	return reg + size;
-}
-#endif
-
 #else
 int dram_init_banksize(void)
 {
-	gd->bd->bi_dram[0].start = CONFIG_SYS_SDRAM_BASE;
+	gd->bd->bi_dram[0].start = CFG_SYS_SDRAM_BASE;
 	gd->bd->bi_dram[0].size = get_effective_memsize();
 
 	mem_map_fill();
@@ -296,8 +262,8 @@ int dram_init_banksize(void)
 
 int dram_init(void)
 {
-	gd->ram_size = get_ram_size((void *)CONFIG_SYS_SDRAM_BASE,
-				    CONFIG_SYS_SDRAM_SIZE);
+	gd->ram_size = get_ram_size((void *)CFG_SYS_SDRAM_BASE,
+				    CFG_SYS_SDRAM_SIZE);
 
 	return 0;
 }
@@ -306,6 +272,18 @@ int dram_init(void)
 #if !CONFIG_IS_ENABLED(SYSRESET)
 void reset_cpu(void)
 {
+	if (!IS_ENABLED(CONFIG_ZYNQMP_FIRMWARE)) {
+		log_warning("reset failed: ZYNQMP_FIRMWARE disabled");
+		return;
+	}
+
+	/* In case of !CONFIG_ZYNQMP_FIRMWARE the call to 'xilinx_pm_request()'
+	 * will be removed by the compiler due to the early return.
+	 * If CONFIG_ZYNQMP_FIRMWARE is defined in SPL 'xilinx_pm_request()'
+	 * will send command over IPI and requires pmufw to be present.
+	 */
+	xilinx_pm_request(PM_RESET_ASSERT, ZYNQMP_PM_RESET_SOFT,
+			  PM_RESET_ACTION_ASSERT, 0, 0, NULL);
 }
 #endif
 
@@ -409,37 +387,16 @@ static int set_fdtfile(void)
 	return 0;
 }
 
-int board_late_init(void)
+static int boot_targets_setup(void)
 {
 	u8 bootmode;
 	struct udevice *dev;
 	int bootseq = -1;
 	int bootseq_len = 0;
 	int env_targets_len = 0;
-	const char *mode;
+	const char *mode = NULL;
 	char *new_targets;
 	char *env_targets;
-	int ret, multiboot;
-
-#if defined(CONFIG_USB_ETHER) && !defined(CONFIG_USB_GADGET_DOWNLOAD)
-	usb_ether_init();
-#endif
-
-	if (!(gd->flags & GD_FLG_ENV_DEFAULT)) {
-		debug("Saved variables - Skipping\n");
-		return 0;
-	}
-
-	if (!CONFIG_IS_ENABLED(ENV_VARS_UBOOT_RUNTIME_CONFIG))
-		return 0;
-
-	ret = set_fdtfile();
-	if (ret)
-		return ret;
-
-	multiboot = multi_boot();
-	if (multiboot >= 0)
-		env_set_hex("multiboot", multiboot);
 
 	bootmode = zynqmp_get_bootmode();
 
@@ -467,8 +424,8 @@ int board_late_init(void)
 					      "mmc@ff160000", &dev) &&
 		    uclass_get_device_by_name(UCLASS_MMC,
 					      "sdhci@ff160000", &dev)) {
-			puts("Boot from EMMC but without SD0 enabled!\n");
-			return -1;
+			debug("SD0 driver for SD0 device is not present\n");
+			break;
 		}
 		debug("mmc0 device found at %p, seq %d\n", dev, dev_seq(dev));
 
@@ -482,8 +439,8 @@ int board_late_init(void)
 					      "mmc@ff160000", &dev) &&
 		    uclass_get_device_by_name(UCLASS_MMC,
 					      "sdhci@ff160000", &dev)) {
-			puts("Boot from SD0 but without SD0 enabled!\n");
-			return -1;
+			debug("SD0 driver for SD0 device is not present\n");
+			break;
 		}
 		debug("mmc0 device found at %p, seq %d\n", dev, dev_seq(dev));
 
@@ -500,8 +457,8 @@ int board_late_init(void)
 					      "mmc@ff170000", &dev) &&
 		    uclass_get_device_by_name(UCLASS_MMC,
 					      "sdhci@ff170000", &dev)) {
-			puts("Boot from SD1 but without SD1 enabled!\n");
-			return -1;
+			debug("SD1 driver for SD1 device is not present\n");
+			break;
 		}
 		debug("mmc1 device found at %p, seq %d\n", dev, dev_seq(dev));
 
@@ -515,39 +472,73 @@ int board_late_init(void)
 		env_set("modeboot", "nandboot");
 		break;
 	default:
-		mode = "";
 		printf("Invalid Boot Mode:0x%x\n", bootmode);
 		break;
 	}
 
-	if (bootseq >= 0) {
-		bootseq_len = snprintf(NULL, 0, "%i", bootseq);
-		debug("Bootseq len: %x\n", bootseq_len);
-		env_set_hex("bootseq", bootseq);
+	if (mode) {
+		if (bootseq >= 0) {
+			bootseq_len = snprintf(NULL, 0, "%i", bootseq);
+			debug("Bootseq len: %x\n", bootseq_len);
+			env_set_hex("bootseq", bootseq);
+		}
+
+		/*
+		 * One terminating char + one byte for space between mode
+		 * and default boot_targets
+		 */
+		env_targets = env_get("boot_targets");
+		if (env_targets)
+			env_targets_len = strlen(env_targets);
+
+		new_targets = calloc(1, strlen(mode) + env_targets_len + 2 +
+				     bootseq_len);
+		if (!new_targets)
+			return -ENOMEM;
+
+		if (bootseq >= 0)
+			sprintf(new_targets, "%s%x %s", mode, bootseq,
+				env_targets ? env_targets : "");
+		else
+			sprintf(new_targets, "%s %s", mode,
+				env_targets ? env_targets : "");
+
+		env_set("boot_targets", new_targets);
+		free(new_targets);
 	}
 
-	/*
-	 * One terminating char + one byte for space between mode
-	 * and default boot_targets
-	 */
-	env_targets = env_get("boot_targets");
-	if (env_targets)
-		env_targets_len = strlen(env_targets);
+	return 0;
+}
 
-	new_targets = calloc(1, strlen(mode) + env_targets_len + 2 +
-			     bootseq_len);
-	if (!new_targets)
-		return -ENOMEM;
+int board_late_init(void)
+{
+	int ret, multiboot;
 
-	if (bootseq >= 0)
-		sprintf(new_targets, "%s%x %s", mode, bootseq,
-			env_targets ? env_targets : "");
-	else
-		sprintf(new_targets, "%s %s", mode,
-			env_targets ? env_targets : "");
+#if defined(CONFIG_USB_ETHER) && !defined(CONFIG_USB_GADGET_DOWNLOAD)
+	usb_ether_init();
+#endif
 
-	env_set("boot_targets", new_targets);
-	free(new_targets);
+	multiboot = multi_boot();
+	if (multiboot >= 0)
+		env_set_hex("multiboot", multiboot);
+
+	if (!(gd->flags & GD_FLG_ENV_DEFAULT)) {
+		debug("Saved variables - Skipping\n");
+		return 0;
+	}
+
+	if (!IS_ENABLED(CONFIG_ENV_VARS_UBOOT_RUNTIME_CONFIG))
+		return 0;
+
+	ret = set_fdtfile();
+	if (ret)
+		return ret;
+
+	if (IS_ENABLED(CONFIG_DISTRO_DEFAULTS)) {
+		ret = boot_targets_setup();
+		if (ret)
+			return ret;
+	}
 
 	reset_reason();
 
@@ -596,6 +587,7 @@ int mmc_get_env_dev(void)
 	return bootseq;
 }
 
+#if defined(CONFIG_ENV_IS_NOWHERE)
 enum env_location env_get_location(enum env_operation op, int prio)
 {
 	u32 bootmode = zynqmp_get_bootmode();
@@ -629,20 +621,44 @@ enum env_location env_get_location(enum env_operation op, int prio)
 		return ENVL_NOWHERE;
 	}
 }
+#endif
 
 #if defined(CONFIG_SET_DFU_ALT_INFO)
 
 #define DFU_ALT_BUF_LEN		SZ_1K
 
+static void mtd_found_part(u32 *base, u32 *size)
+{
+	struct mtd_info *part, *mtd;
+
+	mtd_probe_devices();
+
+	mtd = get_mtd_device_nm("nor0");
+	if (!IS_ERR_OR_NULL(mtd)) {
+		list_for_each_entry(part, &mtd->partitions, node) {
+			debug("0x%012llx-0x%012llx : \"%s\"\n",
+			      part->offset, part->offset + part->size,
+			      part->name);
+
+			if (*base >= part->offset &&
+			    *base < part->offset + part->size) {
+				debug("Found my partition: %d/%s\n",
+				      part->index, part->name);
+				*base = part->offset;
+				*size = part->size;
+				break;
+			}
+		}
+	}
+}
+
 void set_dfu_alt_info(char *interface, char *devstr)
 {
-	u8 multiboot;
-	int bootseq = 0;
+	int multiboot, bootseq = 0, len = 0;
 
 	ALLOC_CACHE_ALIGN_BUFFER(char, buf, DFU_ALT_BUF_LEN);
 
-	if (!CONFIG_IS_ENABLED(EFI_HAVE_CAPSULE_SUPPORT) &&
-	    env_get("dfu_alt_info"))
+	if (env_get("dfu_alt_info"))
 		return;
 
 	memset(buf, 0, sizeof(buf));
@@ -660,34 +676,70 @@ void set_dfu_alt_info(char *interface, char *devstr)
 	case SD1_LSHFT_MODE:
 	case SD_MODE1:
 		bootseq = mmc_get_env_dev();
-		if (!multiboot)
-			snprintf(buf, DFU_ALT_BUF_LEN,
-				 "mmc %d:1=boot.bin fat %d 1;"
-				 "%s fat %d 1",
-				 bootseq, bootseq,
-				 CONFIG_SPL_FS_LOAD_PAYLOAD_NAME, bootseq);
-		else
-			snprintf(buf, DFU_ALT_BUF_LEN,
-				 "mmc %d:1=boot%04d.bin fat %d 1;"
-				 "%s fat %d 1",
-				 bootseq, multiboot, bootseq,
-				 CONFIG_SPL_FS_LOAD_PAYLOAD_NAME, bootseq);
+
+		len += snprintf(buf + len, DFU_ALT_BUF_LEN, "mmc %d=boot",
+			       bootseq);
+
+		if (multiboot)
+			len += snprintf(buf + len, DFU_ALT_BUF_LEN,
+				       "%04d", multiboot);
+
+		len += snprintf(buf + len, DFU_ALT_BUF_LEN, ".bin fat %d 1",
+			       bootseq);
+#if defined(CONFIG_SPL_FS_LOAD_PAYLOAD_NAME)
+		if (strlen(CONFIG_SPL_FS_LOAD_PAYLOAD_NAME))
+			len += snprintf(buf + len, DFU_ALT_BUF_LEN,
+					";%s fat %d 1",
+					CONFIG_SPL_FS_LOAD_PAYLOAD_NAME,
+					bootseq);
+#endif
 		break;
-#if defined(CONFIG_SYS_SPI_U_BOOT_OFFS)
 	case QSPI_MODE_24BIT:
 	case QSPI_MODE_32BIT:
-		snprintf(buf, DFU_ALT_BUF_LEN,
-			 "sf 0:0=boot.bin raw %x 0x1500000;"
-			 "%s raw 0x%x 0x500000",
-			 multiboot * SZ_32K, CONFIG_SPL_FS_LOAD_PAYLOAD_NAME,
-			 CONFIG_SYS_SPI_U_BOOT_OFFS);
-		break;
+		{
+			u32 base = multiboot * SZ_32K;
+			u32 size = 0x1500000;
+			u32 limit = size;
+
+			mtd_found_part(&base, &limit);
+
+#if defined(CONFIG_SYS_SPI_U_BOOT_OFFS)
+			size = limit;
+			limit = CONFIG_SYS_SPI_U_BOOT_OFFS;
 #endif
+
+			len += snprintf(buf + len, DFU_ALT_BUF_LEN,
+					"sf 0:0=boot.bin raw 0x%x 0x%x",
+					base, limit);
+#if defined(CONFIG_SPL_FS_LOAD_PAYLOAD_NAME) && defined(CONFIG_SYS_SPI_U_BOOT_OFFS)
+			if (strlen(CONFIG_SPL_FS_LOAD_PAYLOAD_NAME))
+				len += snprintf(buf + len, DFU_ALT_BUF_LEN,
+						";%s raw 0x%x 0x%x",
+						CONFIG_SPL_FS_LOAD_PAYLOAD_NAME,
+						base + limit, size - limit);
+#endif
+		}
+		break;
 	default:
 		return;
 	}
 
 	env_set("dfu_alt_info", buf);
 	puts("DFU alt info setting: done\n");
+}
+#endif
+
+#if defined(CONFIG_SPL_SPI_LOAD)
+unsigned int spl_spi_get_uboot_offs(struct spi_flash *flash)
+{
+	u32 offset;
+	int multiboot = multi_boot();
+
+	offset = multiboot * SZ_32K;
+	offset += CONFIG_SYS_SPI_U_BOOT_OFFS;
+
+	log_info("SPI offset:\t0x%x\n", offset);
+
+	return offset;
 }
 #endif

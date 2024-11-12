@@ -12,7 +12,6 @@
 #include <time.h>
 #include <asm/global_data.h>
 #include <linux/types.h>
-#include <common.h>
 #include <env.h>
 #include <asm/io.h>
 #include <asm/bootm.h>
@@ -61,13 +60,13 @@ int dram_init_banksize(void)
 
 	/*
 	 * On this SoC, U-Boot is running as an ELF file.  Change the
-	 * relocation address to CONFIG_SYS_TEXT_BASE, so that in
+	 * relocation address to CONFIG_TEXT_BASE, so that in
 	 * setup_reloc, gd->reloc_off works out to 0, effectively
 	 * disabling relocation.  Otherwise U-Boot hangs in the setup
 	 * instructions just before relocate_code in
 	 * arch/arm/lib/crt0.S.
 	 */
-	gd->relocaddr = CONFIG_SYS_TEXT_BASE;
+	gd->relocaddr = CONFIG_TEXT_BASE;
 
 	return 0;
 }

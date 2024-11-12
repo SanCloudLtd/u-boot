@@ -7,7 +7,6 @@
  * ROHM BD71837 regulator driver
  */
 
-#include <common.h>
 #include <dm.h>
 #include <log.h>
 #include <linux/bitops.h>
@@ -276,7 +275,8 @@ static int pca9450_regulator_probe(struct udevice *dev)
 
 	type = dev_get_driver_data(dev_get_parent(dev));
 
-	if (type != NXP_CHIP_TYPE_PCA9450A && type != NXP_CHIP_TYPE_PCA9450BC) {
+	if (type != NXP_CHIP_TYPE_PCA9450A && type != NXP_CHIP_TYPE_PCA9450BC &&
+	    type != NXP_CHIP_TYPE_PCA9451A) {
 		debug("Unknown PMIC type\n");
 		return -EINVAL;
 	}
@@ -288,6 +288,14 @@ static int pca9450_regulator_probe(struct udevice *dev)
 		/* PCA9450B/PCA9450C uses BUCK1 and BUCK3 in dual-phase */
 		if (type == NXP_CHIP_TYPE_PCA9450BC &&
 		    !strcmp(pca9450_reg_data[i].name, "BUCK3")) {
+			continue;
+		}
+
+		/* PCA9451A uses BUCK3 in dual-phase and don't have LDO2 and LDO3 */
+		if (type == NXP_CHIP_TYPE_PCA9451A &&
+		    (!strcmp(pca9450_reg_data[i].name, "BUCK3") ||
+		    !strcmp(pca9450_reg_data[i].name, "LDO2") ||
+		    !strcmp(pca9450_reg_data[i].name, "LDO3"))) {
 			continue;
 		}
 

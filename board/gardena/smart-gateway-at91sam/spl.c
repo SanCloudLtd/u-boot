@@ -4,7 +4,7 @@
  * Copyright (C) 2019 Stefan Roese <sr@denx.de>
  */
 
-#include <common.h>
+#include <config.h>
 #include <nand.h>
 #include <spl.h>
 #include <asm/arch/at91sam9x5_matrix.h>
@@ -53,10 +53,10 @@ static void at91sam9x5ek_nand_hw_init(void)
 	at91_periph_clk_enable(ATMEL_ID_PIOCD);
 
 	/* Configure RDY/BSY */
-	at91_set_gpio_input(CONFIG_SYS_NAND_READY_PIN, 1);
+	at91_set_gpio_input(CFG_SYS_NAND_READY_PIN, 1);
 
 	/* Enable NandFlash */
-	at91_set_gpio_output(CONFIG_SYS_NAND_ENABLE_PIN, 1);
+	at91_set_gpio_output(CFG_SYS_NAND_ENABLE_PIN, 1);
 
 	at91_pio3_set_a_periph(AT91_PIO_PORTD, 0, 1);	/* NAND OE */
 	at91_pio3_set_a_periph(AT91_PIO_PORTD, 1, 1);	/* NAND WE */

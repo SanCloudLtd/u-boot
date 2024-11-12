@@ -7,23 +7,7 @@
 #ifndef __TEGRA_COMMON_POST_H
 #define __TEGRA_COMMON_POST_H
 
-#define CONFIG_SYS_NONCACHED_MEMORY	(1 << 20)	/* 1 MiB */
-
-#if CONFIG_IS_ENABLED(CMD_USB)
-# define BOOT_TARGET_USB(func) func(USB, usb, 0)
-#else
-# define BOOT_TARGET_USB(func)
-#endif
-
-#ifndef BOOT_TARGET_DEVICES
-#define BOOT_TARGET_DEVICES(func) \
-	func(MMC, mmc, 1) \
-	func(MMC, mmc, 0) \
-	BOOT_TARGET_USB(func) \
-	func(PXE, pxe, na) \
-	func(DHCP, dhcp, na)
-#endif
-#include <config_distro_bootcmd.h>
+#define BOOT_TARGETS	"usb mmc1 mmc0 pxe dhcp"
 
 #ifdef CONFIG_TEGRA_KEYBOARD
 #define STDIN_KBD_KBC ",tegra-kbc"
@@ -37,13 +21,13 @@
 #define STDIN_KBD_USB ""
 #endif
 
-#ifdef CONFIG_LCD
-#define STDOUT_LCD ",lcd"
+#ifdef CONFIG_BUTTON_KEYBOARD
+#define STDIN_BTN_KBD ",button-kbd"
 #else
-#define STDOUT_LCD ""
+#define STDIN_BTN_KBD ""
 #endif
 
-#ifdef CONFIG_DM_VIDEO
+#ifdef CONFIG_VIDEO
 #define STDOUT_VIDEO ",vidconsole"
 #else
 #define STDOUT_VIDEO ""
@@ -56,9 +40,9 @@
 #endif
 
 #define TEGRA_DEVICE_SETTINGS \
-	"stdin=serial" STDIN_KBD_KBC STDIN_KBD_USB STDOUT_CROS_EC "\0" \
-	"stdout=serial" STDOUT_LCD STDOUT_VIDEO "\0" \
-	"stderr=serial" STDOUT_LCD STDOUT_VIDEO "\0" \
+	"stdin=serial" STDIN_KBD_KBC STDIN_KBD_USB STDOUT_CROS_EC STDIN_BTN_KBD "\0" \
+	"stdout=serial" STDOUT_VIDEO "\0" \
+	"stderr=serial" STDOUT_VIDEO "\0" \
 	""
 
 #ifndef BOARD_EXTRA_ENV_SETTINGS
@@ -73,16 +57,12 @@
 #define INITRD_HIGH "ffffffff"
 #endif
 
-#define CONFIG_EXTRA_ENV_SETTINGS \
+#define CFG_EXTRA_ENV_SETTINGS \
 	TEGRA_DEVICE_SETTINGS \
 	MEM_LAYOUT_ENV_SETTINGS \
 	"fdt_high=" FDT_HIGH "\0" \
 	"initrd_high=" INITRD_HIGH "\0" \
-	BOOTENV \
+	"boot_targets=" BOOT_TARGETS "\0" \
 	BOARD_EXTRA_ENV_SETTINGS
-
-#if defined(CONFIG_TEGRA20_SFLASH) || defined(CONFIG_TEGRA20_SLINK) || defined(CONFIG_TEGRA114_SPI)
-#define CONFIG_TEGRA_SPI
-#endif
 
 #endif /* __TEGRA_COMMON_POST_H */

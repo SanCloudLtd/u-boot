@@ -7,7 +7,7 @@
  * Author: Nikita Kiryanov <nikita@compulab.co.il>
  */
 
-#include <common.h>
+#include <config.h>
 #include <ahci.h>
 #include <dm.h>
 #include <dwc_ahsata.h>
@@ -251,7 +251,6 @@ I2C_PADS(i2c2_pads,
 	 PAD_GPIO_6__I2C3_SDA | MUX_PAD_CTRL(I2C_PAD_CTRL),
 	 PAD_GPIO_6__GPIO1_IO06 | MUX_PAD_CTRL(I2C_PAD_CTRL),
 	 IMX_GPIO_NR(1, 6));
-
 
 static int cm_fx6_setup_one_i2c(int busnum, struct i2c_pads_info *pads)
 {
@@ -622,7 +621,7 @@ int board_init(void)
 		int i;
 
 		cm_fx6_set_usdhc_iomux();
-		for (i = 0; i < CONFIG_SYS_FSL_USDHC_NUM; i++)
+		for (i = 0; i < CFG_SYS_FSL_USDHC_NUM; i++)
 			enable_usdhc_clk(1, i);
 	}
 #endif
@@ -736,7 +735,7 @@ U_BOOT_DRVINFO(cm_fx6_serial) = {
 	.plat = &cm_fx6_mxc_serial_plat,
 };
 
-#if CONFIG_IS_ENABLED(AHCI)
+#if IS_ENABLED(CONFIG_AHCI)
 static int sata_imx_probe(struct udevice *dev)
 {
 	int i, err;

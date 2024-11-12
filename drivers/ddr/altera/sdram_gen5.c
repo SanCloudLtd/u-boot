@@ -2,7 +2,6 @@
 /*
  * Copyright Altera Corporation (C) 2014-2015
  */
-#include <common.h>
 #include <dm.h>
 #include <errno.h>
 #include <div64.h>
@@ -567,9 +566,9 @@ static int altera_gen5_sdram_of_to_plat(struct udevice *dev)
 {
 	struct altera_gen5_sdram_plat *plat = dev_get_plat(dev);
 
-	plat->sdr = (struct socfpga_sdr *)devfdt_get_addr_index(dev, 0);
+	plat->sdr = devfdt_get_addr_index_ptr(dev, 0);
 	if (!plat->sdr)
-		return -ENODEV;
+		return -EINVAL;
 
 	return 0;
 }

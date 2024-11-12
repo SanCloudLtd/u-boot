@@ -3,7 +3,7 @@
  * Copyright 2008 Freescale Semiconductor, Inc.
  */
 
-#include <common.h>
+#include <config.h>
 #include <log.h>
 #include <asm/io.h>
 #include <fsl_ddr_sdram.h>
@@ -18,7 +18,7 @@ void fsl_ddr_set_memctl_regs(const fsl_ddr_cfg_regs_t *regs,
 {
 	unsigned int i;
 	struct ccsr_ddr __iomem *ddr =
-		(struct ccsr_ddr __iomem *)CONFIG_SYS_FSL_DDR_ADDR;
+		(struct ccsr_ddr __iomem *)CFG_SYS_FSL_DDR_ADDR;
 
 	if (ctrl_num != 0) {
 		printf("%s unexpected ctrl_num = %u\n", __FUNCTION__, ctrl_num);
@@ -71,9 +71,9 @@ void
 ddr_enable_ecc(unsigned int dram_size)
 {
 	struct ccsr_ddr __iomem *ddr =
-		(struct ccsr_ddr __iomem *)(CONFIG_SYS_FSL_DDR_ADDR);
+		(struct ccsr_ddr __iomem *)(CFG_SYS_FSL_DDR_ADDR);
 
-	dma_meminit(CONFIG_MEM_INIT_VALUE, dram_size);
+	dma_meminit(dram_size);
 
 	/*
 	 * Enable errors for ECC.

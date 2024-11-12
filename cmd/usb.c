@@ -10,7 +10,6 @@
  * project.
  */
 
-#include <common.h>
 #include <blk.h>
 #include <bootstage.h>
 #include <command.h>
@@ -25,9 +24,6 @@
 
 #ifdef CONFIG_USB_STORAGE
 static int usb_stor_curr_dev = -1; /* current device */
-#endif
-#if defined(CONFIG_USB_HOST_ETHER) && !defined(CONFIG_DM_ETH)
-static int __maybe_unused usb_ether_curr_dev = -1; /* current ethernet device */
 #endif
 
 /* some display routines (info command) */
@@ -421,7 +417,9 @@ static void usb_show_tree_graph(struct usb_device *dev, char *pre)
 		 * Ignore emulators and block child devices, we only want
 		 * real devices
 		 */
-		if ((device_get_uclass_id(child) != UCLASS_USB_EMUL) &&
+		if (udev &&
+		    (device_get_uclass_id(child) != UCLASS_BOOTDEV) &&
+		    (device_get_uclass_id(child) != UCLASS_USB_EMUL) &&
 		    (device_get_uclass_id(child) != UCLASS_BLK)) {
 			usb_show_tree_graph(udev, pre);
 			pre[index] = 0;
@@ -551,7 +549,6 @@ static int usb_test(struct usb_device *dev, int port, char* arg)
 	}
 }
 
-
 /******************************************************************************
  * usb boot command intepreter. Derived from diskboot
  */
@@ -591,16 +588,6 @@ static void do_usb_start(void)
 	drv_usb_kbd_init();
 # endif
 #endif /* !CONFIG_DM_USB */
-#ifdef CONFIG_USB_HOST_ETHER
-# ifdef CONFIG_DM_ETH
-#  ifndef CONFIG_DM_USB
-#   error "You must use CONFIG_DM_USB if you want to use CONFIG_USB_HOST_ETHER with CONFIG_DM_ETH"
-#  endif
-# else
-	/* try to recognize ethernet devices immediately */
-	usb_ether_curr_dev = usb_host_eth_scan(1);
-# endif
-#endif
 }
 
 #ifdef CONFIG_DM_USB
@@ -614,10 +601,12 @@ static void usb_show_info(struct usb_device *udev)
 	     child;
 	     device_find_next_child(&child)) {
 		if (device_active(child) &&
+		    (device_get_uclass_id(child) != UCLASS_BOOTDEV) &&
 		    (device_get_uclass_id(child) != UCLASS_USB_EMUL) &&
 		    (device_get_uclass_id(child) != UCLASS_BLK)) {
 			udev = dev_get_parent_priv(child);
-			usb_show_info(udev);
+			if (udev)
+				usb_show_info(udev);
 		}
 	}
 }
@@ -630,7 +619,6 @@ static int do_usb(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 {
 	struct usb_device *udev = NULL;
 	int i;
-	extern char usb_started;
 
 	if (argc < 2)
 		return CMD_RET_USAGE;
@@ -719,7 +707,7 @@ static int do_usb(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 	if (strncmp(argv[1], "stor", 4) == 0)
 		return usb_stor_info();
 
-	return blk_common_cmd(argc, argv, IF_TYPE_USB, &usb_stor_curr_dev);
+	return blk_common_cmd(argc, argv, UCLASS_USB, &usb_stor_curr_dev);
 #else
 	return CMD_RET_USAGE;
 #endif /* CONFIG_USB_STORAGE */
@@ -747,7 +735,6 @@ U_BOOT_CMD(
 	"    from memory address `addr'"
 #endif /* CONFIG_USB_STORAGE */
 );
-
 
 #ifdef CONFIG_USB_STORAGE
 U_BOOT_CMD(

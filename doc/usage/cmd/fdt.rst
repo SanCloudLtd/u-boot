@@ -1,10 +1,13 @@
 .. SPDX-License-Identifier: GPL-2.0+
 
+.. index::
+   single: fdt (command)
+
 fdt command
 ===========
 
-Synopis
--------
+Synopsis
+--------
 
 ::
 
@@ -60,6 +63,7 @@ The second word shows the size of the FDT. Now set the working FDT to that
 address and expand it to 0xf000 in size::
 
     => fdt addr 10000 f000
+    Working FDT set to 10000
     => md 10000 4
     00010000: edfe0dd0 00f00000 78000000 7c270000  ...........x..'|
 

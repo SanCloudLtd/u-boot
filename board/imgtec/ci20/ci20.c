@@ -6,7 +6,6 @@
  * Author: Paul Burton <paul.burton@imgtec.com>
  */
 
-#include <common.h>
 #include <env.h>
 #include <init.h>
 #include <net.h>
@@ -349,10 +348,6 @@ static const struct jz4780_ddr_config H5TQ2G83CFR_48_config = {
 	.pullup = 0x0e,
 	.pulldn = 0x0e,
 };
-
-#if (CONFIG_SYS_MHZ != 1200)
-#error No DDR configuration for CPU speed
-#endif
 
 const struct jz4780_ddr_config *jz4780_get_ddr_config(void)
 {

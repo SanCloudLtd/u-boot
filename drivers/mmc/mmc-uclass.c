@@ -7,7 +7,6 @@
 
 #define LOG_CATEGORY UCLASS_MMC
 
-#include <common.h>
 #include <bootdev.h>
 #include <log.h>
 #include <mmc.h>
@@ -112,7 +111,7 @@ int mmc_getcd(struct mmc *mmc)
 	return dm_mmc_get_cd(mmc->dev);
 }
 
-#ifdef MMC_SUPPORTS_TUNING
+#if CONFIG_IS_ENABLED(MMC_SUPPORTS_TUNING)
 static int dm_mmc_execute_tuning(struct udevice *dev, uint opcode)
 {
 	struct dm_mmc_ops *ops = mmc_get_ops(dev);
@@ -124,7 +123,13 @@ static int dm_mmc_execute_tuning(struct udevice *dev, uint opcode)
 
 int mmc_execute_tuning(struct mmc *mmc, uint opcode)
 {
-	return dm_mmc_execute_tuning(mmc->dev, opcode);
+	int ret;
+
+	mmc->tuning = true;
+	ret = dm_mmc_execute_tuning(mmc->dev, opcode);
+	mmc->tuning = false;
+
+	return ret;
 }
 #endif
 
@@ -251,11 +256,14 @@ int mmc_of_parse(struct udevice *dev, struct mmc_config *cfg)
 	if (dev_read_bool(dev, "mmc-hs200-1_2v"))
 		cfg->host_caps |= MMC_CAP(MMC_HS_200);
 	if (dev_read_bool(dev, "mmc-hs400-1_8v"))
-		cfg->host_caps |= MMC_CAP(MMC_HS_400);
+		cfg->host_caps |= MMC_CAP(MMC_HS_400) | MMC_CAP(MMC_HS_200);
 	if (dev_read_bool(dev, "mmc-hs400-1_2v"))
-		cfg->host_caps |= MMC_CAP(MMC_HS_400);
+		cfg->host_caps |= MMC_CAP(MMC_HS_400) | MMC_CAP(MMC_HS_200);
 	if (dev_read_bool(dev, "mmc-hs400-enhanced-strobe"))
 		cfg->host_caps |= MMC_CAP(MMC_HS_400_ES);
+	if (dev_read_bool(dev, "no-mmc-hs400"))
+		cfg->host_caps &= ~(MMC_CAP(MMC_HS_400) |
+				    MMC_CAP(MMC_HS_400_ES));
 
 	if (dev_read_bool(dev, "non-removable")) {
 		cfg->host_caps |= MMC_CAP_NONREMOVABLE;
@@ -290,7 +298,7 @@ struct mmc *find_mmc_device(int dev_num)
 	struct udevice *dev, *mmc_dev;
 	int ret;
 
-	ret = blk_find_device(IF_TYPE_MMC, dev_num, &dev);
+	ret = blk_find_device(UCLASS_MMC, dev_num, &dev);
 
 	if (ret) {
 #if !defined(CONFIG_SPL_BUILD) || defined(CONFIG_SPL_LIBCOMMON_SUPPORT)
@@ -308,12 +316,12 @@ struct mmc *find_mmc_device(int dev_num)
 
 int get_mmc_num(void)
 {
-	return max((blk_find_max_devnum(IF_TYPE_MMC) + 1), 0);
+	return max((blk_find_max_devnum(UCLASS_MMC) + 1), 0);
 }
 
 int mmc_get_next_devnum(void)
 {
-	return blk_find_max_devnum(IF_TYPE_MMC);
+	return blk_find_max_devnum(UCLASS_MMC);
 }
 
 int mmc_get_blk(struct udevice *dev, struct udevice **blkp)
@@ -411,8 +419,8 @@ int mmc_bind(struct udevice *dev, struct mmc *mmc, const struct mmc_config *cfg)
 	/* Use the fixed index with aliases node's index */
 	debug("%s: alias devnum=%d\n", __func__, dev_seq(dev));
 
-	ret = blk_create_devicef(dev, "mmc_blk", "blk", IF_TYPE_MMC,
-			dev_seq(dev), 512, 0, &bdev);
+	ret = blk_create_devicef(dev, "mmc_blk", "blk", UCLASS_MMC,
+				 dev_seq(dev), DEFAULT_BLKSZ, 0, &bdev);
 	if (ret) {
 		debug("Cannot create block device\n");
 		return ret;
@@ -421,7 +429,7 @@ int mmc_bind(struct udevice *dev, struct mmc *mmc, const struct mmc_config *cfg)
 	mmc->cfg = cfg;
 	mmc->priv = dev;
 
-	ret = bootdev_setup_for_dev(dev, "mmc_bootdev");
+	ret = bootdev_setup_for_sibling_blk(bdev, "mmc_bootdev");
 	if (ret)
 		return log_msg_ret("bootdev", ret);
 
@@ -472,7 +480,7 @@ static int mmc_select_hwpart(struct udevice *bdev, int hwpart)
 
 	ret = mmc_switch_part(mmc, hwpart);
 	if (!ret)
-		blkcache_invalidate(desc->if_type, desc->devnum);
+		blkcache_invalidate(desc->uclass_id, desc->devnum);
 
 	return ret;
 }
@@ -494,10 +502,7 @@ static int mmc_blk_probe(struct udevice *dev)
 	if (ret) {
 		debug("Probing %s failed (err=%d)\n", dev->name, ret);
 
-		if (CONFIG_IS_ENABLED(MMC_UHS_SUPPORT) ||
-		    CONFIG_IS_ENABLED(MMC_HS200_SUPPORT) ||
-		    CONFIG_IS_ENABLED(MMC_HS400_SUPPORT))
-			mmc_deinit(mmc);
+		mmc_deinit(mmc);
 
 		return ret;
 	}
@@ -505,9 +510,6 @@ static int mmc_blk_probe(struct udevice *dev)
 	return 0;
 }
 
-#if CONFIG_IS_ENABLED(MMC_UHS_SUPPORT) || \
-    CONFIG_IS_ENABLED(MMC_HS200_SUPPORT) || \
-    CONFIG_IS_ENABLED(MMC_HS400_SUPPORT)
 static int mmc_blk_remove(struct udevice *dev)
 {
 	struct udevice *mmc_dev = dev_get_parent(dev);
@@ -516,7 +518,6 @@ static int mmc_blk_remove(struct udevice *dev)
 
 	return mmc_deinit(mmc);
 }
-#endif
 
 static const struct blk_ops mmc_blk_ops = {
 	.read	= mmc_bread,
@@ -532,15 +533,10 @@ U_BOOT_DRIVER(mmc_blk) = {
 	.id		= UCLASS_BLK,
 	.ops		= &mmc_blk_ops,
 	.probe		= mmc_blk_probe,
-#if CONFIG_IS_ENABLED(MMC_UHS_SUPPORT) || \
-    CONFIG_IS_ENABLED(MMC_HS200_SUPPORT) || \
-    CONFIG_IS_ENABLED(MMC_HS400_SUPPORT)
 	.remove		= mmc_blk_remove,
 	.flags		= DM_FLAG_OS_PREPARE,
-#endif
 };
 #endif /* CONFIG_BLK */
-
 
 UCLASS_DRIVER(mmc) = {
 	.id		= UCLASS_MMC,

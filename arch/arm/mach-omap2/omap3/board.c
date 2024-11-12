@@ -15,7 +15,6 @@
  *      Syed Mohammed Khasim <khasim@ti.com>
  *
  */
-#include <common.h>
 #include <command.h>
 #include <dm.h>
 #include <init.h>
@@ -216,7 +215,7 @@ void s_init(void)
 void board_init_f(ulong dummy)
 {
 	early_system_init();
-	mem_init();
+	omap3_mem_init();
 	/*
 	* Save the boot parameters passed from romcode.
 	* We cannot delay the saving further than this,
@@ -405,7 +404,6 @@ void v7_arch_cp15_set_acr(u32 acr, u32 cpu_midr, u32 cpu_rev_comb,
 	/* Write ACR - affects non-secure banked bits - some erratas need it */
 	asm volatile ("mcr p15, 0, %0, c1, c0, 1" : : "r" (acr));
 }
-
 
 #ifndef CONFIG_SYS_L2CACHE_OFF
 static void omap3_update_aux_cr(u32 set_bits, u32 clear_bits)

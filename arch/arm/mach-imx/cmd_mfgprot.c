@@ -11,7 +11,7 @@
 #include <asm/arch/clock.h>
 #include <linux/compiler.h>
 #include <command.h>
-#include <common.h>
+#include <config.h>
 #include <env.h>
 #include <fsl_sec.h>
 #include <mapmem.h>
@@ -41,7 +41,7 @@ static int do_mfgprot(struct cmd_tbl *cmdtp, int flag, int argc, char *const arg
 	/* Enable HAB clock */
 	hab_caam_clock_enable(1);
 
-	u32 out_jr_size = sec_in32(CONFIG_SYS_FSL_JR0_ADDR +
+	u32 out_jr_size = sec_in32(CFG_SYS_FSL_JR0_ADDR +
 				   FSL_CAAM_ORSR_JRa_OFFSET);
 
 	if (out_jr_size != FSL_CAAM_MAX_JR_SIZE)
@@ -134,12 +134,12 @@ free_m:
 }
 
 /***************************************************/
-static char mfgprot_help_text[] =
+U_BOOT_LONGHELP(mfgprot,
 	"Usage:\n"
 	 "Print the public key for Manufacturing Protection\n"
 	 "\tmfgprot pubk\n"
 	 "Generates a Manufacturing Protection signature\n"
-	 "\tmfgprot sign <data_addr> <size>";
+	 "\tmfgprot sign <data_addr> <size>\n");
 
 U_BOOT_CMD(
 	mfgprot, 4, 1, do_mfgprot,

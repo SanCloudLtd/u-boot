@@ -5,12 +5,13 @@
  * Copyright 2020 Stephen Carlson <stcarlso@linux.microsoft.com>
  */
 
-#include <common.h>
+#include <config.h>
 #include <command.h>
 #include <env.h>
 #include <i2c.h>
 #include <irq_func.h>
 #include <log.h>
+#include <vsprintf.h>
 #include <asm/io.h>
 #ifdef CONFIG_FSL_LSCH2
 #include <asm/arch/immap_lsch2.h>
@@ -539,10 +540,10 @@ int adjust_vdd(ulong vdd_override)
 {
 	int re_enable = disable_interrupts();
 #if defined(CONFIG_FSL_LSCH2) || defined(CONFIG_FSL_LSCH3)
-	struct ccsr_gur *gur = (void *)(CONFIG_SYS_FSL_GUTS_ADDR);
+	struct ccsr_gur *gur = (void *)(CFG_SYS_FSL_GUTS_ADDR);
 #else
 	ccsr_gur_t __iomem *gur =
-		(void __iomem *)(CONFIG_SYS_MPC85xx_GUTS_ADDR);
+		(void __iomem *)(CFG_SYS_MPC85xx_GUTS_ADDR);
 #endif
 	u8 vid;
 	u32 fusesr;
@@ -793,4 +794,4 @@ U_BOOT_CMD(
 	vdd_read, 1, 0, do_vdd_read,
 	"read VDD",
 	" - Read the voltage specified in mV"
-)
+);

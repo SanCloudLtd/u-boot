@@ -5,7 +5,6 @@
  * Copyright 2020, Heinrich Schuchadt <xypron.glpk@gmx.de>
  */
 
-#include <common.h>
 #include <command.h>
 #include <display_options.h>
 #include <asm/global_data.h>
@@ -68,6 +67,9 @@ static int lib_test_print_size(struct unit_test_state *uts)
 	ut_assertok(test_print_size(uts, 7654321, "7.3 MiB;"));
 	ut_assertok(test_print_size(uts, 87654321, "83.6 MiB;"));
 	ut_assertok(test_print_size(uts, 987654321, "941.9 MiB;"));
+	ut_assertok(test_print_size(uts, 1073689395, "1023.9 MiB;"));
+	ut_assertok(test_print_size(uts, 1073689396, "1 GiB;"));
+	ut_assertok(test_print_size(uts, 1073741824, "1 GiB;"));
 	ut_assertok(test_print_size(uts, 1987654321, "1.9 GiB;"));
 	ut_assertok(test_print_size(uts, 54321987654321, "49.4 TiB;"));
 	return 0;

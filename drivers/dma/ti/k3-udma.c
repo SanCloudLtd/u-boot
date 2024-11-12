@@ -1,19 +1,20 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- *  Copyright (C) 2018 Texas Instruments Incorporated - http://www.ti.com
+ *  Copyright (C) 2018 Texas Instruments Incorporated - https://www.ti.com
  *  Author: Peter Ujfalusi <peter.ujfalusi@ti.com>
  */
 #define pr_fmt(fmt) "udma: " fmt
 
-#include <common.h>
 #include <cpu_func.h>
 #include <log.h>
 #include <asm/cache.h>
 #include <asm/io.h>
 #include <asm/bitops.h>
 #include <malloc.h>
+#include <net.h>
 #include <linux/bitops.h>
 #include <linux/dma-mapping.h>
+#include <linux/sizes.h>
 #include <dm.h>
 #include <dm/device_compat.h>
 #include <dm/devres.h>
@@ -24,6 +25,7 @@
 #include <linux/delay.h>
 #include <linux/bitmap.h>
 #include <linux/err.h>
+#include <linux/printk.h>
 #include <linux/soc/ti/k3-navss-ringacc.h>
 #include <linux/soc/ti/cppi5.h>
 #include <linux/soc/ti/ti-udma.h>
@@ -874,13 +876,20 @@ static int udma_alloc_tx_resources(struct udma_chan *uc)
 {
 	struct k3_nav_ring_cfg ring_cfg;
 	struct udma_dev *ud = uc->ud;
-	int ret;
+	struct udma_tchan *tchan;
+	int ring_idx, ret;
 
 	ret = udma_get_tchan(uc);
 	if (ret)
 		return ret;
 
-	ret = k3_nav_ringacc_request_rings_pair(ud->ringacc, uc->tchan->id, -1,
+	tchan = uc->tchan;
+	if (tchan->tflow_id > 0)
+		ring_idx = tchan->tflow_id;
+	else
+		ring_idx = tchan->id;
+
+	ret = k3_nav_ringacc_request_rings_pair(ud->ringacc, ring_idx, -1,
 						&uc->tchan->t_ring,
 						&uc->tchan->tc_ring);
 	if (ret) {
@@ -1285,7 +1294,7 @@ static int udma_get_mmrs(struct udevice *dev)
 	u32 cap2, cap3, cap4;
 	int i;
 
-	ud->mmrs[MMR_GCFG] = (uint32_t *)devfdt_get_addr_name(dev, mmr_names[MMR_GCFG]);
+	ud->mmrs[MMR_GCFG] = dev_read_addr_name_ptr(dev, mmr_names[MMR_GCFG]);
 	if (!ud->mmrs[MMR_GCFG])
 		return -EINVAL;
 
@@ -1323,8 +1332,7 @@ static int udma_get_mmrs(struct udevice *dev)
 		if (i == MMR_RCHANRT && ud->rchan_cnt == 0)
 			continue;
 
-		ud->mmrs[i] = (uint32_t *)devfdt_get_addr_name(dev,
-				mmr_names[i]);
+		ud->mmrs[i] = dev_read_addr_name_ptr(dev, mmr_names[i]);
 		if (!ud->mmrs[i])
 			return -EINVAL;
 	}
@@ -1702,7 +1710,6 @@ static int udma_probe(struct udevice *dev)
 	struct udma_tisci_rm *tisci_rm = &ud->tisci_rm;
 	ofnode navss_ofnode = ofnode_get_parent(dev_ofnode(dev));
 
-
 	ud->match_data = (void *)dev_get_driver_data(dev);
 	ret = udma_get_mmrs(dev);
 	if (ret)
@@ -1762,9 +1769,11 @@ static int udma_probe(struct udevice *dev)
 		return PTR_ERR(ud->ringacc);
 
 	ud->dev = dev;
-	ud->ch_count = setup_resources(ud);
-	if (ud->ch_count <= 0)
-		return ud->ch_count;
+	ret = setup_resources(ud);
+	if (ret < 0)
+		return ret;
+
+	ud->ch_count = ret;
 
 	for (i = 0; i < ud->bchan_cnt; i++) {
 		struct udma_bchan *bchan = &ud->bchans[i];
@@ -1823,7 +1832,7 @@ static int udma_probe(struct udevice *dev)
 
 	uc_priv->supported = DMA_SUPPORTS_MEM_TO_MEM | DMA_SUPPORTS_MEM_TO_DEV;
 
-	return ret;
+	return 0;
 }
 
 static int udma_push_to_ring(struct k3_nav_ring *ring, void *elem)
@@ -2149,7 +2158,7 @@ static int pktdma_tisci_rx_channel_config(struct udma_chan *uc)
 		flow_req.rx_psinfo_present = 1;
 	else
 		flow_req.rx_psinfo_present = 0;
-	flow_req.rx_error_handling = 1;
+	flow_req.rx_error_handling = 0;
 
 	ret = tisci_ops->rx_flow_cfg(tisci_rm->tisci, &flow_req);
 
@@ -2304,7 +2313,7 @@ err_res_free:
 }
 
 static int udma_transfer(struct udevice *dev, int direction,
-			 void *dst, void *src, size_t len)
+			 dma_addr_t dst, dma_addr_t src, size_t len)
 {
 	struct udma_dev *ud = dev_get_priv(dev);
 	/* Channel0 is reserved for memcpy */
@@ -2325,7 +2334,7 @@ static int udma_transfer(struct udevice *dev, int direction,
 	if (ret)
 		return ret;
 
-	udma_prep_dma_memcpy(uc, (dma_addr_t)dst, (dma_addr_t)src, len);
+	udma_prep_dma_memcpy(uc, dst, src, len);
 	udma_start(uc);
 	udma_poll_completion(uc, &paddr);
 	udma_stop(uc);
@@ -2666,6 +2675,9 @@ int udma_prepare_rcv_buf(struct dma *dma, void *dst, size_t size)
 			 uc->config.psd_size);
 	cppi5_hdesc_set_pktlen(desc_rx, size);
 	cppi5_hdesc_attach_buf(desc_rx, dma_dst, size, dma_dst, size);
+
+	invalidate_dcache_range((unsigned long)dma_dst,
+				(unsigned long)(dma_dst + size));
 
 	flush_dcache_range((unsigned long)desc_rx,
 			   ALIGN((unsigned long)desc_rx + uc->config.hdesc_size,

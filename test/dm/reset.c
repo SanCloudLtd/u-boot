@@ -3,7 +3,6 @@
  * Copyright (c) 2016, NVIDIA CORPORATION.
  */
 
-#include <common.h>
 #include <dm.h>
 #include <dm/device-internal.h>
 #include <log.h>
@@ -35,8 +34,7 @@ static int dm_test_reset_base(struct unit_test_state *uts)
 
 	/* Get the same reset port in 2 different ways and compare */
 	ut_assertok(reset_get_by_index(dev, 0, &reset_method1));
-	ut_assertok(reset_get_by_index_nodev(dev_ofnode(dev), 0,
-					     &reset_method1_1));
+	ut_assertok(reset_get_by_name(dev, NULL, &reset_method1_1));
 	ut_assertok(reset_get_by_index(dev, 1, &reset_method2));
 	ut_assertok(reset_get_by_index_nodev(dev_ofnode(dev), 1,
 					     &reset_method2_1));

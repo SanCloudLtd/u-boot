@@ -4,7 +4,7 @@
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
  */
 
-#include <common.h>
+#include <bootm.h>
 #include <bootstage.h>
 #include <env.h>
 #include <image.h>
@@ -71,7 +71,7 @@ static void linux_cmdline_dump(void)
 		debug("   arg %03d: %s\n", i, linux_argv[i]);
 }
 
-static void linux_cmdline_legacy(bootm_headers_t *images)
+static void linux_cmdline_legacy(struct bootm_headers *images)
 {
 	const char *bootargs, *next, *quote;
 
@@ -111,7 +111,7 @@ static void linux_cmdline_legacy(bootm_headers_t *images)
 	}
 }
 
-static void linux_cmdline_append(bootm_headers_t *images)
+static void linux_cmdline_append(struct bootm_headers *images)
 {
 	char buf[24];
 	ulong mem, rd_start, rd_size;
@@ -164,7 +164,7 @@ static void linux_env_set(const char *env_name, const char *env_val)
 	}
 }
 
-static void linux_env_legacy(bootm_headers_t *images)
+static void linux_env_legacy(struct bootm_headers *images)
 {
 	char env_buf[12];
 	const char *cp;
@@ -213,11 +213,11 @@ static void linux_env_legacy(bootm_headers_t *images)
 	}
 }
 
-static int boot_reloc_fdt(bootm_headers_t *images)
+static int boot_reloc_fdt(struct bootm_headers *images)
 {
 	/*
 	 * In case of legacy uImage's, relocation of FDT is already done
-	 * by do_bootm_states() and should not repeated in 'bootm prep'.
+	 * by bootm_run_states() and should not repeated in 'bootm prep'.
 	 */
 	if (images->state & BOOTM_STATE_FDT) {
 		debug("## FDT already relocated\n");
@@ -243,15 +243,15 @@ int arch_fixup_fdt(void *blob)
 }
 #endif
 
-static int boot_setup_fdt(bootm_headers_t *images)
+static int boot_setup_fdt(struct bootm_headers *images)
 {
 	images->initrd_start = virt_to_phys((void *)images->initrd_start);
 	images->initrd_end = virt_to_phys((void *)images->initrd_end);
-	return image_setup_libfdt(images, images->ft_addr, images->ft_len,
-		&images->lmb);
+
+	return image_setup_libfdt(images, images->ft_addr, &images->lmb);
 }
 
-static void boot_prep_linux(bootm_headers_t *images)
+static void boot_prep_linux(struct bootm_headers *images)
 {
 	if (CONFIG_IS_ENABLED(MIPS_BOOT_FDT) && images->ft_len) {
 		boot_reloc_fdt(images);
@@ -271,7 +271,7 @@ static void boot_prep_linux(bootm_headers_t *images)
 	}
 }
 
-static void boot_jump_linux(bootm_headers_t *images)
+static void boot_jump_linux(struct bootm_headers *images)
 {
 	typedef void __noreturn (*kernel_entry_t)(int, ulong, ulong, ulong);
 	kernel_entry_t kernel = (kernel_entry_t) images->ep;
@@ -284,10 +284,10 @@ static void boot_jump_linux(bootm_headers_t *images)
 	if (CONFIG_IS_ENABLED(MALTA))
 		linux_extra = gd->ram_size;
 
-#if CONFIG_IS_ENABLED(BOOTSTAGE_FDT)
+#if IS_ENABLED(CONFIG_BOOTSTAGE_FDT)
 	bootstage_fdt_add_report();
 #endif
-#if CONFIG_IS_ENABLED(BOOTSTAGE_REPORT)
+#if IS_ENABLED(CONFIG_BOOTSTAGE_REPORT)
 	bootstage_report();
 #endif
 
@@ -301,9 +301,10 @@ static void boot_jump_linux(bootm_headers_t *images)
 			linux_extra);
 }
 
-int do_bootm_linux(int flag, int argc, char *const argv[],
-		   bootm_headers_t *images)
+int do_bootm_linux(int flag, struct bootm_info *bmi)
 {
+	struct bootm_headers *images = bmi->images;
+
 	/* No need for those on MIPS */
 	if (flag & BOOTM_STATE_OS_BD_T)
 		return -1;

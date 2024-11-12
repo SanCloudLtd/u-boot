@@ -4,7 +4,6 @@
  * Reinhard Pfau, Guntermann & Drunck GmbH, reinhard.pfau@gdsys.cc
  */
 
-#include <common.h>
 #include <log.h>
 #include <malloc.h>
 #include <fs.h>
@@ -15,7 +14,6 @@
 #include <u-boot/sha1.h>
 #include <asm/byteorder.h>
 #include <asm/unaligned.h>
-#include <pca9698.h>
 
 #include "hre.h"
 

@@ -8,10 +8,10 @@
  * Based on:
  * Board functions for TI AM335X based boards
  *
- * Copyright (C) 2011, Texas Instruments, Incorporated - http://www.ti.com/
+ * Copyright (C) 2011, Texas Instruments, Incorporated - https://www.ti.com/
  */
 
-#include <common.h>
+#include <config.h>
 #include <bootstage.h>
 #include <cpu_func.h>
 #include <env.h>
@@ -115,7 +115,7 @@ static void __maybe_unused force_modules_running(void)
 	gpio_direction_output(WIFI_REGEN_GPIO, 1);
 	/*
 	 * Wait for Wi-Fi power regulator to reach a stable voltage
-	 * (soft-start time, max. 350 µs)
+	 * (soft-start time, max. 350 us)
 	 */
 	__udelay(350);
 
@@ -449,7 +449,7 @@ int board_init(void)
 	if (read_eeprom() < 0)
 		puts("EEPROM Content Invalid.\n");
 
-	gd->bd->bi_boot_params = CONFIG_SYS_SDRAM_BASE + 0x100;
+	gd->bd->bi_boot_params = CFG_SYS_SDRAM_BASE + 0x100;
 #if defined(CONFIG_NOR) || defined(CONFIG_MTD_RAW_NAND)
 	gpmc_init();
 #endif

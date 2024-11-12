@@ -5,14 +5,12 @@
  * Copyright 2019 Google LLC
  */
 
-#include <common.h>
 #include <dm.h>
 #include <cpu.h>
 #include <log.h>
 #include <mapmem.h>
 #include <tables_csum.h>
-#include <timestamp.h>
-#include <version.h>
+#include <version_string.h>
 #include <acpi/acpi_table.h>
 #include <asm/global_data.h>
 #include <dm/acpi.h>
@@ -25,12 +23,12 @@
  * to have valid date. So for U-Boot version 2021.04 OEM_REVISION is set to
  * value 0x20210401.
  */
-#define OEM_REVISION ((((U_BOOT_VERSION_NUM / 1000) % 10) << 28) | \
-		      (((U_BOOT_VERSION_NUM / 100) % 10) << 24) | \
-		      (((U_BOOT_VERSION_NUM / 10) % 10) << 20) | \
-		      ((U_BOOT_VERSION_NUM % 10) << 16) | \
-		      (((U_BOOT_VERSION_NUM_PATCH / 10) % 10) << 12) | \
-		      ((U_BOOT_VERSION_NUM_PATCH % 10) << 8) | \
+#define OEM_REVISION ((((version_num / 1000) % 10) << 28) | \
+		      (((version_num / 100) % 10) << 24) | \
+		      (((version_num / 10) % 10) << 20) | \
+		      ((version_num % 10) << 16) | \
+		      (((version_num_patch / 10) % 10) << 12) | \
+		      ((version_num_patch % 10) << 8) | \
 		      0x01)
 
 int acpi_create_dmar(struct acpi_dmar *dmar, enum dmar_flags flags)
@@ -40,7 +38,7 @@ int acpi_create_dmar(struct acpi_dmar *dmar, enum dmar_flags flags)
 	struct udevice *cpu;
 	int ret;
 
-	ret = uclass_first_device(UCLASS_CPU, &cpu);
+	ret = uclass_first_device_err(UCLASS_CPU, &cpu);
 	if (ret)
 		return log_msg_ret("cpu", ret);
 	ret = cpu_get_info(cpu, &info);
@@ -118,7 +116,8 @@ void acpi_fill_header(struct acpi_table_header *header, char *signature)
 	memcpy(header->oem_id, OEM_ID, 6);
 	memcpy(header->oem_table_id, OEM_TABLE_ID, 8);
 	header->oem_revision = OEM_REVISION;
-	memcpy(header->aslc_id, ASLC_ID, 4);
+	memcpy(header->creator_id, ASLC_ID, 4);
+	header->creator_revision = ASL_REVISION;
 }
 
 void acpi_align(struct acpi_ctx *ctx)
@@ -169,7 +168,7 @@ int acpi_add_table(struct acpi_ctx *ctx, void *table)
 	}
 
 	/* Add table to the RSDT */
-	rsdt->entry[i] = map_to_sysmem(table);
+	rsdt->entry[i] = nomap_to_sysmem(table);
 
 	/* Fix RSDT length or the kernel will assume invalid entries */
 	rsdt->header.length = sizeof(struct acpi_table_header) +
@@ -187,7 +186,7 @@ int acpi_add_table(struct acpi_ctx *ctx, void *table)
 	xsdt = ctx->xsdt;
 
 	/* Add table to the XSDT */
-	xsdt->entry[i] = map_to_sysmem(table);
+	xsdt->entry[i] = nomap_to_sysmem(table);
 
 	/* Fix XSDT length */
 	xsdt->header.length = sizeof(struct acpi_table_header) +
@@ -221,7 +220,6 @@ void acpi_create_dbg2(struct acpi_dbg2_header *dbg2,
 
 	header->revision = acpi_get_table_revision(ACPITAB_DBG2);
 	acpi_fill_header(header, "DBG2");
-	header->aslc_revision = ASL_REVISION;
 
 	/* One debug device defined */
 	dbg2->devices_offset = sizeof(struct acpi_dbg2_header);

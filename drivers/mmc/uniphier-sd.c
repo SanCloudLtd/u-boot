@@ -4,7 +4,6 @@
  *   Author: Masahiro Yamada <yamada.masahiro@socionext.com>
  */
 
-#include <common.h>
 #include <clk.h>
 #include <fdtdec.h>
 #include <malloc.h>
@@ -64,7 +63,6 @@ static int uniphier_sd_probe(struct udevice *dev)
 	ret = clk_set_rate(&priv->clk, ULONG_MAX);
 	if (ret < 0) {
 		dev_err(dev, "failed to set rate for host clock\n");
-		clk_free(&priv->clk);
 		return ret;
 	}
 

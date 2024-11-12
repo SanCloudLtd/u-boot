@@ -4,12 +4,13 @@
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
  */
 
-#include <common.h>
+#include <stdio.h>
 #include <bootretry.h>
 #include <cli.h>
 #include <env.h>
 #include <errno.h>
 #include <time.h>
+#include <vsprintf.h>
 #include <watchdog.h>
 
 static uint64_t endtime;  /* must be set, default is instant timeout */
@@ -44,7 +45,7 @@ int bootretry_tstc_timeout(void)
 	while (!tstc()) {	/* while no incoming data */
 		if (retry_time >= 0 && get_ticks() > endtime)
 			return -ETIMEDOUT;
-		WATCHDOG_RESET();
+		schedule();
 	}
 
 	return 0;

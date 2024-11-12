@@ -3,7 +3,6 @@
  * Copyright 2017 NXP
  */
 
-#include <common.h>
 #include <clk.h>
 #include <dm.h>
 #include <malloc.h>
@@ -337,6 +336,9 @@ static int imx8m_power_domain_on(struct power_domain *power_domain)
 			return ret;
 		}
 	}
+
+	/* delay for reset to propagate */
+	udelay(5);
 
 	if (domain->bits.pxx) {
 		/* request the domain to power up */

@@ -5,7 +5,6 @@
  * Copyright (c) 2020 Heinrich Schuchardt
  */
 
-#include <common.h>
 #include <efi_dt_fixup.h>
 #include <efi_loader.h>
 #include <efi_rng.h>
@@ -145,7 +144,7 @@ efi_dt_fixup(struct efi_dt_fixup_protocol *this, void *dtb,
 	efi_status_t ret;
 	size_t required_size;
 	size_t total_size;
-	bootm_headers_t img = { 0 };
+	struct bootm_headers img = { 0 };
 
 	EFI_ENTRY("%p, %p, %p, %d", this, dtb, buffer_size, flags);
 
@@ -173,7 +172,7 @@ efi_dt_fixup(struct efi_dt_fixup_protocol *this, void *dtb,
 		}
 
 		fdt_set_totalsize(dtb, *buffer_size);
-		if (image_setup_libfdt(&img, dtb, 0, NULL)) {
+		if (image_setup_libfdt(&img, dtb, NULL)) {
 			log_err("failed to process device tree\n");
 			ret = EFI_INVALID_PARAMETER;
 			goto out;

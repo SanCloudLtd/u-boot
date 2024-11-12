@@ -6,13 +6,13 @@
 
 #define LOG_CATEGORY UCLASS_PCI
 
-#include <common.h>
 #include <dm.h>
 #include <errno.h>
 #include <init.h>
 #include <log.h>
 #include <malloc.h>
 #include <pci.h>
+#include <spl.h>
 #include <asm/global_data.h>
 #include <asm/io.h>
 #include <dm/device-internal.h>
@@ -23,6 +23,7 @@
 #endif
 #include <dt-bindings/pci/pci.h>
 #include <linux/delay.h>
+#include <linux/printk.h>
 #include "pci_internal.h"
 
 DECLARE_GLOBAL_DATA_PTR;
@@ -121,7 +122,7 @@ static void pci_dev_find_ofnode(struct udevice *bus, phys_addr_t bdf,
 
 	dev_for_each_subnode(node, bus) {
 		ret = ofnode_read_pci_addr(node, FDT_PCI_SPACE_CONFIG, "reg",
-					   &addr);
+					   &addr, NULL);
 		if (ret)
 			continue;
 
@@ -540,14 +541,13 @@ int pci_auto_config_devices(struct udevice *bus)
 	struct pci_child_plat *pplat;
 	unsigned int sub_bus;
 	struct udevice *dev;
-	int ret;
 
 	sub_bus = dev_seq(bus);
 	debug("%s: start\n", __func__);
 	pciauto_config_init(hose);
-	for (ret = device_find_first_child(bus, &dev);
-	     !ret && dev;
-	     ret = device_find_next_child(&dev)) {
+	for (device_find_first_child(bus, &dev);
+	     dev;
+	     device_find_next_child(&dev)) {
 		unsigned int max_bus;
 		int ret;
 
@@ -722,6 +722,9 @@ static bool pci_need_device_pre_reloc(struct udevice *bus, uint vendor,
 	u32 vendev;
 	int index;
 
+	if (spl_phase() == PHASE_SPL && CONFIG_IS_ENABLED(PCI_PNP))
+		return true;
+
 	for (index = 0;
 	     !dev_read_u32_index(bus, "u-boot,pci-pre-reloc", index,
 				 &vendev);
@@ -766,7 +769,7 @@ static int pci_find_and_bind_driver(struct udevice *parent,
 	if (ofnode_valid(dev_ofnode(parent)))
 		pci_dev_find_ofnode(parent, bdf, &node);
 
-	if (ofnode_valid(node) && !ofnode_is_available(node)) {
+	if (ofnode_valid(node) && !ofnode_is_enabled(node)) {
 		debug("%s: Ignoring disabled device\n", __func__);
 		return log_msg_ret("dis", -EPERM);
 	}
@@ -793,7 +796,9 @@ static int pci_find_and_bind_driver(struct udevice *parent,
 			 * space is pretty limited (ie: using Cache As RAM).
 			 */
 			if (!(gd->flags & GD_FLG_RELOC) &&
-			    !(drv->flags & DM_FLAG_PRE_RELOC))
+			    !(drv->flags & DM_FLAG_PRE_RELOC) &&
+			    (!CONFIG_IS_ENABLED(PCI_PNP) ||
+			     spl_phase() != PHASE_SPL))
 				return log_msg_ret("pre", -EPERM);
 
 			/*
@@ -918,6 +923,8 @@ int pci_bind_bus_devices(struct udevice *bus)
 			}
 			ret = pci_find_and_bind_driver(bus, &find_id, bdf,
 						       &dev);
+		} else {
+			debug("device: %s\n", dev->name);
 		}
 		if (ret == -EPERM)
 			continue;
@@ -972,6 +979,10 @@ static int decode_regions(struct pci_controller *hose, ofnode parent_node,
 	int max_regions;
 	int len;
 	int i;
+
+	/* handle booting from coreboot, etc. */
+	if (!ll_boot_init())
+		return 0;
 
 	prop = ofnode_get_property(node, "ranges", &len);
 	if (!prop) {
@@ -1211,22 +1222,19 @@ static int pci_bridge_write_config(struct udevice *bus, pci_dev_t bdf,
 static int skip_to_next_device(struct udevice *bus, struct udevice **devp)
 {
 	struct udevice *dev;
-	int ret = 0;
 
 	/*
 	 * Scan through all the PCI controllers. On x86 there will only be one
 	 * but that is not necessarily true on other hardware.
 	 */
-	do {
+	while (bus) {
 		device_find_first_child(bus, &dev);
 		if (dev) {
 			*devp = dev;
 			return 0;
 		}
-		ret = uclass_next_device(&bus);
-		if (ret)
-			return ret;
-	} while (bus);
+		uclass_next_device(&bus);
+	}
 
 	return 0;
 }
@@ -1235,7 +1243,6 @@ int pci_find_next_device(struct udevice **devp)
 {
 	struct udevice *child = *devp;
 	struct udevice *bus = child->parent;
-	int ret;
 
 	/* First try all the siblings */
 	*devp = NULL;
@@ -1248,9 +1255,7 @@ int pci_find_next_device(struct udevice **devp)
 	}
 
 	/* We ran out of siblings. Try the next bus */
-	ret = uclass_next_device(&bus);
-	if (ret)
-		return ret;
+	uclass_next_device(&bus);
 
 	return bus ? skip_to_next_device(bus, devp) : 0;
 }
@@ -1258,12 +1263,9 @@ int pci_find_next_device(struct udevice **devp)
 int pci_find_first_device(struct udevice **devp)
 {
 	struct udevice *bus;
-	int ret;
 
 	*devp = NULL;
-	ret = uclass_first_device(UCLASS_PCI, &bus);
-	if (ret)
-		return ret;
+	uclass_first_device(UCLASS_PCI, &bus);
 
 	return skip_to_next_device(bus, devp);
 }
@@ -1443,7 +1445,7 @@ phys_addr_t dm_pci_bus_to_phys(struct udevice *dev, pci_addr_t bus_addr,
 		return res->phys_start + offset;
 	}
 
-	puts("pci_hose_bus_to_phys: invalid physical address\n");
+	puts("dm_pci_bus_to_phys: invalid physical address\n");
 	return 0;
 }
 
@@ -1483,7 +1485,7 @@ pci_addr_t dm_pci_phys_to_bus(struct udevice *dev, phys_addr_t phys_addr,
 		return res->bus_start + offset;
 	}
 
-	puts("pci_hose_phys_to_bus: invalid physical address\n");
+	puts("dm_pci_phys_to_bus: invalid physical address\n");
 	return 0;
 }
 
@@ -1607,6 +1609,17 @@ void *dm_pci_map_bar(struct udevice *dev, int bar, size_t offset, size_t len,
 	/* read BAR address */
 	dm_pci_read_config32(udev, bar, &bar_response);
 	pci_bus_addr = (pci_addr_t)(bar_response & ~0xf);
+
+	/* This has a lot of baked in assumptions, but essentially tries
+	 * to mirror the behavior of BAR assignment for 64 Bit enabled
+	 * hosts and 64 bit placeable BARs in the auto assign code.
+	 */
+#if defined(CONFIG_SYS_PCI_64BIT)
+	if (bar_response & PCI_BASE_ADDRESS_MEM_TYPE_64) {
+		dm_pci_read_config32(udev, bar + 4, &bar_response);
+		pci_bus_addr |= (pci_addr_t)bar_response << 32;
+	}
+#endif /* CONFIG_SYS_PCI_64BIT */
 
 	if (~((pci_addr_t)0) - pci_bus_addr < offset)
 		return NULL;
@@ -1777,10 +1790,9 @@ int pci_sriov_init(struct udevice *pdev, int vf_en)
 
 	bdf = dm_pci_get_bdf(pdev);
 
-	pci_get_bus(PCI_BUS(bdf), &bus);
-
-	if (!bus)
-		return -ENODEV;
+	ret = pci_get_bus(PCI_BUS(bdf), &bus);
+	if (ret)
+		return ret;
 
 	bdf += PCI_BDF(0, 0, vf_offset);
 

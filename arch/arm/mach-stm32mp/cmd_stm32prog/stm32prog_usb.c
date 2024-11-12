@@ -3,12 +3,12 @@
  * Copyright (C) 2020, STMicroelectronics - All Rights Reserved
  */
 
-#include <common.h>
 #include <dfu.h>
 #include <g_dnl.h>
 #include <usb.h>
 #include <asm/arch/stm32prog.h>
 #include <asm/arch/sys_proto.h>
+#include <linux/printk.h>
 #include "stm32prog.h"
 
 static int stm32prog_set_phase(struct stm32prog_data *data, u8 phase,
@@ -41,7 +41,7 @@ static int stm32prog_set_phase(struct stm32prog_data *data, u8 phase,
 static int stm32prog_cmd_write(u64 offset, void *buf, long *len)
 {
 	u8 phase;
-	u32 address;
+	uintptr_t address;
 	u8 *pt = buf;
 	void (*entry)(void);
 	int ret;
@@ -58,7 +58,7 @@ static int stm32prog_cmd_write(u64 offset, void *buf, long *len)
 	address = (pt[1] << 24) | (pt[2] << 16) | (pt[3] << 8) | pt[4];
 	if (phase == PHASE_RESET) {
 		entry = (void *)address;
-		printf("## Starting application at 0x%x ...\n", address);
+		printf("## Starting application at 0x%p ...\n", entry);
 		(*entry)();
 		printf("## Application terminated\n");
 		return 0;
@@ -90,7 +90,7 @@ static int stm32prog_cmd_read(u64 offset, void *buf, long *len)
 	}
 	phase = stm32prog_data->phase;
 	if (phase == PHASE_FLASHLAYOUT)
-		destination = STM32_DDR_BASE;
+		destination = CONFIG_SYS_LOAD_ADDR;
 	dfu_offset = stm32prog_data->offset;
 
 	/* mandatory header, size = PHASE_MIN_SIZE */

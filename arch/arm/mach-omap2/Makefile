@@ -5,7 +5,6 @@
 
 obj-$(if $(filter am33xx,$(SOC)),y) += am33xx/
 obj-$(CONFIG_OMAP34XX) += omap3/
-obj-$(CONFIG_OMAP44XX) += omap4/
 obj-$(CONFIG_OMAP54XX) += omap5/
 
 obj-y	+= reset.o
@@ -19,19 +18,12 @@ endif
 obj-y	+= utils.o
 
 obj-y	+= sysinfo-common.o
-ifneq ($(CONFIG_OMAP44XX)$(CONFIG_OMAP54XX),)
+ifdef CONFIG_OMAP54XX
 obj-y	+= hwinit-common.o
 obj-y	+= clocks-common.o
 obj-y	+= emif-common.o
 obj-y	+= vc.o
 obj-y	+= abb.o
-endif
-
-ifneq ($(CONFIG_OMAP54XX),)
-ifeq ($(CONFIG_DM_SCSI),)
-obj-y	+= pipe3-phy.o
-obj-$(CONFIG_SCSI_AHCI_PLAT) += sata.o
-endif
 endif
 
 ifeq ($(CONFIG_$(SPL_TPL_)SYS_DCACHE_OFF),)

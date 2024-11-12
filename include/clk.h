@@ -88,8 +88,9 @@ struct clk_bulk {
 	unsigned int count;
 };
 
-#if CONFIG_IS_ENABLED(OF_CONTROL) && CONFIG_IS_ENABLED(CLK)
 struct phandle_1_arg;
+
+#if CONFIG_IS_ENABLED(OF_CONTROL) && CONFIG_IS_ENABLED(CLK)
 /**
  * clk_get_by_phandle() - Get a clock by its phandle information (of-platadata)
  * @dev: Device containing the phandle
@@ -166,7 +167,7 @@ int clk_get_bulk(struct udevice *dev, struct clk_bulk *bulk);
  * clk_get_by_name() - Get/request a clock by name.
  * @dev:	The client device.
  * @name:	The name of the clock to request, within the client's list of
- *		clocks.
+ *		clocks, or NULL to request the first clock in the list.
  * @clk:	A pointer to a clock struct to initialize.
  *
  * This looks up and requests a clock. The name is relative to the client
@@ -183,7 +184,7 @@ int clk_get_by_name(struct udevice *dev, const char *name, struct clk *clk);
  * clk_get_by_name_nodev - Get/request a clock by name without a device.
  * @node:	The client ofnode.
  * @name:	The name of the clock to request, within the client's list of
- *		clocks.
+ *		clocks, or NULL to request the first clock in the list.
  * @clk:	A pointer to a clock struct to initialize.
  *
  * Return: 0 if OK, or a negative error code.
@@ -222,9 +223,11 @@ struct clk *devm_clk_get(struct udevice *dev, const char *id);
 static inline struct clk *devm_clk_get_optional(struct udevice *dev,
 						const char *id)
 {
+	int ret;
 	struct clk *clk = devm_clk_get(dev, id);
 
-	if (PTR_ERR(clk) == -ENODATA)
+	ret = PTR_ERR(clk);
+	if (ret == -ENODATA || ret == -ENOENT)
 		return NULL;
 
 	return clk;
@@ -242,24 +245,25 @@ static inline struct clk *devm_clk_get_optional(struct udevice *dev,
  *
  * Return: zero on success, or -ve error code.
  */
-int clk_release_all(struct clk *clk, int count);
-
-/**
- * devm_clk_put	- "free" a managed clock source
- * @dev: device used to acquire the clock
- * @clk: clock source acquired with devm_clk_get()
- *
- * Note: drivers must ensure that all clk_enable calls made on this
- * clock source are balanced by clk_disable calls prior to calling
- * this function.
- *
- * clk_put should not be called from within interrupt context.
- */
-void devm_clk_put(struct udevice *dev, struct clk *clk);
+int clk_release_all(struct clk *clk, unsigned int count);
 
 #else
+
+static inline int clk_get_by_phandle(struct udevice *dev, const
+				     struct phandle_1_arg *cells,
+				     struct clk *clk)
+{
+	return -ENOSYS;
+}
+
 static inline int clk_get_by_index(struct udevice *dev, int index,
 				   struct clk *clk)
+{
+	return -ENOSYS;
+}
+
+static inline int clk_get_by_index_nodev(ofnode node, int index,
+					 struct clk *clk)
 {
 	return -ENOSYS;
 }
@@ -275,13 +279,24 @@ static inline int clk_get_by_name(struct udevice *dev, const char *name,
 	return -ENOSYS;
 }
 
+static inline struct clk *devm_clk_get(struct udevice *dev, const char *id)
+{
+	return ERR_PTR(-ENOSYS);
+}
+
+static inline struct clk *devm_clk_get_optional(struct udevice *dev,
+						const char *id)
+{
+	return ERR_PTR(-ENOSYS);
+}
+
 static inline int
 clk_get_by_name_nodev(ofnode node, const char *name, struct clk *clk)
 {
 	return -ENOSYS;
 }
 
-static inline int clk_release_all(struct clk *clk, int count)
+static inline int clk_release_all(struct clk *clk, unsigned int count)
 {
 	return -ENOSYS;
 }
@@ -305,7 +320,7 @@ static inline int clk_get_by_name_optional(struct udevice *dev,
 	int ret;
 
 	ret = clk_get_by_name(dev, name, clk);
-	if (ret == -ENODATA)
+	if (ret == -ENODATA || ret == -ENOENT)
 		return 0;
 
 	return ret;
@@ -329,7 +344,7 @@ static inline int clk_get_by_name_nodev_optional(ofnode node, const char *name,
 	int ret;
 
 	ret = clk_get_by_name_nodev(node, name, clk);
-	if (ret == -ENODATA)
+	if (ret == -ENODATA || ret == -ENOENT)
 		return 0;
 
 	return ret;
@@ -410,15 +425,6 @@ static inline int clk_release_bulk(struct clk_bulk *bulk)
 int clk_request(struct udevice *dev, struct clk *clk);
 
 /**
- * clk_free() - Free a previously requested clock.
- * @clk:	A clock struct that was previously successfully requested by
- *		clk_request/get_by_*().
- *
- * Free resources allocated by clk_request() (or any clk_get_* function).
- */
-void clk_free(struct clk *clk);
-
-/**
  * clk_get_rate() - Get current clock rate.
  * @clk:	A clock struct that was previously successfully requested by
  *		clk_request/get_by_*().
@@ -438,13 +444,13 @@ ulong clk_get_rate(struct clk *clk);
 struct clk *clk_get_parent(struct clk *clk);
 
 /**
- * clk_get_parent_rate() - Get parent of current clock rate.
+ * clk_get_parent_rate() - Get rate of current clock's parent.
  * @clk:	A clock struct that was previously successfully requested by
  *		clk_request/get_by_*().
  *
  * Return: clock rate in Hz, or -ve error code.
  */
-long long clk_get_parent_rate(struct clk *clk);
+ulong clk_get_parent_rate(struct clk *clk);
 
 /**
  * clk_round_rate() - Adjust a rate to the exact rate a clock can provide
@@ -562,11 +568,6 @@ static inline int clk_request(struct udevice *dev, struct clk *clk)
 	return -ENOSYS;
 }
 
-static inline void clk_free(struct clk *clk)
-{
-	return;
-}
-
 static inline ulong clk_get_rate(struct clk *clk)
 {
 	return -ENOSYS;
@@ -577,7 +578,7 @@ static inline struct clk *clk_get_parent(struct clk *clk)
 	return ERR_PTR(-ENOSYS);
 }
 
-static inline long long clk_get_parent_rate(struct clk *clk)
+static inline ulong clk_get_parent_rate(struct clk *clk)
 {
 	return -ENOSYS;
 }
@@ -643,8 +644,6 @@ static inline bool clk_valid(struct clk *clk)
 {
 	return clk && !!clk->dev;
 }
-
-int soc_clk_dump(void);
 
 #endif
 

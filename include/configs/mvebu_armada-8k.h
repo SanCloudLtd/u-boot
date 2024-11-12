@@ -9,14 +9,14 @@
 /*
  * High Level Configuration Options (easy to change)
  */
-#define CONFIG_SYS_TCLK		250000000	/* 250MHz */
+#define CFG_SYS_TCLK		250000000	/* 250MHz */
 
 /* additions for new ARM relocation support */
-#define CONFIG_SYS_SDRAM_BASE	0x00000000
+#define CFG_SYS_SDRAM_BASE	0x00000000
 
 /* auto boot */
 
-#define CONFIG_SYS_BAUDRATE_TABLE	{ 9600, 19200, 38400, 57600, \
+#define CFG_SYS_BAUDRATE_TABLE	{ 9600, 19200, 38400, 57600, \
 					  115200, 230400, 460800, 921600 }
 
 /*
@@ -25,14 +25,12 @@
 
 /* When runtime detection fails this is the default */
 
-#define CONFIG_SYS_MAX_NAND_DEVICE	1
-
 /* USB ethernet */
 
 /*
  * PCI configuration
  */
-
+#ifdef CONFIG_DISTRO_DEFAULTS
 #define BOOT_TARGET_DEVICES(func) \
 	func(MMC, mmc, 1) \
 	func(MMC, mmc, 0) \
@@ -42,8 +40,11 @@
 	func(DHCP, dhcp, na)
 
 #include <config_distro_bootcmd.h>
+#else
+#define BOOTENV
+#endif
 
-#define CONFIG_EXTRA_ENV_SETTINGS	\
+#define CFG_EXTRA_ENV_SETTINGS	\
 	"scriptaddr=0x6d00000\0"	\
 	"pxefile_addr_r=0x6e00000\0"	\
 	"fdt_addr_r=0x6f00000\0"	\

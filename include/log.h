@@ -100,6 +100,10 @@ enum log_category_t {
 	LOGC_BOOT,
 	/** @LOGC_EVENT: Related to event and event handling */
 	LOGC_EVENT,
+	/** @LOGC_FS: Related to filesystems */
+	LOGC_FS,
+	/** @LOGC_EXPO: Related to expo handling */
+	LOGC_EXPO,
 	/** @LOGC_COUNT: Number of log categories */
 	LOGC_COUNT,
 	/** @LOGC_END: Sentinel value for lists of log categories */
@@ -322,7 +326,10 @@ void __assert_fail(const char *assertion, const char *file, unsigned int line,
  *
  * or:
  *
- *	return log_msg_ret("fred failed", fred_call());
+ *	return log_msg_ret("get", fred_call());
+ *
+ * It is recommended to use <= 3 characters for the name since this will only
+ * use 4 bytes in rodata
  */
 #define log_ret(_ret) ({ \
 	int __ret = (_ret); \
@@ -680,5 +687,17 @@ static inline int log_get_default_format(void)
 	       (IS_ENABLED(CONFIG_LOGF_LINE) ? BIT(LOGF_LINE) : 0) |
 	       (IS_ENABLED(CONFIG_LOGF_FUNC) ? BIT(LOGF_FUNC) : 0);
 }
+
+struct global_data;
+/**
+ * log_fixup_for_gd_move() - Handle global_data moving to a new place
+ *
+ * @new_gd: Pointer to the new global data
+ *
+ * The log_head list is part of global_data. Due to the way lists work, moving
+ * the list will cause it to become invalid. This function fixes that up so
+ * that the log_head list will work correctly.
+ */
+void log_fixup_for_gd_move(struct global_data *new_gd);
 
 #endif

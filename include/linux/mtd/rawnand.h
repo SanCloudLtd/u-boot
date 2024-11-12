@@ -29,9 +29,8 @@ struct nand_flash_dev;
 struct device_node;
 
 /* Get the flash and manufacturer id and lookup if the type is supported. */
-struct nand_flash_dev *nand_get_flash_type(struct nand_chip *chip,
-					   int *maf_id, int *dev_id,
-					   struct nand_flash_dev *type);
+int nand_detect(struct nand_chip *chip, int *maf_id, int *dev_id,
+		struct nand_flash_dev *type);
 
 /* Scan and identify a NAND device */
 int nand_scan(struct mtd_info *mtd, int max_chips);
@@ -178,7 +177,6 @@ enum nand_ecc_algo {
 /* Bit mask for flags passed to do_nand_read_ecc */
 #define NAND_GET_DEVICE		0x80
 
-
 /*
  * Option constants for bizarre disfunctionality and real
  * features.
@@ -249,6 +247,13 @@ enum nand_ecc_algo {
  * kmap'ed, vmalloc'ed highmem buffers being passed from upper layers
  */
 #define NAND_USE_BOUNCE_BUFFER	0x00100000
+
+/*
+ * Do not try to tweak the timings at runtime. This is needed when the
+ * controller initializes the timings on itself or when it relies on
+ * configuration done by the bootloader.
+ */
+#define NAND_KEEP_TIMINGS	0x00800000
 
 /* Options set by nand scan */
 /* bbt has already been read */
@@ -925,7 +930,6 @@ struct nand_chip {
 	int (*setup_data_interface)(struct mtd_info *mtd, int chipnr,
 				    const struct nand_data_interface *conf);
 
-
 	int chip_delay;
 	unsigned int options;
 	unsigned int bbt_options;
@@ -976,7 +980,7 @@ struct nand_chip {
 	void *priv;
 
 	struct {
-		const struct nand_manufacturers *desc;
+		const struct nand_manufacturer *desc;
 		void *priv;
 	} manufacturer;
 };
@@ -1124,19 +1128,19 @@ struct nand_flash_dev {
 };
 
 /**
- * struct nand_manufacturers - NAND Flash Manufacturer ID Structure
+ * struct nand_manufacturer - NAND Flash Manufacturer ID Structure
  * @name:	Manufacturer name
  * @id:		manufacturer ID code of device.
  * @ops:	manufacturer operations
 */
-struct nand_manufacturers {
+struct nand_manufacturer {
 	int id;
 	char *name;
 	const struct nand_manufacturer_ops *ops;
 };
 
 extern struct nand_flash_dev nand_flash_ids[];
-extern struct nand_manufacturers nand_manuf_ids[];
+extern struct nand_manufacturer nand_manuf_ids[];
 
 extern const struct nand_manufacturer_ops toshiba_nand_manuf_ops;
 extern const struct nand_manufacturer_ops samsung_nand_manuf_ops;

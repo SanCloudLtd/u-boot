@@ -9,7 +9,6 @@
 #ifndef _SPI_H_
 #define _SPI_H_
 
-#include <common.h>
 #include <linux/bitops.h>
 
 /* SPI mode flags */
@@ -352,8 +351,10 @@ void spi_cs_deactivate(struct spi_slave *slave);
  * This sets a new speed to be applied for next spi_xfer().
  * @slave:	The SPI slave
  * @hz:		The transfer speed
+ *
+ * Returns:	0 on success, or a negative value on error.
  */
-void spi_set_speed(struct spi_slave *slave, uint hz);
+int spi_set_speed(struct spi_slave *slave, uint hz);
 
 /**
  * Write 8 bits, then read 8 bits.
@@ -741,5 +742,7 @@ int dm_spi_get_mmap(struct udevice *dev, ulong *map_basep, uint *map_sizep,
 /* Access the operations for a SPI device */
 #define spi_get_ops(dev)	((struct dm_spi_ops *)(dev)->driver->ops)
 #define spi_emul_get_ops(dev)	((struct dm_spi_emul_ops *)(dev)->driver->ops)
+
+int spi_get_env_dev(void);
 
 #endif	/* _SPI_H_ */

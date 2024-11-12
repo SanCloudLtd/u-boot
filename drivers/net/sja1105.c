@@ -8,7 +8,6 @@
  * Ported from Linux (drivers/net/dsa/sja1105/).
  */
 
-#include <common.h>
 #include <dm/device_compat.h>
 #include <linux/bitops.h>
 #include <linux/bitrev.h>
@@ -3316,7 +3315,7 @@ static int sja1105_probe(struct udevice *dev)
 	int rc;
 
 	if (ofnode_valid(dev_ofnode(dev)) &&
-	    !ofnode_is_available(dev_ofnode(dev))) {
+	    !ofnode_is_enabled(dev_ofnode(dev))) {
 		dev_dbg(dev, "switch disabled\n");
 		return -ENODEV;
 	}

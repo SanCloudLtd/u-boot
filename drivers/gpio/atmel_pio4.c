@@ -5,7 +5,6 @@
  * Copyright (C) 2015 Atmel Corporation
  *		 Wenyou.Yang <wenyou.yang@atmel.com>
  */
-#include <common.h>
 #include <clk.h>
 #include <dm.h>
 #include <fdtdec.h>
@@ -310,8 +309,6 @@ static int atmel_pio4_probe(struct udevice *dev)
 	if (ret)
 		return ret;
 
-	clk_free(&clk);
-
 	addr_base = dev_read_addr(dev);
 	if (addr_base == FDT_ADDR_T_NONE)
 		return -EINVAL;
@@ -350,10 +347,8 @@ static const struct atmel_pioctrl_data microchip_sama7g5_pioctrl_data = {
 
 static const struct udevice_id atmel_pio4_ids[] = {
 	{
-		.compatible = "atmel,sama5d2-gpio",
 		.data = (ulong)&atmel_sama5d2_pioctrl_data,
 	}, {
-		.compatible = "microchip,sama7g5-gpio",
 		.data = (ulong)&microchip_sama7g5_pioctrl_data,
 	},
 	{}

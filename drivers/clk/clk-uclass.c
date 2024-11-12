@@ -8,7 +8,6 @@
 
 #define LOG_CATEGORY UCLASS_CLK
 
-#include <common.h>
 #include <clk.h>
 #include <clk-uclass.h>
 #include <dm.h>
@@ -131,7 +130,6 @@ static int clk_get_by_indexed_prop(struct udevice *dev, const char *prop_name,
 		return log_ret(ret);
 	}
 
-
 	return clk_get_by_index_tail(ret, dev_ofnode(dev), &args, "clocks",
 				     index, clk);
 }
@@ -180,7 +178,7 @@ int clk_get_bulk(struct udevice *dev, struct clk_bulk *bulk)
 bulk_get_err:
 	err = clk_release_all(bulk->clks, bulk->count);
 	if (err)
-		debug("%s: could release all clocks for %p\n",
+		debug("%s: could not release all clocks for %p\n",
 		      __func__, dev);
 
 	return ret;
@@ -329,7 +327,13 @@ static int clk_set_default_rates(struct udevice *dev,
 			dev_dbg(dev,
 				"could not get assigned clock %d (err = %d)\n",
 				index, ret);
-			continue;
+			/* Skip if it is empty */
+			if (ret == -ENOENT) {
+				ret = 0;
+				continue;
+			}
+
+			return ret;
 		}
 
 		/* This is clk provider device trying to program itself
@@ -399,27 +403,30 @@ int clk_get_by_name(struct udevice *dev, const char *name, struct clk *clk)
 
 int clk_get_by_name_nodev(ofnode node, const char *name, struct clk *clk)
 {
-	int index;
+	int index = 0;
 
 	debug("%s(node=%p, name=%s, clk=%p)\n", __func__,
 		ofnode_get_name(node), name, clk);
 	clk->dev = NULL;
 
-	index = ofnode_stringlist_search(node, "clock-names", name);
-	if (index < 0) {
-		debug("fdt_stringlist_search() failed: %d\n", index);
-		return index;
+	if (name) {
+		index = ofnode_stringlist_search(node, "clock-names", name);
+		if (index < 0) {
+			debug("fdt_stringlist_search() failed: %d\n", index);
+			return index;
+		}
 	}
 
 	return clk_get_by_index_nodev(node, index, clk);
 }
 
-int clk_release_all(struct clk *clk, int count)
+int clk_release_all(struct clk *clk, unsigned int count)
 {
-	int i, ret;
+	unsigned int i;
+	int ret;
 
 	for (i = 0; i < count; i++) {
-		debug("%s(clk[%d]=%p)\n", __func__, i, &clk[i]);
+		debug("%s(clk[%u]=%p)\n", __func__, i, &clk[i]);
 
 		/* check if clock has been previously requested */
 		if (!clk[i].dev)
@@ -428,8 +435,6 @@ int clk_release_all(struct clk *clk, int count)
 		ret = clk_disable(&clk[i]);
 		if (ret && ret != -ENOSYS)
 			return ret;
-
-		clk_free(&clk[i]);
 	}
 
 	return 0;
@@ -452,24 +457,9 @@ int clk_request(struct udevice *dev, struct clk *clk)
 	return ops->request(clk);
 }
 
-void clk_free(struct clk *clk)
-{
-	const struct clk_ops *ops;
-
-	debug("%s(clk=%p)\n", __func__, clk);
-	if (!clk_valid(clk))
-		return;
-	ops = clk_dev_ops(clk->dev);
-
-	if (ops->rfree)
-		ops->rfree(clk);
-	return;
-}
-
 ulong clk_get_rate(struct clk *clk)
 {
 	const struct clk_ops *ops;
-	int ret;
 
 	debug("%s(clk=%p)\n", __func__, clk);
 	if (!clk_valid(clk))
@@ -479,11 +469,7 @@ ulong clk_get_rate(struct clk *clk)
 	if (!ops->get_rate)
 		return -ENOSYS;
 
-	ret = ops->get_rate(clk);
-	if (ret)
-		return log_ret(ret);
-
-	return 0;
+	return ops->get_rate(clk);
 }
 
 struct clk *clk_get_parent(struct clk *clk)
@@ -505,7 +491,7 @@ struct clk *clk_get_parent(struct clk *clk)
 	return pclk;
 }
 
-long long clk_get_parent_rate(struct clk *clk)
+ulong clk_get_parent_rate(struct clk *clk)
 {
 	const struct clk_ops *ops;
 	struct clk *pclk;
@@ -544,6 +530,19 @@ ulong clk_round_rate(struct clk *clk, ulong rate)
 	return ops->round_rate(clk, rate);
 }
 
+static void clk_get_priv(struct clk *clk, struct clk **clkp)
+{
+	*clkp = clk;
+
+	/* get private clock struct associated to the provided clock */
+	if (CONFIG_IS_ENABLED(CLK_CCF)) {
+		/* Take id 0 as a non-valid clk, such as dummy */
+		if (clk->id)
+			clk_get_by_id(clk->id, clkp);
+	}
+}
+
+/* clean cache, called with private clock struct */
 static void clk_clean_rate_cache(struct clk *clk)
 {
 	struct udevice *child_dev;
@@ -563,6 +562,7 @@ static void clk_clean_rate_cache(struct clk *clk)
 ulong clk_set_rate(struct clk *clk, ulong rate)
 {
 	const struct clk_ops *ops;
+	struct clk *clkp;
 
 	debug("%s(clk=%p, rate=%lu)\n", __func__, clk, rate);
 	if (!clk_valid(clk))
@@ -572,8 +572,10 @@ ulong clk_set_rate(struct clk *clk, ulong rate)
 	if (!ops->set_rate)
 		return -ENOSYS;
 
+	/* get private clock struct used for cache */
+	clk_get_priv(clk, &clkp);
 	/* Clean up cached rates for us and all child clocks */
-	clk_clean_rate_cache(clk);
+	clk_clean_rate_cache(clkp);
 
 	return ops->set_rate(clk, rate);
 }
@@ -607,7 +609,7 @@ int clk_enable(struct clk *clk)
 	struct clk *clkp = NULL;
 	int ret;
 
-	debug("%s(clk=%p)\n", __func__, clk);
+	debug("%s(clk=%p name=%s)\n", __func__, clk, clk->dev->name);
 	if (!clk_valid(clk))
 		return 0;
 	ops = clk_dev_ops(clk->dev);
@@ -615,6 +617,7 @@ int clk_enable(struct clk *clk)
 	if (CONFIG_IS_ENABLED(CLK_CCF)) {
 		/* Take id 0 as a non-valid clk, such as dummy */
 		if (clk->id && !clk_get_by_id(clk->id, &clkp)) {
+			ops = clk_dev_ops(clkp->dev);
 			if (clkp->enable_count) {
 				clkp->enable_count++;
 				return 0;
@@ -631,7 +634,7 @@ int clk_enable(struct clk *clk)
 		}
 
 		if (ops->enable) {
-			ret = ops->enable(clk);
+			ret = ops->enable(clkp ? clkp : clk);
 			if (ret) {
 				printf("Enable %s failed\n", clk->dev->name);
 				return ret;
@@ -667,13 +670,14 @@ int clk_disable(struct clk *clk)
 	struct clk *clkp = NULL;
 	int ret;
 
-	debug("%s(clk=%p)\n", __func__, clk);
+	debug("%s(clk=%p name=%s)\n", __func__, clk, clk->dev->name);
 	if (!clk_valid(clk))
 		return 0;
 	ops = clk_dev_ops(clk->dev);
 
 	if (CONFIG_IS_ENABLED(CLK_CCF)) {
 		if (clk->id && !clk_get_by_id(clk->id, &clkp)) {
+			ops = clk_dev_ops(clkp->dev);
 			if (clkp->flags & CLK_IS_CRITICAL)
 				return 0;
 
@@ -688,7 +692,7 @@ int clk_disable(struct clk *clk)
 		}
 
 		if (ops->disable) {
-			ret = ops->disable(clk);
+			ret = ops->disable(clkp ? clkp : clk);
 			if (ret)
 				return ret;
 		}
@@ -764,22 +768,12 @@ bool clk_is_match(const struct clk *p, const struct clk *q)
 	return false;
 }
 
-static void devm_clk_release(struct udevice *dev, void *res)
-{
-	clk_free(res);
-}
-
-static int devm_clk_match(struct udevice *dev, void *res, void *data)
-{
-	return res == data;
-}
-
 struct clk *devm_clk_get(struct udevice *dev, const char *id)
 {
 	int rc;
 	struct clk *clk;
 
-	clk = devres_alloc(devm_clk_release, sizeof(struct clk), __GFP_ZERO);
+	clk = devm_kzalloc(dev, sizeof(*clk), GFP_KERNEL);
 	if (unlikely(!clk))
 		return ERR_PTR(-ENOMEM);
 
@@ -787,19 +781,7 @@ struct clk *devm_clk_get(struct udevice *dev, const char *id)
 	if (rc)
 		return ERR_PTR(rc);
 
-	devres_add(dev, clk);
 	return clk;
-}
-
-void devm_clk_put(struct udevice *dev, struct clk *clk)
-{
-	int rc;
-
-	if (!clk)
-		return;
-
-	rc = devres_release(dev, devm_clk_release, devm_clk_match, clk);
-	WARN_ON(rc);
 }
 
 int clk_uclass_post_probe(struct udevice *dev)

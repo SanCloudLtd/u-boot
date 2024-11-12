@@ -8,7 +8,6 @@
 
 #define LOG_CATEGORY LOGC_DM
 
-#include <common.h>
 #include <dm.h>
 #include <errno.h>
 #include <log.h>
@@ -60,8 +59,8 @@ static int uclass_add(enum uclass_id id, struct uclass **ucp)
 	*ucp = NULL;
 	uc_drv = lists_uclass_lookup(id);
 	if (!uc_drv) {
-		debug("Cannot find uclass for id %d: please add the UCLASS_DRIVER() declaration for this UCLASS_... id\n",
-		      id);
+		dm_warn("Cannot find uclass for id %d: please add the UCLASS_DRIVER() declaration for this UCLASS_... id\n",
+			id);
 		/*
 		 * Use a strange error to make this case easier to find. When
 		 * a uclass is not available it can prevent driver model from
@@ -411,18 +410,14 @@ done:
 }
 
 #if CONFIG_IS_ENABLED(OF_REAL)
-int uclass_find_device_by_phandle(enum uclass_id id, struct udevice *parent,
-				  const char *name, struct udevice **devp)
+static int uclass_find_device_by_phandle_id(enum uclass_id id,
+					    uint find_phandle,
+					    struct udevice **devp)
 {
 	struct udevice *dev;
 	struct uclass *uc;
-	int find_phandle;
 	int ret;
 
-	*devp = NULL;
-	find_phandle = dev_read_u32_default(parent, name, -1);
-	if (find_phandle <= 0)
-		return -ENOENT;
 	ret = uclass_get(id, &uc);
 	if (ret)
 		return ret;
@@ -439,6 +434,19 @@ int uclass_find_device_by_phandle(enum uclass_id id, struct udevice *parent,
 	}
 
 	return -ENODEV;
+}
+
+int uclass_find_device_by_phandle(enum uclass_id id, struct udevice *parent,
+				  const char *name, struct udevice **devp)
+{
+	int find_phandle;
+
+	*devp = NULL;
+	find_phandle = dev_read_u32_default(parent, name, -1);
+	if (find_phandle <= 0)
+		return -ENOENT;
+
+	return uclass_find_device_by_phandle_id(id, find_phandle, devp);
 }
 #endif
 
@@ -535,31 +543,22 @@ int uclass_get_device_by_ofnode(enum uclass_id id, ofnode node,
 	return uclass_get_device_tail(dev, ret, devp);
 }
 
-#if CONFIG_IS_ENABLED(OF_CONTROL)
+#if CONFIG_IS_ENABLED(OF_REAL)
+int uclass_get_device_by_of_path(enum uclass_id id, const char *path,
+				 struct udevice **devp)
+{
+	return uclass_get_device_by_ofnode(id, ofnode_path(path), devp);
+}
+
 int uclass_get_device_by_phandle_id(enum uclass_id id, uint phandle_id,
 				    struct udevice **devp)
 {
 	struct udevice *dev;
-	struct uclass *uc;
 	int ret;
 
 	*devp = NULL;
-	ret = uclass_get(id, &uc);
-	if (ret)
-		return ret;
-
-	uclass_foreach_dev(dev, uc) {
-		uint phandle;
-
-		phandle = dev_read_phandle(dev);
-
-		if (phandle == phandle_id) {
-			*devp = dev;
-			return uclass_get_device_tail(dev, ret, devp);
-		}
-	}
-
-	return -ENODEV;
+	ret = uclass_find_device_by_phandle_id(id, phandle_id, &dev);
+	return uclass_get_device_tail(dev, ret, devp);
 }
 
 int uclass_get_device_by_phandle(enum uclass_id id, struct udevice *parent,
@@ -574,23 +573,41 @@ int uclass_get_device_by_phandle(enum uclass_id id, struct udevice *parent,
 }
 #endif
 
-int uclass_first_device(enum uclass_id id, struct udevice **devp)
+/*
+ * Starting from the given device @dev, return pointer to the first device in
+ * the uclass that probes successfully in @devp.
+ */
+static void _uclass_next_device(struct udevice *dev, struct udevice **devp)
+{
+	for (; dev; uclass_find_next_device(&dev)) {
+		if (!device_probe(dev))
+			break;
+	}
+	*devp = dev;
+}
+
+void uclass_first_device(enum uclass_id id, struct udevice **devp)
 {
 	struct udevice *dev;
 	int ret;
 
-	*devp = NULL;
 	ret = uclass_find_first_device(id, &dev);
-	if (!dev)
-		return 0;
-	return uclass_get_device_tail(dev, ret, devp);
+	_uclass_next_device(dev, devp);
+}
+
+void uclass_next_device(struct udevice **devp)
+{
+	struct udevice *dev = *devp;
+
+	uclass_find_next_device(&dev);
+	_uclass_next_device(dev, devp);
 }
 
 int uclass_first_device_err(enum uclass_id id, struct udevice **devp)
 {
 	int ret;
 
-	ret = uclass_first_device(id, devp);
+	ret = uclass_first_device_check(id, devp);
 	if (ret)
 		return ret;
 	else if (!*devp)
@@ -599,23 +616,11 @@ int uclass_first_device_err(enum uclass_id id, struct udevice **devp)
 	return 0;
 }
 
-int uclass_next_device(struct udevice **devp)
-{
-	struct udevice *dev = *devp;
-	int ret;
-
-	*devp = NULL;
-	ret = uclass_find_next_device(&dev);
-	if (!dev)
-		return 0;
-	return uclass_get_device_tail(dev, ret, devp);
-}
-
 int uclass_next_device_err(struct udevice **devp)
 {
 	int ret;
 
-	ret = uclass_next_device(devp);
+	ret = uclass_next_device_check(devp);
 	if (ret)
 		return ret;
 	else if (!*devp)
@@ -799,20 +804,18 @@ int uclass_pre_remove_device(struct udevice *dev)
 int uclass_probe_all(enum uclass_id id)
 {
 	struct udevice *dev;
-	int ret;
+	int ret, err;
 
-	ret = uclass_first_device(id, &dev);
-	if (ret || !dev)
-		return ret;
+	err = uclass_first_device_check(id, &dev);
 
 	/* Scanning uclass to probe all devices */
 	while (dev) {
-		ret = uclass_next_device(&dev);
+		ret = uclass_next_device_check(&dev);
 		if (ret)
-			return ret;
+			err = ret;
 	}
 
-	return 0;
+	return err;
 }
 
 int uclass_id_count(enum uclass_id id)

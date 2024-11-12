@@ -6,12 +6,9 @@
  */
 
 #ifndef USE_HOSTCC
-#include <common.h>
-#include <linux/string.h>
-#else
-#include <string.h>
+#include <cyclic.h>
 #endif /* USE_HOSTCC */
-#include <watchdog.h>
+#include <string.h>
 #include <u-boot/sha256.h>
 
 #include <linux/compiler_attributes.h>
@@ -293,7 +290,7 @@ void sha256_csum_wd(const unsigned char *input, unsigned int ilen,
 			chunk = chunk_sz;
 		sha256_update(&ctx, curr, chunk);
 		curr += chunk;
-		WATCHDOG_RESET();
+		schedule();
 	}
 #else
 	sha256_update(&ctx, input, ilen);

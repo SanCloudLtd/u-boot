@@ -5,7 +5,6 @@
  * Copyright 2019 Google LLC
  */
 
-#include <common.h>
 #include <errno.h>
 #include <dm.h>
 #include <log.h>
@@ -69,7 +68,6 @@ static int dm_test_devres_free(struct unit_test_state *uts)
 	return 0;
 }
 DM_TEST(dm_test_devres_free, UT_TESTF_SCAN_PDATA);
-
 
 /* Test that kzalloc() returns memory that is zeroed */
 static int dm_test_devres_kzalloc(struct unit_test_state *uts)
@@ -165,8 +163,8 @@ static int dm_test_devres_phase(struct unit_test_state *uts)
 	ut_asserteq(TEST_DEVRES_SIZE + TEST_DEVRES_SIZE3, stats.total_size);
 
 	/* Probing the device should add one allocation */
-	ut_assertok(uclass_first_device(UCLASS_TEST_DEVRES, &dev));
-	ut_assert(dev != NULL);
+	ut_assertok(uclass_first_device_err(UCLASS_TEST_DEVRES, &dev));
+	ut_assertnonnull(dev);
 	devres_get_stats(dev, &stats);
 	ut_asserteq(3, stats.allocs);
 	ut_asserteq(TEST_DEVRES_SIZE + TEST_DEVRES_SIZE2 + TEST_DEVRES_SIZE3,

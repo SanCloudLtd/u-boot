@@ -5,13 +5,13 @@
  * Based on code from the coreboot file of the same name
  */
 
-#include <common.h>
 #include <cpu.h>
 #include <dm.h>
 #include <errno.h>
 #include <log.h>
 #include <malloc.h>
 #include <qfw.h>
+#include <time.h>
 #include <asm/atomic.h>
 #include <asm/cpu.h>
 #include <asm/global_data.h>
@@ -69,12 +69,12 @@ DECLARE_GLOBAL_DATA_PTR;
  * CPUS are numbered sequentially from 0 using the device tree:
  *
  *	cpus {
- *		u-boot,dm-pre-reloc;
+ *		bootph-all;
  *		#address-cells = <1>;
  *		#size-cells = <0>;
  *
  *		cpu@0 {
- *			u-boot,dm-pre-reloc;
+ *			bootph-all;
  *			device_type = "cpu";
  *			compatible = "intel,apl-cpu";
  *			reg = <0>;

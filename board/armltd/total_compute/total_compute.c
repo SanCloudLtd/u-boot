@@ -4,7 +4,7 @@
  * Usama Arif <usama.arif@arm.com>
  */
 
-#include <common.h>
+#include <config.h>
 #include <dm.h>
 #include <dm/platform_data/serial_pl01x.h>
 #include <asm/armv8/mmu.h>
@@ -13,7 +13,7 @@
 static const struct pl01x_serial_plat serial_plat = {
 	.base = UART0_BASE,
 	.type = TYPE_PL011,
-	.clock = CONFIG_PL011_CLOCK,
+	.clock = CFG_PL011_CLOCK,
 };
 
 U_BOOT_DRVINFO(total_compute_serials) = {

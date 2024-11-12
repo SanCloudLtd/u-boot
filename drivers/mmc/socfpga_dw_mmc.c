@@ -3,7 +3,6 @@
  * (C) Copyright 2013 Altera Corporation <www.altera.com>
  */
 
-#include <common.h>
 #include <log.h>
 #include <asm/arch/clock_manager.h>
 #include <asm/arch/secure_reg_helper.h>
@@ -99,7 +98,6 @@ static int socfpga_dwmmc_get_clk_rate(struct udevice *dev)
 
 	host->bus_hz = clk_get_rate(&clk);
 
-	clk_free(&clk);
 #else
 	/* Fixed clock divide by 4 which due to the SDMMC wrapper */
 	host->bus_hz = cm_get_mmc_controller_clk_hz();

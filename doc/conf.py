@@ -21,6 +21,14 @@ from subprocess import check_output
 # Get Sphinx version
 major, minor, patch = sphinx.version_info[:3]
 
+# Set canonical URL from the Read the Docs Domain
+html_baseurl = os.environ.get("READTHEDOCS_CANONICAL_URL", "")
+
+# Tell Jinja2 templates the build is running on Read the Docs
+if os.environ.get("READTHEDOCS", "") == "True":
+    html_context = {
+        'READTHEDOCS' : True,
+    }
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
@@ -39,7 +47,7 @@ needs_sphinx = '2.4.4'
 extensions = ['kerneldoc', 'rstFlatTable', 'kernel_include',
               'kfigure', 'sphinx.ext.ifconfig', # 'automarkup',
               'maintainers_include', 'sphinx.ext.autosectionlabel',
-              'kernel_abi', 'kernel_feat']
+              'kernel_abi', 'kernel_feat', 'sphinx-prompt']
 
 #
 # cdomain is badly broken in Sphinx 3+.  Leaving it out generates *most*
@@ -47,10 +55,6 @@ extensions = ['kerneldoc', 'rstFlatTable', 'kernel_include',
 # the process to proceed; hopefully somebody will fix this properly soon.
 #
 if major >= 3:
-    sys.stderr.write('''WARNING: The kernel documentation build process
-        support for Sphinx v3.0 and above is brand new. Be prepared for
-        possible issues in the generated output.
-        ''')
     if (major > 3) or (minor > 0 or patch >= 2):
         # Sphinx c function parser is more pedantic with regards to type
         # checking. Due to that, having macros at c:function cause problems.
@@ -178,7 +182,7 @@ finally:
 #
 # This is also used if you do content translation via gettext catalogs.
 # Usually you set "language" from the command line for these cases.
-language = None
+language = 'en'
 
 # There are two options for replacing |today|: either, you set today to some
 # non-false value, then it is used:
@@ -232,7 +236,7 @@ highlight_language = 'none'
 try:
     import sphinx_rtd_theme
     html_theme = 'sphinx_rtd_theme'
-    html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
+    extensions.append('sphinx_rtd_theme')
 except ImportError:
     sys.stderr.write('Warning: The Sphinx \'sphinx_rtd_theme\' HTML theme was not found. Make sure you have the theme installed to produce pretty HTML output. Falling back to the default theme.\n')
 
@@ -449,7 +453,7 @@ for fn in os.listdir('.'):
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'dasuboot', 'The U-Boot Documentation',
+    (master_doc, 'u-boot', 'The U-Boot Documentation',
      [author], 1)
 ]
 
@@ -463,8 +467,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'DasUBoot', 'The U-Boot Documentation',
-     author, 'DasUBoot', 'One line description of project.',
+    (master_doc, 'u-boot', 'The U-Boot Documentation',
+     author, 'U-Boot', 'Boot loader for embedded systems',
      'Miscellaneous'),
 ]
 

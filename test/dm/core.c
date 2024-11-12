@@ -5,7 +5,6 @@
  * Copyright (c) 2013 Google, Inc
  */
 
-#include <common.h>
 #include <errno.h>
 #include <dm.h>
 #include <fdtdec.h>
@@ -17,6 +16,7 @@
 #include <dm/util.h>
 #include <dm/test.h>
 #include <dm/uclass-internal.h>
+#include <linux/list.h>
 #include <test/test.h>
 #include <test/ut.h>
 
@@ -124,15 +124,15 @@ static int dm_test_autobind(struct unit_test_state *uts)
 	 * device with no children.
 	 */
 	ut_assert(uts->root);
-	ut_asserteq(1, list_count_items(gd->uclass_root));
-	ut_asserteq(0, list_count_items(&gd->dm_root->child_head));
+	ut_asserteq(1, list_count_nodes(gd->uclass_root));
+	ut_asserteq(0, list_count_nodes(&gd->dm_root->child_head));
 	ut_asserteq(0, dm_testdrv_op_count[DM_TEST_OP_POST_BIND]);
 
 	ut_assertok(dm_scan_plat(false));
 
 	/* We should have our test class now at least, plus more children */
-	ut_assert(1 < list_count_items(gd->uclass_root));
-	ut_assert(0 < list_count_items(&gd->dm_root->child_head));
+	ut_assert(1 < list_count_nodes(gd->uclass_root));
+	ut_assert(0 < list_count_nodes(&gd->dm_root->child_head));
 
 	/* Our 3 dm_test_infox children should be bound to the test uclass */
 	ut_asserteq(3, dm_testdrv_op_count[DM_TEST_OP_POST_BIND]);
@@ -512,23 +512,15 @@ static int dm_test_leak(struct unit_test_state *uts)
 	int i;
 
 	for (i = 0; i < 2; i++) {
-		struct udevice *dev;
 		int ret;
-		int id;
 
 		dm_leak_check_start(uts);
 
 		ut_assertok(dm_scan_plat(false));
 		ut_assertok(dm_scan_fdt(false));
 
-		/* Scanning the uclass is enough to probe all the devices */
-		for (id = UCLASS_ROOT; id < UCLASS_COUNT; id++) {
-			for (ret = uclass_first_device(UCLASS_TEST, &dev);
-			     dev;
-			     ret = uclass_next_device(&dev))
-				;
-			ut_assertok(ret);
-		}
+		ret = uclass_probe_all(UCLASS_TEST);
+		ut_assertok(ret);
 
 		ut_assertok(dm_leak_check_end(uts));
 	}
@@ -653,10 +645,7 @@ static int dm_test_children(struct unit_test_state *uts)
 	ut_asserteq(2 + NODE_COUNT, dm_testdrv_op_count[DM_TEST_OP_PROBE]);
 
 	/* Probe everything */
-	for (ret = uclass_first_device(UCLASS_TEST, &dev);
-	     dev;
-	     ret = uclass_next_device(&dev))
-		;
+	ret = uclass_probe_all(UCLASS_TEST);
 	ut_assertok(ret);
 
 	ut_asserteq(total, dm_testdrv_op_count[DM_TEST_OP_PROBE]);
@@ -1018,7 +1007,6 @@ static int dm_test_uclass_before_ready(struct unit_test_state *uts)
 	ut_assertok(uclass_get(UCLASS_TEST, &uc));
 
 	gd->dm_root = NULL;
-	gd->dm_root_f = NULL;
 	memset(&gd->uclass_root, '\0', sizeof(gd->uclass_root));
 
 	ut_asserteq_ptr(NULL, uclass_find(UCLASS_TEST));
@@ -1089,11 +1077,10 @@ static int dm_test_uclass_devices_get(struct unit_test_state *uts)
 	struct udevice *dev;
 	int ret;
 
-	for (ret = uclass_first_device(UCLASS_TEST, &dev);
+	for (ret = uclass_first_device_check(UCLASS_TEST, &dev);
 	     dev;
-	     ret = uclass_next_device(&dev)) {
+	     ret = uclass_next_device_check(&dev)) {
 		ut_assert(!ret);
-		ut_assert(dev);
 		ut_assert(device_active(dev));
 	}
 
@@ -1123,11 +1110,10 @@ static int dm_test_uclass_devices_get_by_name(struct unit_test_state *uts)
 	 * this will fail on checking condition: testdev == finddev, since the
 	 * uclass_get_device_by_name(), returns the first device by given name.
 	*/
-	for (ret = uclass_first_device(UCLASS_TEST_FDT, &testdev);
+	for (ret = uclass_first_device_check(UCLASS_TEST_FDT, &testdev);
 	     testdev;
-	     ret = uclass_next_device(&testdev)) {
+	     ret = uclass_next_device_check(&testdev)) {
 		ut_assertok(ret);
-		ut_assert(testdev);
 		ut_assert(device_active(testdev));
 
 		findret = uclass_get_device_by_name(UCLASS_TEST_FDT,

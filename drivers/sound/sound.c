@@ -4,9 +4,9 @@
  * R. Chandrasekar <rcsekar@samsung.com>
  */
 
-#include <common.h>
 #include <log.h>
 #include <sound.h>
+#include <linux/string.h>
 
 void sound_create_square_wave(uint sample_rate, unsigned short *data, int size,
 			      uint freq, uint channels)
@@ -15,7 +15,10 @@ void sound_create_square_wave(uint sample_rate, unsigned short *data, int size,
 	const int period = freq ? sample_rate / freq : 0;
 	const int half = period / 2;
 
-	assert(freq);
+	if (!half) {
+		memset(data, 0, size);
+		return;
+	}
 
 	/* Make sure we don't overflow our buffer */
 	if (size % 2)

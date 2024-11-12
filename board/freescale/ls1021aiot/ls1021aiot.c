@@ -4,7 +4,7 @@
  * Copyright 2021 NXP
  */
 
-#include <common.h>
+#include <config.h>
 #include <clock_legacy.h>
 #include <fdt_support.h>
 #include <init.h>
@@ -18,6 +18,7 @@
 
 #include <asm/arch/ls102xa_devdis.h>
 #include <asm/arch/ls102xa_soc.h>
+#include <asm/sections.h>
 #include <fsl_csu.h>
 #include <fsl_immap.h>
 #include <netdev.h>
@@ -32,13 +33,12 @@ DECLARE_GLOBAL_DATA_PTR;
 
 #define DDR_SIZE		0x40000000
 
-
 int checkboard(void)
 {
 	puts("Board: LS1021AIOT\n");
 
 #ifndef CONFIG_QSPI_BOOT
-	struct ccsr_gur *dcfg = (struct ccsr_gur *)CONFIG_SYS_FSL_GUTS_ADDR;
+	struct ccsr_gur *dcfg = (struct ccsr_gur *)CFG_SYS_FSL_GUTS_ADDR;
 	u32 cpldrev;
 
 	cpldrev = in_be32(&dcfg->gpporcr1);
@@ -51,7 +51,7 @@ int checkboard(void)
 
 void ddrmc_init(void)
 {
-	struct ccsr_ddr *ddr = (struct ccsr_ddr *)CONFIG_SYS_FSL_DDR_ADDR;
+	struct ccsr_ddr *ddr = (struct ccsr_ddr *)CFG_SYS_FSL_DDR_ADDR;
 	u32 temp_sdram_cfg, tmp;
 
 	out_be32(&ddr->sdram_cfg, DDR_SDRAM_CFG);
@@ -111,7 +111,7 @@ int dram_init(void)
 
 int board_early_init_f(void)
 {
-	struct ccsr_scfg *scfg = (struct ccsr_scfg *)CONFIG_SYS_FSL_SCFG_ADDR;
+	struct ccsr_scfg *scfg = (struct ccsr_scfg *)CFG_SYS_FSL_SCFG_ADDR;
 
 #ifdef CONFIG_TSEC_ENET
 	/* clear BD & FR bits for BE BD's and frame data */

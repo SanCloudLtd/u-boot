@@ -4,7 +4,6 @@
  * Jaehoon Chung <jh80.chung@samsung.com>
  */
 
-#include <common.h>
 #include <dwmmc.h>
 #include <fdtdec.h>
 #include <asm/global_data.h>
@@ -16,6 +15,7 @@
 #include <asm/arch/pinmux.h>
 #include <asm/arch/power.h>
 #include <asm/gpio.h>
+#include <linux/printk.h>
 
 #define	DWMMC_MAX_CH_NUM		4
 #define	DWMMC_MAX_FREQ			52000000

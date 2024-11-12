@@ -3,7 +3,6 @@
  * Copyright (C) 2021 SiFive
  */
 
-#include <common.h>
 #include <cache.h>
 #include <dm.h>
 #include <asm/io.h>
@@ -62,6 +61,7 @@ static int sifive_ccache_probe(struct udevice *dev)
 static const struct udevice_id sifive_ccache_ids[] = {
 	{ .compatible = "sifive,fu540-c000-ccache" },
 	{ .compatible = "sifive,fu740-c000-ccache" },
+	{ .compatible = "sifive,ccache0" },
 	{}
 };
 

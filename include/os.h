@@ -24,7 +24,7 @@ struct sandbox_state;
 int os_printf(const char *format, ...);
 
 /**
- * Access to the OS read() system call
+ * os_read() - access the OS read() system call
  *
  * @fd:		File descriptor as returned by os_open()
  * @buf:	Buffer to place data
@@ -34,7 +34,7 @@ int os_printf(const char *format, ...);
 ssize_t os_read(int fd, void *buf, size_t count);
 
 /**
- * Access to the OS write() system call
+ * os_write() - access the OS write() system call
  *
  * @fd:		File descriptor as returned by os_open()
  * @buf:	Buffer containing data to write
@@ -44,7 +44,7 @@ ssize_t os_read(int fd, void *buf, size_t count);
 ssize_t os_write(int fd, const void *buf, size_t count);
 
 /**
- * Access to the OS lseek() system call
+ * os_lseek() - access the OS lseek() system call
  *
  * @fd:		File descriptor as returned by os_open()
  * @offset:	File offset (based on whence)
@@ -64,10 +64,10 @@ off_t os_lseek(int fd, off_t offset, int whence);
  * @fd:		File descriptor as returned by os_open()
  * Return:	file size or negative error code
  */
-int os_filesize(int fd);
+off_t os_filesize(int fd);
 
 /**
- * Access to the OS open() system call
+ * os_open() - access the OS open() system call
  *
  * @pathname:	Pathname of file to open
  * @flags:	Flags, like OS_O_RDONLY, OS_O_RDWR
@@ -98,6 +98,29 @@ int os_close(int fd);
  */
 int os_unlink(const char *pathname);
 
+/** os_persistent_fname() - Find the path to a test file
+ *
+ * @buf: Buffer to hold path
+ * @maxsize: Maximum size of buffer
+ * @fname: Leaf filename to find
+ * Returns: 0 on success, -ENOENT if file is not found, -ENOSPC if the buffer is
+ * too small
+ */
+int os_persistent_file(char *buf, int maxsize, const char *fname);
+
+/**
+ * os_mktemp() - Create a temporary file
+ * @fname: The template to use for the file name. This must end with 6 Xs. It
+ *         will be modified to the opened filename on success.
+ * @size: The size of the file
+ *
+ * Create a temporary file using @fname as a template, unlink it, and truncate
+ * it to @size.
+ *
+ * Return: A file descriptor, or negative errno on error
+ */
+int os_mktemp(char *fname, off_t size);
+
 /**
  * os_exit() - access to the OS exit() system call
  *
@@ -109,6 +132,27 @@ int os_unlink(const char *pathname);
 void os_exit(int exit_code) __attribute__((noreturn));
 
 /**
+ * os_alarm() - access to the OS alarm() system call
+ *
+ * @seconds: number of seconds before the signal is sent
+ * Returns: number of seconds remaining until any previously scheduled alarm was
+ * due to be delivered; 0 if there was no previously scheduled alarm
+ */
+unsigned int os_alarm(unsigned int seconds);
+
+/**
+ * os_set_alarm_handler() - set handler for SIGALRM
+ *
+ * @handler:   The handler function. Pass NULL for SIG_DFL.
+ */
+void os_set_alarm_handler(void (*handler)(int));
+
+/**
+ * os_raise_sigalrm() - do raise(SIGALRM)
+ */
+void os_raise_sigalrm(void);
+
+/**
  * os_tty_raw() - put tty into raw mode to mimic serial console better
  *
  * @fd:		File descriptor of stdin (normally 0)
@@ -118,7 +162,7 @@ void os_exit(int exit_code) __attribute__((noreturn));
 void os_tty_raw(int fd, bool allow_sigs);
 
 /**
- * os_fs_restore() - restore the tty to its original mode
+ * os_fd_restore() - restore the tty to its original mode
  *
  * Call this to restore the original terminal mode, after it has been changed
  * by os_tty_raw(). This is an internal function.
@@ -163,14 +207,14 @@ void *os_realloc(void *ptr, size_t length);
 void os_usleep(unsigned long usec);
 
 /**
- * Gets a monotonic increasing number of nano seconds from the OS
+ * os_get_nsec() - get monotonically increasing number of nano seconds from OS
  *
- * Return:	a monotonic increasing time scaled in nano seconds
+ * Return:	a monotoniccally increasing time scaled in nano seconds
  */
 uint64_t os_get_nsec(void);
 
 /**
- * Parse arguments and update sandbox state.
+ * os_parse_args() - parse arguments and update sandbox state.
  *
  * @state:	sandbox state to update
  * @argc:	argument count
@@ -294,6 +338,14 @@ void os_putc(int ch);
  * @str:	string to write (note that \n is not appended)
  */
 void os_puts(const char *str);
+
+/**
+ * os_flush() - flush controlling OS terminal
+ *
+ * This bypasses the U-Boot console support and flushes directly the OS
+ * stdout file descriptor.
+ */
+void os_flush(void);
 
 /**
  * os_write_ram_buf() - write the sandbox RAM buffer to a existing file

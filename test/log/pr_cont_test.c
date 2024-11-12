@@ -5,7 +5,6 @@
  * Test continuation of log messages using pr_cont().
  */
 
-#include <common.h>
 #include <console.h>
 #include <test/log.h>
 #include <test/test.h>
@@ -15,9 +14,6 @@
 #include <linux/printk.h>
 
 #define BUFFSIZE 64
-
-#undef CONFIG_LOGLEVEL
-#define CONFIG_LOGLEVEL 4
 
 DECLARE_GLOBAL_DATA_PTR;
 

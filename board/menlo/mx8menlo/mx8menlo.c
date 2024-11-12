@@ -3,7 +3,6 @@
  * Copyright 2021-2022 Marek Vasut <marex@denx.de>
  */
 
-#include <common.h>
 #include <asm/arch/clock.h>
 #include <asm/arch/imx8mm_pins.h>
 #include <asm/arch/sys_proto.h>
@@ -14,5 +13,5 @@
 
 void board_early_init(void)
 {
-	init_uart_clk(1);
+	init_uart_clk(0);
 }

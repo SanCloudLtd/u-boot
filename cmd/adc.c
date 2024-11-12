@@ -3,32 +3,28 @@
  * Copyright (C) 2018 BayLibre, SAS
  * Author: Neil Armstrong <narmstrong@baylibre.com>
  */
-#include <common.h>
 #include <command.h>
 #include <dm.h>
 #include <adc.h>
+#include <linux/printk.h>
 
 static int do_adc_list(struct cmd_tbl *cmdtp, int flag, int argc,
 		       char *const argv[])
 {
 	struct udevice *dev;
-	int ret;
+	int ret, err;
 
-	ret = uclass_first_device_err(UCLASS_ADC, &dev);
-	if (ret) {
-		printf("No available ADC device\n");
-		return CMD_RET_FAILURE;
+	ret = err = uclass_first_device_check(UCLASS_ADC, &dev);
+
+	while (dev) {
+		printf("- %s status: %i\n", dev->name, ret);
+
+		ret = uclass_next_device_check(&dev);
+		if (ret)
+			err = ret;
 	}
 
-	do {
-		printf("- %s\n", dev->name);
-
-		ret = uclass_next_device(&dev);
-		if (ret)
-			return CMD_RET_FAILURE;
-	} while (dev);
-
-	return CMD_RET_SUCCESS;
+	return err ? CMD_RET_FAILURE : CMD_RET_SUCCESS;
 }
 
 static int do_adc_info(struct cmd_tbl *cmdtp, int flag, int argc,
@@ -156,11 +152,11 @@ static int do_adc_scan(struct cmd_tbl *cmdtp, int flag, int argc,
 	return CMD_RET_SUCCESS;
 }
 
-static char adc_help_text[] =
+U_BOOT_LONGHELP(adc,
 	"list - list ADC devices\n"
 	"adc info <name> - Get ADC device info\n"
 	"adc single <name> <channel> [varname] - Get Single data of ADC device channel\n"
-	"adc scan <name> [channel mask] - Scan all [or masked] ADC channels";
+	"adc scan <name> [channel mask] - Scan all [or masked] ADC channels\n");
 
 U_BOOT_CMD_WITH_SUBCMDS(adc, "ADC sub-system", adc_help_text,
 	U_BOOT_SUBCMD_MKENT(list, 1, 1, do_adc_list),

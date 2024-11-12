@@ -5,7 +5,6 @@
  * Copyright 2020 Google LLC
  */
 
-#include <common.h>
 #include <bootm.h>
 #include <asm/global_data.h>
 #include <test/suites.h>
@@ -208,7 +207,8 @@ BOOTM_TEST(bootm_test_silent_var, 0);
 /* Test substitution processing in the bootargs variable */
 static int bootm_test_subst_var(struct unit_test_state *uts)
 {
-	env_set("bootargs", NULL);
+	ut_assertok(env_set("silent_linux", "yes"));
+	ut_assertok(env_set("bootargs", NULL));
 	ut_assertok(bootm_process_cmdline_env(BOOTM_CL_SILENT));
 	ut_asserteq_str("console=ttynull", env_get("bootargs"));
 

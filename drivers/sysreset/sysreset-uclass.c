@@ -6,7 +6,6 @@
 
 #define LOG_CATEGORY UCLASS_SYSRESET
 
-#include <common.h>
 #include <command.h>
 #include <cpu_func.h>
 #include <dm.h>
@@ -118,7 +117,6 @@ void reset_cpu(void)
 	sysreset_walk_halt(SYSRESET_WARM);
 }
 
-
 #if IS_ENABLED(CONFIG_SYSRESET_CMD_RESET)
 int do_reset(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 {
@@ -158,23 +156,7 @@ int do_poweroff(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 }
 #endif
 
-static int sysreset_post_bind(struct udevice *dev)
-{
-#if defined(CONFIG_NEEDS_MANUAL_RELOC)
-	struct sysreset_ops *ops = sysreset_get_ops(dev);
-	static int reloc_done;
-
-	if (!reloc_done) {
-		if (ops->request)
-			ops->request += gd->reloc_off;
-		reloc_done++;
-	}
-#endif
-	return 0;
-}
-
 UCLASS_DRIVER(sysreset) = {
 	.id		= UCLASS_SYSRESET,
 	.name		= "sysreset",
-	.post_bind	= sysreset_post_bind,
 };

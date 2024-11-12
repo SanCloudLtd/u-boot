@@ -3,7 +3,6 @@
  * Copyright (C) 2014, Bin Meng <bmeng.cn@gmail.com>
  */
 
-#include <common.h>
 #include <cpu_func.h>
 #include <dm.h>
 #include <errno.h>
@@ -61,6 +60,7 @@ void board_final_init(void)
 		debug("OK\n");
 }
 
+#if CONFIG_IS_ENABLED(DM_RTC)
 int fsp_save_s3_stack(void)
 {
 	struct udevice *dev;
@@ -84,3 +84,4 @@ int fsp_save_s3_stack(void)
 
 	return 0;
 }
+#endif

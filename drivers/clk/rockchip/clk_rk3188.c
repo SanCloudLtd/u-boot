@@ -4,7 +4,6 @@
  * (C) Copyright 2016 Heiko Stuebner <heiko@sntech.de>
  */
 
-#include <common.h>
 #include <clk-uclass.h>
 #include <dm.h>
 #include <dt-structs.h>
@@ -13,7 +12,6 @@
 #include <malloc.h>
 #include <mapmem.h>
 #include <syscon.h>
-#include <asm/io.h>
 #include <asm/arch-rockchip/clock.h>
 #include <asm/arch-rockchip/cru_rk3188.h>
 #include <asm/arch-rockchip/grf_rk3188.h>
@@ -600,7 +598,7 @@ static int rk3188_clk_bind(struct udevice *dev)
 	ret = offsetof(struct rk3188_cru, cru_softrst_con[0]);
 	ret = rockchip_reset_bind(dev, ret, 9);
 	if (ret)
-		debug("Warning: software reset driver bind faile\n");
+		debug("Warning: software reset driver bind failed\n");
 #endif
 
 	return 0;

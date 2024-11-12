@@ -4,14 +4,16 @@
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
  */
 
-#include <common.h>
 #include <compiler.h>
 #include <console.h>
 #include <display_options.h>
 #include <div64.h>
 #include <version_string.h>
 #include <linux/ctype.h>
+#include <linux/kernel.h>
 #include <asm/io.h>
+#include <stdio.h>
+#include <vsprintf.h>
 
 char *display_options_get_banner_priv(bool newlines, const char *build_tag,
 				      char *buf, int size)
@@ -127,6 +129,12 @@ void print_size(uint64_t size, const char *s)
 		if (m >= 10) {
 			m -= 10;
 			n += 1;
+
+			if (n == 1024 && i > 0) {
+				n = 1;
+				m = 0;
+				c = names[i - 1];
+			}
 		}
 	}
 

@@ -30,7 +30,7 @@ static void imx8image_set_header(void *ptr, struct stat *sbuf, int ifd,
 {
 }
 
-static void imx8image_print_header(const void *ptr)
+static void imx8image_print_header(const void *ptr, struct image_tool_params *params)
 {
 }
 
@@ -57,6 +57,7 @@ static table_entry_t imx8image_cmds[] = {
 
 static table_entry_t imx8image_core_entries[] = {
 	{CFG_SCU,	"SCU",			"scu core",	},
+	{CFG_PWR,	"PWR",			"uPower core",	},
 	{CFG_M40,	"M40",			"M4 core 0",	},
 	{CFG_M41,	"M41",			"M4 core 1",	},
 	{CFG_A35,	"A35",			"A35 core",	},
@@ -119,7 +120,7 @@ static void parse_cfg_cmd(image_t *param_stack, int32_t cmd, char *token,
 		} else if (!strncmp(token, "IMX8QM", 6)) {
 			soc = QM;
 		} else if (!strncmp(token, "ULP", 3)) {
-			soc = IMX9;
+			soc = ULP;
 		} else if (!strncmp(token, "IMX9", 4)) {
 			soc = IMX9;
 		} else {
@@ -179,6 +180,10 @@ static void parse_cfg_fld(image_t *param_stack, int32_t *cmd, char *token,
 		switch (core_type) {
 		case CFG_SCU:
 			param_stack[p_idx].option = SCFW;
+			param_stack[p_idx++].filename = token;
+			break;
+		case CFG_PWR:
+			param_stack[p_idx].option = UPOWER;
 			param_stack[p_idx++].filename = token;
 			break;
 		case CFG_M40:
@@ -279,6 +284,7 @@ static uint32_t parse_cfg_file(image_t *param_stack, char *name)
 		}
 	}
 
+	fclose(fd);
 	return 0;
 }
 
@@ -828,7 +834,6 @@ static int build_container(soc_type_t soc, uint32_t sector_size,
 	int ret;
 
 	int container = -1;
-	int cont_img_count = 0; /* indexes to arrange the container */
 
 	memset((char *)&imx_header, 0, sizeof(imx_header_v3_t));
 
@@ -878,7 +883,6 @@ static int build_container(soc_type_t soc, uint32_t sector_size,
 			img_sp->src = file_off;
 
 			file_off += ALIGN(sbuf.st_size, sector_size);
-			cont_img_count++;
 			break;
 
 		case SECO:
@@ -898,7 +902,6 @@ static int build_container(soc_type_t soc, uint32_t sector_size,
 			img_sp->src = file_off;
 
 			file_off += sbuf.st_size;
-			cont_img_count++;
 			break;
 
 		case NEW_CONTAINER:
@@ -907,8 +910,6 @@ static int build_container(soc_type_t soc, uint32_t sector_size,
 				      CONTAINER_ALIGNMENT,
 				      CONTAINER_FLAGS_DEFAULT,
 				      fuse_version);
-			/* reset img count when moving to new container */
-			cont_img_count = 0;
 			scfw_flags = 0;
 			break;
 

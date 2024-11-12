@@ -11,13 +11,9 @@
  */
 
 #ifndef USE_HOSTCC
-#include <common.h>
-#include <linux/string.h>
-#else
-#include <string.h>
+#include <cyclic.h>
 #endif /* USE_HOSTCC */
 #include <compiler.h>
-#include <watchdog.h>
 #include <u-boot/sha512.h>
 
 const uint8_t sha384_der_prefix[SHA384_DER_LEN] = {
@@ -309,7 +305,7 @@ void sha384_csum_wd(const unsigned char *input, unsigned int ilen,
 			chunk = chunk_sz;
 		sha384_update(&ctx, curr, chunk);
 		curr += chunk;
-		WATCHDOG_RESET();
+		schedule();
 	}
 #else
 	sha384_update(&ctx, input, ilen);
@@ -372,7 +368,7 @@ void sha512_csum_wd(const unsigned char *input, unsigned int ilen,
 			chunk = chunk_sz;
 		sha512_update(&ctx, curr, chunk);
 		curr += chunk;
-		WATCHDOG_RESET();
+		schedule();
 	}
 #else
 	sha512_update(&ctx, input, ilen);

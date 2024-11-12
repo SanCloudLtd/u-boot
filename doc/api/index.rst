@@ -6,15 +6,19 @@ U-Boot API documentation
 .. toctree::
    :maxdepth: 2
 
+   bootcount
    clk
    dfu
    dm
    efi
+   event
    getopt
+   interrupt
    linker_lists
    lmb
    logging
    nvmem
+   part
    pinctrl
    rng
    sandbox

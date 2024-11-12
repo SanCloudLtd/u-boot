@@ -6,7 +6,6 @@
 
 #define LOG_CATEGORY UCLASS_REGULATOR
 
-#include <common.h>
 #include <errno.h>
 #include <dm.h>
 #include <log.h>
@@ -197,6 +196,12 @@ int regulator_set_enable_if_allowed(struct udevice *dev, bool enable)
 	ret = regulator_set_enable(dev, enable);
 	if (ret == -ENOSYS || ret == -EACCES)
 		return 0;
+	/* if we want to disable but it's in use by someone else */
+	if (!enable && ret == -EBUSY)
+		return 0;
+	/* if it's already enabled/disabled */
+	if (ret == -EALREADY)
+		return 0;
 
 	return ret;
 }
@@ -287,18 +292,31 @@ int regulator_autoset(struct udevice *dev)
 
 	uc_pdata = dev_get_uclass_plat(dev);
 
+	if (uc_pdata->flags & REGULATOR_FLAG_AUTOSET_DONE)
+		return -EALREADY;
+
 	ret = regulator_set_suspend_enable(dev, uc_pdata->suspend_on);
+	if (ret == -ENOSYS)
+		ret = 0;
+
 	if (!ret && uc_pdata->suspend_on) {
 		ret = regulator_set_suspend_value(dev, uc_pdata->suspend_uV);
-		if (!ret)
+		if (ret == -ENOSYS)
+			ret = 0;
+
+		if (ret)
 			return ret;
 	}
 
-	if (!uc_pdata->always_on && !uc_pdata->boot_on)
-		return -EMEDIUMTYPE;
+	if (!uc_pdata->always_on && !uc_pdata->boot_on) {
+		ret = -EMEDIUMTYPE;
+		goto out;
+	}
 
-	if (uc_pdata->type == REGULATOR_TYPE_FIXED)
-		return regulator_set_enable(dev, true);
+	if (uc_pdata->type == REGULATOR_TYPE_FIXED) {
+		ret = regulator_set_enable(dev, true);
+		goto out;
+	}
 
 	if (uc_pdata->flags & REGULATOR_FLAG_AUTOSET_UV)
 		ret = regulator_set_value(dev, uc_pdata->min_uV);
@@ -309,6 +327,9 @@ int regulator_autoset(struct udevice *dev)
 
 	if (!ret)
 		ret = regulator_set_enable(dev, true);
+
+out:
+	uc_pdata->flags |= REGULATOR_FLAG_AUTOSET_DONE;
 
 	return ret;
 }
@@ -496,7 +517,7 @@ int regulators_enable_boot_on(bool verbose)
 	     dev;
 	     uclass_next_device(&dev)) {
 		ret = regulator_autoset(dev);
-		if (ret == -EMEDIUMTYPE) {
+		if (ret == -EMEDIUMTYPE || ret == -EALREADY) {
 			ret = 0;
 			continue;
 		}

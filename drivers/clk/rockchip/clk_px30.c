@@ -3,7 +3,6 @@
  * (C) Copyright 2017 Rockchip Electronics Co., Ltd
  */
 
-#include <common.h>
 #include <bitfield.h>
 #include <clk-uclass.h>
 #include <dm.h>
@@ -15,7 +14,6 @@
 #include <asm/arch-rockchip/cru_px30.h>
 #include <asm/arch-rockchip/hardware.h>
 #include <asm/global_data.h>
-#include <asm/io.h>
 #include <dm/device-internal.h>
 #include <dm/lists.h>
 #include <dt-bindings/clock/px30-cru.h>
@@ -1415,6 +1413,9 @@ static int px30_clk_enable(struct clk *clk)
 	case SCLK_GMAC_RMII:
 		/* Required to successfully probe the Designware GMAC driver */
 		return 0;
+	case PCLK_WDT_NS:
+		/* Required to successfully probe the Designware watchdog driver */
+		return 0;
 	}
 
 	debug("%s: unsupported clk %ld\n", __func__, clk->id);
@@ -1505,7 +1506,7 @@ static int px30_clk_bind(struct udevice *dev)
 	ret = offsetof(struct px30_cru, softrst_con[0]);
 	ret = rockchip_reset_bind(dev, ret, 12);
 	if (ret)
-		debug("Warning: software reset driver bind faile\n");
+		debug("Warning: software reset driver bind failed\n");
 #endif
 
 	return 0;

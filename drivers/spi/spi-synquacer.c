@@ -6,7 +6,6 @@
  */
 
 #include <clk.h>
-#include <common.h>
 #include <dm.h>
 #include <log.h>
 #include <time.h>
@@ -203,14 +202,14 @@ static void synquacer_spi_config(struct udevice *dev, void *rx, const void *tx)
 	priv->mode = slave_plat->mode;
 	priv->speed = slave_plat->max_hz;
 
-	if (priv->mode & SPI_TX_BYTE)
-		bus_width = 1;
-	else if (priv->mode & SPI_TX_DUAL)
+	if (priv->mode & SPI_TX_DUAL)
 		bus_width = 2;
 	else if (priv->mode & SPI_TX_QUAD)
 		bus_width = 4;
 	else if (priv->mode & SPI_TX_OCTAL)
 		bus_width = 8;
+	else
+		bus_width = 1; /* default is single bit mode */
 
 	div = DIV_ROUND_UP(125000000, priv->speed);
 

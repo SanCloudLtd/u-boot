@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright (C) 2017-2018 Texas Instruments Incorporated - http://www.ti.com/
+ * Copyright (C) 2017-2018 Texas Instruments Incorporated - https://www.ti.com/
  * Jean-Jacques Hiblot <jjhiblot@ti.com>
  */
 
-#include <common.h>
 #include <dm.h>
 #include <mux.h>
 #include <regmap.h>

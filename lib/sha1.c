@@ -17,12 +17,9 @@
 #endif
 
 #ifndef USE_HOSTCC
-#include <common.h>
-#include <linux/string.h>
-#else
-#include <string.h>
+#include <cyclic.h>
 #endif /* USE_HOSTCC */
-#include <watchdog.h>
+#include <string.h>
 #include <u-boot/sha1.h>
 
 #include <linux/compiler_attributes.h>
@@ -344,7 +341,7 @@ void sha1_csum_wd(const unsigned char *input, unsigned int ilen,
 			chunk = chunk_sz;
 		sha1_update (&ctx, curr, chunk);
 		curr += chunk;
-		WATCHDOG_RESET ();
+		schedule();
 	}
 #else
 	sha1_update (&ctx, input, ilen);

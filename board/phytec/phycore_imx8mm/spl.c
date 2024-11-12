@@ -4,7 +4,6 @@
  * Author: Teresa Remmet <t.remmet@phytec.de>
  */
 
-#include <common.h>
 #include <asm/arch/clock.h>
 #include <asm/arch/ddr.h>
 #include <asm/arch/imx8mm_pins.h>
@@ -12,6 +11,7 @@
 #include <asm/global_data.h>
 #include <asm/mach-imx/boot_mode.h>
 #include <asm/mach-imx/iomux-v3.h>
+#include <asm/sections.h>
 #include <hang.h>
 #include <init.h>
 #include <log.h>
@@ -40,16 +40,6 @@ int spl_board_boot_device(enum boot_device boot_dev_spl)
 static void spl_dram_init(void)
 {
 	ddr_init(&dram_timing);
-}
-
-void spl_board_init(void)
-{
-	/* Serial download mode */
-	if (is_usb_boot()) {
-		puts("Back to ROM, SDP\n");
-		restore_boot_params();
-	}
-	puts("Normal Boot\n");
 }
 
 int board_fit_config_name_match(const char *name)

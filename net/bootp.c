@@ -8,7 +8,6 @@
  *	Copyright 2000-2004 Wolfgang Denk, wd@denx.de
  */
 
-#include <common.h>
 #include <bootstage.h>
 #include <command.h>
 #include <env.h>
@@ -26,6 +25,7 @@
 #ifdef CONFIG_BOOTP_RANDOM_DELAY
 #include "net_rand.h"
 #endif
+#include <malloc.h>
 
 #define BOOTP_VENDOR_MAGIC	0x63825363	/* RFC1048 Magic Cookie */
 
@@ -41,18 +41,15 @@
  */
 #define TIMEOUT_MS	((3 + (CONFIG_NET_RETRY_COUNT * 5)) * 1000)
 
-#define PORT_BOOTPS	67		/* BOOTP server UDP port */
-#define PORT_BOOTPC	68		/* BOOTP client UDP port */
-
-#ifndef CONFIG_DHCP_MIN_EXT_LEN		/* minimal length of extension list */
-#define CONFIG_DHCP_MIN_EXT_LEN 64
+#ifndef CFG_DHCP_MIN_EXT_LEN		/* minimal length of extension list */
+#define CFG_DHCP_MIN_EXT_LEN 64
 #endif
 
-#ifndef CONFIG_BOOTP_ID_CACHE_SIZE
-#define CONFIG_BOOTP_ID_CACHE_SIZE 4
+#ifndef CFG_BOOTP_ID_CACHE_SIZE
+#define CFG_BOOTP_ID_CACHE_SIZE 4
 #endif
 
-u32		bootp_ids[CONFIG_BOOTP_ID_CACHE_SIZE];
+u32		bootp_ids[CFG_BOOTP_ID_CACHE_SIZE];
 unsigned int	bootp_num_ids;
 int		bootp_try;
 ulong		bootp_start;
@@ -604,6 +601,10 @@ static int dhcp_extended(u8 *e, int message_type, struct in_addr server_ip,
 	*e++  = 42;
 	*cnt += 1;
 #endif
+	if (IS_ENABLED(CONFIG_BOOTP_PXE_DHCP_OPTION)) {
+		*e++ = 209;	/* PXELINUX Config File */
+		*cnt += 1;
+	}
 	/* no options, so back up to avoid sending an empty request list */
 	if (*cnt == 0)
 		e -= 2;
@@ -611,8 +612,8 @@ static int dhcp_extended(u8 *e, int message_type, struct in_addr server_ip,
 	*e++  = 255;		/* End of the list */
 
 	/* Pad to minimal length */
-#ifdef	CONFIG_DHCP_MIN_EXT_LEN
-	while ((e - start) < CONFIG_DHCP_MIN_EXT_LEN)
+#ifdef	CFG_DHCP_MIN_EXT_LEN
+	while ((e - start) < CFG_DHCP_MIN_EXT_LEN)
 		*e++ = 0;
 #endif
 
@@ -881,6 +882,14 @@ static void dhcp_process_options(uchar *popt, uchar *end)
 			break;
 		case 28:	/* Ignore Broadcast Address Option */
 			break;
+		case 40:	/* NIS Domain name */
+			if (net_nis_domain[0] == 0) {
+				size = truncate_sz("NIS Domain Name",
+					sizeof(net_nis_domain), oplen);
+				memcpy(&net_nis_domain, popt + 2, size);
+				net_nis_domain[size] = 0;
+			}
+			break;
 #if defined(CONFIG_CMD_SNTP) && defined(CONFIG_BOOTP_NTPSERVER)
 		case 42:	/* NTP server IP */
 			net_copy_ip(&net_ntp_server, (popt + 2));
@@ -910,6 +919,22 @@ static void dhcp_process_options(uchar *popt, uchar *end)
 						   oplen);
 				memcpy(&net_boot_file_name, popt + 2, size);
 				net_boot_file_name[size] = 0;
+			}
+			break;
+		case 209:	/* PXELINUX Config File */
+			if (IS_ENABLED(CONFIG_BOOTP_PXE_DHCP_OPTION)) {
+				/* In case it has already been allocated when get DHCP Offer packet,
+				 * free first to avoid memory leak.
+				 */
+				if (pxelinux_configfile)
+					free(pxelinux_configfile);
+
+				pxelinux_configfile = (char *)malloc((oplen + 1) * sizeof(char));
+
+				if (pxelinux_configfile)
+					strlcpy(pxelinux_configfile, popt + 2, oplen + 1);
+				else
+					printf("Error: Failed to allocate pxelinux_configfile\n");
 			}
 			break;
 		default:
@@ -1076,8 +1101,15 @@ static void dhcp_handler(uchar *pkt, unsigned dest, struct in_addr sip,
 			    CONFIG_SYS_BOOTFILE_PREFIX,
 			    strlen(CONFIG_SYS_BOOTFILE_PREFIX)) == 0) {
 #endif	/* CONFIG_SYS_BOOTFILE_PREFIX */
+			if (CONFIG_IS_ENABLED(UNIT_TEST) &&
+			    dhcp_message_type((u8 *)bp->bp_vend) == -1) {
+				debug("got BOOTP response; transitioning to BOUND\n");
+				goto dhcp_got_bootp;
+			}
 			dhcp_packet_process_options(bp);
-			efi_net_set_dhcp_ack(pkt, len);
+			if (CONFIG_IS_ENABLED(EFI_LOADER) &&
+			    IS_ENABLED(CONFIG_NETDEVICES))
+				efi_net_set_dhcp_ack(pkt, len);
 
 #if defined(CONFIG_SERVERIP_FROM_PROXYDHCP)
 			if (!net_server_ip.s_addr)
@@ -1100,6 +1132,7 @@ static void dhcp_handler(uchar *pkt, unsigned dest, struct in_addr sip,
 		debug("DHCP State: REQUESTING\n");
 
 		if (dhcp_message_type((u8 *)bp->bp_vend) == DHCP_ACK) {
+dhcp_got_bootp:
 			dhcp_packet_process_options(bp);
 			/* Store net params from reply */
 			store_net_params(bp);

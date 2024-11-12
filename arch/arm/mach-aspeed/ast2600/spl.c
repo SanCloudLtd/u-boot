@@ -2,7 +2,6 @@
 /*
  * Copyright (c) Aspeed Technology Inc.
  */
-#include <common.h>
 #include <debug_uart.h>
 #include <dm.h>
 #include <spl.h>
@@ -56,9 +55,9 @@ out:
 	return BOOT_DEVICE_RAM;
 }
 
-struct image_header *spl_get_load_buffer(ssize_t offset, size_t size)
+struct legacy_img_hdr *spl_get_load_buffer(ssize_t offset, size_t size)
 {
-	return (struct image_header *)(CONFIG_SYS_LOAD_ADDR);
+	return (struct legacy_img_hdr *)(CONFIG_SYS_LOAD_ADDR);
 }
 
 #ifdef CONFIG_SPL_OS_BOOT
