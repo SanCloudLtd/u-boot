@@ -25,12 +25,14 @@
 
 #ifdef CONFIG_MTD_RAW_NAND
 #define NANDARGS \
+	"mtdids=" CONFIG_MTDIDS_DEFAULT "\0" \
+	"mtdparts=" CONFIG_MTDPARTS_DEFAULT "\0" \
 	"nandargs=setenv bootargs console=${console} " \
 		"${optargs} " \
 		"root=${nandroot} " \
 		"rootfstype=${nandrootfstype}\0" \
 	"nandroot=ubi0:rootfs rw ubi.mtd=NAND.file-system,2048\0" \
-	"nandrootfstype=ubifs rootwait\0" \
+	"nandrootfstype=ubifs rootwait=1\0" \
 	"nandboot=echo Booting from nand ...; " \
 		"run nandargs; " \
 		"nand read ${fdtaddr} NAND.u-boot-spl-os; " \
@@ -39,6 +41,20 @@
 #else
 #define NANDARGS ""
 #endif
+
+#define BOOTENV_DEV_LEGACY_MMC(devtypeu, devtypel, instance) \
+	"bootcmd_" #devtypel #instance "=" \
+	"gpio clear 56; " \
+	"gpio clear 55; " \
+	"gpio clear 54; " \
+	"gpio set 53; " \
+	"setenv devtype mmc; " \
+	"setenv mmcdev " #instance"; "\
+	"setenv bootpart " #instance":1 ; "\
+	"run boot\0"
+
+#define BOOTENV_DEV_NAME_LEGACY_MMC(devtypeu, devtypel, instance) \
+	#devtypel #instance " "
 
 #define BOOTENV_DEV_NAND(devtypeu, devtypel, instance) \
 	"bootcmd_" #devtypel "=" \
@@ -67,8 +83,9 @@
 
 #define BOOT_TARGET_DEVICES(func) \
 	func(MMC, mmc, 0) \
+	func(LEGACY_MMC, legacy_mmc, 0) \
 	func(MMC, mmc, 1) \
-	func(NAND, nand, 0) \
+	func(LEGACY_MMC, legacy_mmc, 1) \
 	BOOT_TARGET_USB(func) \
 	BOOT_TARGET_PXE(func) \
 	BOOT_TARGET_DHCP(func)
@@ -77,12 +94,17 @@
 
 #ifndef CONFIG_SPL_BUILD
 #include <env/ti/dfu.h>
+#include <env/ti/mmc.h>
 
 #define CFG_EXTRA_ENV_SETTINGS \
 	DEFAULT_LINUX_BOOT_ENV \
+	DEFAULT_MMC_TI_ARGS \
+	"bootpart=0:2\0" \
+	"bootdir=/boot\0" \
+	"bootfile=zImage\0" \
+	"board_eeprom_header=undefined\0" \
 	"fdtfile=undefined\0" \
-	"finduuid=part uuid mmc 0:2 uuid\0" \
-	"console=ttyO0,115200n8\0" \
+	"console=ttyS0,115200n8\0" \
 	"partitions=" \
 		"uuid_disk=${uuid_gpt_disk};" \
 		"name=bootloader,start=384K,size=1792K," \
@@ -110,14 +132,54 @@
 		"sf probe ${spibusno}:0; " \
 		"sf read ${loadaddr} ${spisrcaddr} ${spiimgsize}; " \
 		"bootz ${loadaddr}\0" \
+	"eeprom_program="\
+		"if test $board_eeprom_header = bbb_blank; then " \
+			"run eeprom_dump; run eeprom_blank; run eeprom_bbb_header; run eeprom_dump; reset; fi; " \
+		"if test $board_eeprom_header = bbbl_blank; then " \
+			"run eeprom_dump; run eeprom_blank; run eeprom_bbb_header; run eeprom_bbbl_footer; run eeprom_dump; reset; fi; " \
+		"if test $board_eeprom_header = bbbw_blank; then " \
+			"run eeprom_dump; run eeprom_blank; run eeprom_bbb_header; run eeprom_bbbw_footer; run eeprom_dump; reset; fi; " \
+		"if test $board_eeprom_header = pocketbeagle_blank; then " \
+			"run eeprom_dump; run eeprom_blank; run eeprom_pocketbeagle; run eeprom_dump; reset; fi; " \
+		"if test $board_eeprom_header = bbgg_blank; then " \
+			"run eeprom_dump; run eeprom_blank; run eeprom_bbb_header; run eeprom_bbgg_footer; run eeprom_dump; reset; fi; " \
+		"if test $board_eeprom_header = beaglelogic_blank; then " \
+			"run eeprom_dump; run eeprom_blank; run eeprom_beaglelogic; run eeprom_dump; reset; fi;  \0" \
 	"ramboot=echo Booting from ramdisk ...; " \
 		"run ramargs; " \
 		"bootz ${loadaddr} ${rdaddr} ${fdtaddr}\0" \
 	"findfdt="\
+		"echo board_name=[$board_name] ...; " \
+		"if test $board_name = A335BLGC; then " \
+			"setenv fdtfile am335x-beaglelogic.dtb; fi; " \
 		"if test $board_name = A335BONE; then " \
 			"setenv fdtfile am335x-bone.dtb; fi; " \
 		"if test $board_name = A335BNLT; then " \
-			"setenv fdtfile am335x-boneblack.dtb; fi; " \
+			"echo board_rev=[$board_rev] ...; " \
+			"if test $board_rev = GH01; then " \
+				"setenv fdtfile am335x-boneblack.dtb; " \
+			"elif test $board_rev = BBG1; then " \
+				"setenv fdtfile am335x-bonegreen.dtb; " \
+			"elif test $board_rev = BP00; then " \
+				"setenv fdtfile am335x-pocketbone.dtb; " \
+			"elif test $board_rev = GW1A; then " \
+				"setenv fdtfile am335x-bonegreen-wireless.dtb; " \
+			"elif test $board_rev = GG1A; then " \
+				"setenv fdtfile am335x-bonegreen-gateway.dtb; " \
+			"elif test $board_rev = AIA0; then " \
+				"setenv fdtfile am335x-abbbi.dtb; " \
+			"elif test $board_rev = EIA0; then " \
+				"setenv fdtfile am335x-boneblack.dtb; " \
+			"elif test $board_rev = ME06; then " \
+				"setenv fdtfile am335x-bonegreen.dtb; " \
+			"elif test $board_rev = OS00; then " \
+				"setenv fdtfile am335x-osd3358-sm-red.dtb; " \
+			"elif test $board_rev = OS01; then " \
+				"setenv fdtfile am335x-osd3358-sm-red-v4.dtb; " \
+			"else " \
+				"setenv fdtfile am335x-boneblack.dtb; " \
+			"fi; " \
+		"fi; " \
 		"if test $board_name = A335PBGL; then " \
 			"setenv fdtfile am335x-pocketbeagle.dtb; fi; " \
 		"if test $board_name = BBBW; then " \
@@ -126,6 +188,8 @@
 			"setenv fdtfile am335x-bonegreen.dtb; fi; " \
 		"if test $board_name = BBGW; then " \
 			"setenv fdtfile am335x-bonegreen-wireless.dtb; fi; " \
+		"if test $board_name = BBGG; then " \
+			"setenv fdtfile am335x-bonegreen-gateway.dtb; fi; " \
 		"if test $board_name = BBBL; then " \
 			"setenv fdtfile am335x-boneblue.dtb; fi; " \
 		"if test $board_name = BBEN; then " \
@@ -134,6 +198,10 @@
 			"setenv fdtfile am335x-sancloud-bbe-lite.dtb; fi; " \
 		"if test $board_name = BBE_EX_WIFI; then " \
 			"setenv fdtfile am335x-sancloud-bbe-extended-wifi.dtb; fi; " \
+		"if test $board_name = OS00; then " \
+			"setenv fdtfile am335x-osd3358-sm-red.dtb; fi; " \
+		"if test $board_name = OS01; then " \
+			"setenv fdtfile am335x-osd3358-sm-red-v4.dtb; fi; " \
 		"if test $board_name = A33515BB; then " \
 			"setenv fdtfile am335x-evm.dtb; fi; " \
 		"if test $board_name = A335X_SK; then " \
@@ -144,13 +212,21 @@
 				"setenv pxe_label_override Pruss; fi;" \
 		"fi; " \
 		"if test $fdtfile = undefined; then " \
-			"echo WARNING: Could not determine device tree to use; fi; \0" \
-	"init_console=" \
+			"setenv board_name A335BNLT; " \
+			"setenv board_rev EMMC; " \
+			"setenv fdtfile am335x-bonegreen.dtb; " \
+		"fi; \0" \
+		"init_console=" \
 		"if test $board_name = A335_ICE; then "\
-			"setenv console ttyO3,115200n8;" \
+			"setenv console ttyS3,115200n8;" \
+		"elif test $board_name = A335BLGC; then " \
+			"setenv console ttyS4,115200n8;" \
 		"else " \
-			"setenv console ttyO0,115200n8;" \
+			"setenv console ttyS0,115200n8;" \
 		"fi;\0" \
+	EEWIKI_BOOT \
+	EEWIKI_UNAME_BOOT \
+	EEPROM_PROGRAMMING \
 	NANDARGS \
 	NETARGS \
 	DFUARGS \
@@ -164,6 +240,12 @@
 #define CFG_SYS_NS16550_COM4		0x481a6000	/* UART3 */
 #define CFG_SYS_NS16550_COM5		0x481a8000	/* UART4 */
 #define CFG_SYS_NS16550_COM6		0x481aa000	/* UART5 */
+
+/* SPL */
+#ifndef CONFIG_NOR_BOOT
+
+/* USB gadget RNDIS */
+#endif
 
 #ifdef CONFIG_MTD_RAW_NAND
 /* NAND: device related configs */
@@ -179,6 +261,27 @@
 #define CFG_SYS_NAND_ECCSIZE		512
 #define CFG_SYS_NAND_ECCBYTES	14
 #endif /* !CONFIG_MTD_RAW_NAND */
+
+/*
+ * For NOR boot, we must set this to the start of where NOR is mapped
+ * in memory.
+ */
+
+
+/*
+ * Disable MMC DM for SPL build and can be re-enabled after adding
+ * DM support in SPL
+ */
+#ifdef CONFIG_SPL_BUILD
+#undef CONFIG_DM_MMC
+#undef CONFIG_TIMER
+#endif
+
+#if defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_USB_ETHER)
+/* Remove other SPL modes. */
+/* disable host part of MUSB in SPL */
+/* disable EFI partitions and partition UUID support */
+#endif
 
 /* USB Device Firmware Update support */
 #ifndef CONFIG_SPL_BUILD
@@ -202,8 +305,11 @@
  * 0x4C0000 - 0xFFFFFF : Userland (11 MiB + 256 KiB)
  */
 #if defined(CONFIG_NOR)
+#define CONFIG_SYS_MAX_FLASH_SECT	128
 #define CFG_SYS_FLASH_BASE		(0x08000000)
+#define CONFIG_SYS_FLASH_CFI_WIDTH	FLASH_CFI_16BIT
 #define CFG_SYS_FLASH_SIZE		0x01000000
+#define CONFIG_SYS_MONITOR_BASE		CONFIG_SYS_FLASH_BASE
 #endif  /* NOR support */
 
 #endif	/* ! __CONFIG_AM335X_EVM_H */
