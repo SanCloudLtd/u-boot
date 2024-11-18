@@ -1,0 +1,78 @@
+#!/bin/bash
+
+# Check if the correct number of arguments is provided
+
+Black="\033[0;30m"
+Red="\033[0;31m"
+Green="\033[0;32m"
+Yellow="\033[0;33m"
+Blue="\033[0;34m"
+Magenta="\033[0;35m"
+Cyan="\033[0;36m"
+White="\033[0;37m"
+RESET="\033[0m"
+
+echo $UOUT/u-boot-dtb.img
+
+
+env -C $UBOOT make O=$UOUT clean
+if [ $? -ne 0 ]; then
+        echo -e "${Red}unable to clean uboot ${RESET}"
+        exit 1
+else
+        echo -e "${Green}Successfully uboot is cleaned ${RESET}"
+fi
+env -C $UBOOT make O=${UOUT} -j10
+if [ $? -ne 0 ]; then
+        echo -e "${Red}unable to compile uboot ${RESET}"
+        exit 1
+else
+        echo -e "${Green}Successfully uboot is compiled ${RESET}"
+fi
+
+
+env -C ${WORK} cp ${UOUT}/arch/arm/dts/am335x-sancloud-bbe-lite.dtb am335x-sancloud-bbe-lite-pubkey.dtb
+if [ $? -ne 0 ]; then
+        echo -e "${Red}unable to copy dtb ${RESET}"
+        exit 1
+else
+        echo -e "${Green}Successfully dtb is copid ${RESET}"
+fi
+
+env -C $WORK $UOUT/tools/mkimage -f sign.its -K am335x-sancloud-bbe-lite-pubkey.dtb -T fdt_legacy -k keys -r SanCloud-sined-image.fit
+if [ $? -ne 0 ]; then
+        echo -e "${Red}unable to signe image ${RESET}"
+        exit 1
+else
+        echo -e "${Green}Successfully image is signed ${RESET}"
+fi
+env -C $UBOOT make O=$UOUT clean
+if [ $? -ne 0 ]; then
+        echo -e "${Red}unable to clean uboot ${RESET}"
+        exit 1
+else
+        echo -e "${Green}Successfully uboot is cleaned ${RESET}"
+fi
+env -C $UBOOT make O=${UOUT} EXT_DTB=${WORK}/am335x-sancloud-bbe-lite-pubkey.dtb -j10
+if [ $? -ne 0 ]; then
+        echo -e "${Red}unable to compile uboot ${RESET}"
+        exit 1
+else
+        echo -e "${Green}Successfully uboot is compiled ${RESET}"
+fi
+
+IPs=(
+"10.0.0.237"
+"10.0.0.94"
+    )  
+
+for IP in "${IPs[@]}"; do
+    # Check if the IP is reachable
+    if ping -c 1 -W 1 "$IP" &> /dev/null; then
+       env ADDITIONAL_FILES="$WORK/SanCloud-sined-image.fit" $UBOOT/b/Boardcp.sh $IP &
+    else
+         echo -e "${Green}device $IP does not exist. ${RESET}"
+    fi
+ 
+    done  
+wait
