@@ -58,7 +58,7 @@
 	"loadimage=load ${devtype} ${bootpart} ${loadaddr} ${bootdir}/${bootfile}\0" \
 	"loadrd=load ${devtype} ${bootpart} ${rdaddr} ${bootdir}/${rdfile}; setenv rdsize ${filesize}\0" \
 	"loadfdt=echo loading ${fdtdir}/${fdtfile} ...; load ${devtype} ${bootpart} ${fdtaddr} ${fdtdir}/${fdtfile}\0" \
-	"loadoverlay=echo uboot_overlays: loading ${actual_uboot_overlay} ...; " \
+	"loadoverlay=echo uboot_overlays: loading ${actual_uboot_overlay} on address ${rdaddr} ...; " \
 		"load ${devtype} ${bootpart} ${rdaddr} ${actual_uboot_overlay}; " \
 		"fdt addr ${fdtaddr}; fdt resize ${fdt_buffer}; " \
 		"fdt apply ${rdaddr}; fdt resize ${fdt_buffer};\0" \
