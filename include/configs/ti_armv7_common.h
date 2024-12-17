@@ -849,12 +849,19 @@
 
 #ifdef CONFIG_SPL_OS_BOOT
 /* FAT */
+#ifndef CONFIG_SPL_FS_LOAD_KERNEL_NAME
 #define CONFIG_SPL_FS_LOAD_KERNEL_NAME		"uImage"
+#endif
+#ifndef CONFIG_SPL_FS_LOAD_ARGS_NAME
 #define CONFIG_SPL_FS_LOAD_ARGS_NAME		"args"
-
+#endif
 /* RAW SD card / eMMC */
+#ifndef CONFIG_SYS_MMCSD_RAW_MODE_ARGS_SECTOR
 #define CONFIG_SYS_MMCSD_RAW_MODE_ARGS_SECTOR	0x1500  /* address 0x2A0000 */
+#endif
+#ifndef CONFIG_SYS_MMCSD_RAW_MODE_ARGS_SECTORS
 #define CONFIG_SYS_MMCSD_RAW_MODE_ARGS_SECTORS	0x200   /* 256KiB */
+#endif
 #endif
 
 /* General parts of the framework, required. */

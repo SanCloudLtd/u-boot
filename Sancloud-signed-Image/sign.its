@@ -10,11 +10,15 @@
             type = "kernel";
             arch = "arm";
             os = "linux";
-            load =  <0x82000000>;
-            entry = <0x82000000>;
+            load =  <0x89000000>;
+            entry = <0x89000000>;
             compression = "none";
             hash-1 {
                 algo = "sha256";
+            };
+            signature {
+                algo = "sha256,rsa2048";
+                key-name-hint = "dev";
             };
         };
         fdt-ligth {
@@ -22,10 +26,15 @@
             data = /incbin/("./am335x-sancloud-bbe-lite.dtb");
             type = "flat_dt";
             arch = "arm";
+            os = "linux";
             compression = "none";
             load =<0x88000000>;
             hash-1 {
                 algo = "sha256";
+            };
+            signature {
+                algo = "sha256,rsa2048";
+                key-name-hint = "dev";
             };
         };
         fdt-ADC {
@@ -33,10 +42,15 @@
             data = /incbin/("./BB-ADC-00A0.dtbo");
             type = "flat_dt";
             arch = "arm";
+            os = "linux";
             compression = "none";
-            load =<0x88000000>;
+            load =<0x88f00000>;
             hash-1 {
                 algo = "sha256";
+            };
+            signature {
+                algo = "sha256,rsa2048";
+                key-name-hint = "dev";
             };
         };
         fdt-eMMC1 {
@@ -44,22 +58,33 @@
             data = /incbin/("./BB-BONE-eMMC1-01-00A0.dtbo");
             type = "flat_dt";
             arch = "arm";
+            os = "linux";
             compression = "none";
-            load =<0x88000000>;
+            load =<0x88f00000>;
             hash-1 {
                 algo = "sha256";
+            };
+            signature {
+                algo = "sha256,rsa2048";
+                key-name-hint = "dev";
             };
         };
         fdt-SPI {
             description = "BB-SPIDEV0-00A0.dtbo";
             data = /incbin/("./BB-SPIDEV0-00A0.dtbo");
             type = "flat_dt";
+            os = "linux";
             arch = "arm";
             compression = "none";
-            load =<0x88000000>;
+            load =<0x88f00000>;
             hash-1 {
                 algo = "sha256";
             };
+            signature {
+                algo = "sha256,rsa2048";
+                key-name-hint = "dev";
+            };
+
         };
         initrd {
             description = "Initrd";
@@ -73,6 +98,11 @@
             hash-1 {
                 algo = "sha256";
             };
+            signature {
+                algo = "sha256,rsa2048";
+                key-name-hint = "dev";
+            };
+
         };
     };
     configurations {
@@ -80,40 +110,13 @@
         r79 {
             description = "";
             kernel = "kernel";
-            fdt = "fdt-ligth";
-            ramdisk = "initrd";
+            fdt = "fdt-ligth","fdt-ADC","fdt-SPI","fdt-eMMC1";
+            #ramdisk = "initrd";
             signature-1 {
                 algo = "sha256,rsa2048";
                 key-name-hint = "dev";
-                sign-images = "fdt", "kernel","initrd";
+                sign-images = "fdt", "kernel";
             };
-        };
-        ADC {
-            description = "Load BB-ADC-00A0.dtbo";
-            fdt ="fdt-ADC";
-            signature-1 {
-                algo = "sha256,rsa2048";
-                key-name-hint = "dev";
-                sign-images = "fdt", "kernel","initrd";
-                };
-            };    
-        SPI {
-            description = "BB-SPIDEV0-00A0.dtbo";
-            fdt ="fdt-SPI";
-            signature-1 {
-                algo = "sha256,rsa2048";
-                key-name-hint = "dev";
-                sign-images = "fdt", "kernel","initrd";
-            };    
-        };
-        eMMC1 {
-            description = "BB-BONE-eMMC1-01-00A0.dtbo";
-            fdt ="fdt-eMMC1";
-            signature-1 {
-                algo = "sha256,rsa2048";
-                key-name-hint = "dev";
-                sign-images = "fdt", "kernel","initrd";
-            };    
         };
     };
 };

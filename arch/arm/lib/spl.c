@@ -26,6 +26,10 @@ DECLARE_GLOBAL_DATA_PTR;
  * pafches that rely on it. The global_data area is set up in crt0.S.
  */
 gd_t gdata __section(".data");
+#else
+#ifdef CONFIG_AM33XX
+ DECLARE_GLOBAL_DATA_PTR;
+#endif 
 #endif
 
 /*
@@ -61,17 +65,24 @@ void __noreturn jump_to_image_linux(struct spl_image_info *spl_image)
 #else
 void __noreturn jump_to_image_linux(struct spl_image_info *spl_image)
 {
+#ifdef CONFIG_AM33XX
+    unsigned long machid = gd->bd->bi_arch_number;
+#else
 	unsigned long machid = 0xffffffff;
+#endif
 #ifdef CONFIG_MACH_TYPE
 	machid = CONFIG_MACH_TYPE;
 #endif
 
-	debug("Entering kernel arg pointer: 0x%p\n", spl_image->arg);
+	printf("Entering kernel arg pointer: 0x%p  \n"
+	      "Os entry pointer: 0x%lx \n"
+		  "MachID : 0x%lx \n", spl_image->arg,spl_image->entry_point,machid);
 	typedef void (*image_entry_arg_t)(int, int, void *)
 		__attribute__ ((noreturn));
 	image_entry_arg_t image_entry =
 		(image_entry_arg_t)(uintptr_t) spl_image->entry_point;
 	cleanup_before_linux();
+	puts("Starting Kernel !!!!!!!!!!\n");
 	image_entry(0, machid, spl_image->arg);
 }
 #endif	/* CONFIG_ARM64 */

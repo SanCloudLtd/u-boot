@@ -22,14 +22,13 @@ if [ $? -ne 0 ]; then
 else
         echo -e "${Green}Successfully uboot is cleaned ${RESET}"
 fi
-env -C $UBOOT make O=${UOUT} -j10
+env -C $UBOOT make O=${UOUT} -j$(nproc)  
 if [ $? -ne 0 ]; then
         echo -e "${Red}unable to compile uboot ${RESET}"
         exit 1
 else
         echo -e "${Green}Successfully uboot is compiled ${RESET}"
 fi
-
 
 env -C ${WORK} cp ${UOUT}/arch/arm/dts/am335x-sancloud-bbe-lite.dtb am335x-sancloud-bbe-lite-pubkey.dtb
 if [ $? -ne 0 ]; then
@@ -39,21 +38,22 @@ else
         echo -e "${Green}Successfully dtb is copid ${RESET}"
 fi
 
+env -C $WORK $UOUT/tools/mkimage  -f signFalcom.its -K am335x-sancloud-bbe-lite-pubkey.dtb -T fdt_legacy -k keys -r SanCloud-Falcon-image.fit
+if [ $? -ne 0 ]; then
+        echo -e "${Red}unable to signe image SanCloud-Falcon-image.fit ${RESET}"
+        exit 1
+else
+        echo -e "${Green}Successfully image SanCloud-Falcon-image.fit is signed ${RESET}"
+fi
+
 env -C $WORK $UOUT/tools/mkimage -f sign.its -K am335x-sancloud-bbe-lite-pubkey.dtb -T fdt_legacy -k keys -r SanCloud-sined-image.fit
 if [ $? -ne 0 ]; then
-        echo -e "${Red}unable to signe image ${RESET}"
+        echo -e "${Red}unable to signe image SanCloud-sined-image.fit ${RESET}"
         exit 1
 else
-        echo -e "${Green}Successfully image is signed ${RESET}"
+        echo -e "${Green}Successfully image SanCloud-sined-image.fit is signed ${RESET}"
 fi
-env -C $UBOOT make O=$UOUT clean
-if [ $? -ne 0 ]; then
-        echo -e "${Red}unable to clean uboot ${RESET}"
-        exit 1
-else
-        echo -e "${Green}Successfully uboot is cleaned ${RESET}"
-fi
-env -C $UBOOT make O=${UOUT} EXT_DTB=${WORK}/am335x-sancloud-bbe-lite-pubkey.dtb -j10
+env -C $UBOOT make O=${UOUT} EXT_DTB=${WORK}/am335x-sancloud-bbe-lite-pubkey.dtb -j$(nproc)  
 if [ $? -ne 0 ]; then
         echo -e "${Red}unable to compile uboot ${RESET}"
         exit 1
@@ -62,6 +62,7 @@ else
 fi
 
 IPs=(
+#"82.5.144.219"
 "10.0.0.237"
 "10.0.0.94"
     )  
@@ -69,7 +70,7 @@ IPs=(
 for IP in "${IPs[@]}"; do
     # Check if the IP is reachable
     if ping -c 1 -W 1 "$IP" &> /dev/null; then
-       env ADDITIONAL_FILES="$WORK/SanCloud-sined-image.fit" $UBOOT/b/Boardcp.sh $IP &
+       env ADDITIONAL_FILES="$WORK/SanCloud-sined-image.fit $WORK/SanCloud-Falcon-image.fit $WORK/uboot.env" $UBOOT/b/Boardcp.sh $IP &
     else
          echo -e "${Green}device $IP does not exist. ${RESET}"
     fi

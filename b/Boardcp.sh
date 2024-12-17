@@ -39,7 +39,11 @@ if [ "$C1" == "$DEF_CRC" ]; then
         $ADDITIONAL_FILES
     )  
 
-
+    FILESIZE=$(stat -c%s "$UOUT/MLO.byteswap")
+    # if [ "$FILESIZE" -gt "110592" ]; then
+    #     echo -e "${Red} MLO size is $FILESIZE biger then 0x1B000"
+    #     exit 1
+    # fi
     sshpass -p "$PASSWORD" ssh "debian@${IP_ADDRESS}" "rm -rf $REMOTE_DIR"
     if [ $? -ne 0 ]; then
         echo -e "${Red}Failed to remove directory $REMOTE_DIR on $IP_ADDRESS${RESET}"
@@ -65,21 +69,37 @@ if [ "$C1" == "$DEF_CRC" ]; then
             else
                 echo -e "${Green}Successfully copied $FILE to $IP_ADDRESS${RESET}"
             fi
-         if [[ "$FILE" == *"SanCloud-sined-image.fit" ]]; then
-            sshpass -p "$PASSWORD" ssh "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S rm -rf /boot/SanCloud-sined-image.fit"
+         if [[ "$FILE" == *"uboot.env" ]]; then
+            sshpass -p "$PASSWORD" ssh "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S rm -rf /boot/uboot.env"
+            if [ $? -ne 0 ]; then
+                echo -e "${Red}Failed to REMOVE old uboot.env FROM /boot on ${IP_ADDRESS} ${RESET}"
+            else
+                echo -e "${Green}Successfully RMOVED olde uboot.env from on ${IP_ADDRESS}  /boot ${RESET}"
+            fi
+
+            sshpass -p "$PASSWORD" ssh "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S mv $REMOTE_DIR/uboot.env /boot/"
+            if [ $? -ne 0 ]; then
+                echo -e "${Red}Failed to MOV \"$REMOTE_DIR/uboot.env\" to /boot ${RESET} on ${IP_ADDRESS}"
+            else
+                echo -e "${Green}Successfully Moved \"$REMOTE_DIR/uboot.env\" to /boot${RESET} on ${IP_ADDRESS}"
+            fi
+          fi 
+          if [[ "$FILE" == *"SanCloud-"*"-image.fit" ]]; then
+            sshpass -p "$PASSWORD" ssh "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S rm -rf /boot/SanCloud-*-image.fit"
             if [ $? -ne 0 ]; then
                 echo -e "${Red}Failed to REMOVE old /boot/SanCloud-sined-image.fit FROM /boot on ${IP_ADDRESS} ${RESET}"
             else
                 echo -e "${Green}Successfully RMOVED olde /boot/SanCloud-sined-image.fit from on ${IP_ADDRESS}  /boot ${RESET}"
             fi
 
-            sshpass -p "$PASSWORD" ssh "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S mv $REMOTE_DIR/SanCloud-sined-image.fit /boot/"
+            sshpass -p "$PASSWORD" ssh "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S cp $REMOTE_DIR/SanCloud-*-image.fit /boot/"
             if [ $? -ne 0 ]; then
                 echo -e "${Red}Failed to MOV \"$REMOTE_DIR/SanCloud-sined-image.fit\" to /boot ${RESET} on ${IP_ADDRESS}"
             else
                 echo -e "${Green}Successfully Moved \"$REMOTE_DIR/SanCloud-sined-image.fit\" to /boot${RESET} on ${IP_ADDRESS}"
             fi
           fi 
+
         else
             echo -e "${Red}File $FILE does not exist.${RESET}"
         fi

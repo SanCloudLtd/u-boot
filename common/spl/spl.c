@@ -335,7 +335,7 @@ int spl_parse_image_header(struct spl_image_info *spl_image,
 	if (CONFIG_IS_ENABLED(LOAD_FIT_FULL)) {
 		ret = spl_load_fit_image(spl_image, header);
 
-		if (!ret)
+		if (ret <= 0)
 			return ret;
 	}
 	if (image_get_magic(header) == IH_MAGIC) {
@@ -593,6 +593,16 @@ int spl_init(void)
 __weak void board_boot_order(u32 *spl_boot_list)
 {
 	spl_boot_list[0] = spl_boot_device();
+	
+    #ifdef CONFIG_SYS_MMCSD_FS_BOOT 
+	if(spl_boot_list[0]==BOOT_DEVICE_SPI)
+	 {
+	  spl_boot_list[1]=BOOT_DEVICE_MMC1;
+	  spl_boot_list[2]=BOOT_DEVICE_MMC2;
+	 }
+	 #endif
+	     
+
 }
 
 __weak int spl_check_board_image(struct spl_image_info *spl_image,
@@ -665,7 +675,9 @@ static int boot_from_devices(struct spl_image_info *spl_image,
 	int ret = -ENODEV;
 	int i;
 
-	for (i = 0; i < count && spl_boot_list[i] != BOOT_DEVICE_NONE; i++) {
+	for (i = 0; i < count ; i++) {
+        if(spl_boot_list[i] == BOOT_DEVICE_NONE)
+		  continue; 
 		struct spl_image_loader *loader;
 		int bootdev = spl_boot_list[i];
 

@@ -23,6 +23,10 @@
 #define V_OSCK				24000000  /* Clock output from T2 */
 #define V_SCLK				(V_OSCK)
 
+#define CFG_SYS_SPI_KERNEL_OFFS      0x1E0000
+#define CFG_SYS_SPI_ARGS_OFFS    0x2000000
+#define CFG_SYS_SPI_ARGS_SIZE   0x10000f
+
 #ifdef CONFIG_MTD_RAW_NAND
 #define NANDARGS \
 	"mtdids=" CONFIG_MTDIDS_DEFAULT "\0" \

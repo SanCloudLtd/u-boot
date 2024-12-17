@@ -1,0 +1,55 @@
+/dts-v1/;
+
+/ {
+    description = "Beaglebone black";
+    #address-cells = <1>;
+    images {
+        kernel {
+            description = "vmlinuz-5.10.168-ti-r79";
+            data = /incbin/("./vmlinuz-5.10.168-ti-r79");
+            type = "kernel";
+            arch = "arm";
+            os = "linux";
+            load =  <0x89000000>;
+            entry = <0x89000000>;
+            compression = "none";
+            hash-1 {
+                algo = "sha256";
+            };
+            signature {
+                algo = "sha256,rsa2048";
+                key-name-hint = "dev";
+            };
+        };
+        args {
+            description = "FALCON BOOT ARGS";
+            data = /incbin/("./falconargs");
+            type = "flat_dt";
+            arch = "arm";
+            os = "linux";
+            compression = "none";
+            load =<0x8f81f000>;
+            entry = <0x8f81f000>;
+            hash-1 {
+                algo = "sha256";
+            };
+            signature {
+                algo = "sha256,rsa2048";
+                key-name-hint = "dev";
+            };
+        };
+    };
+    configurations {
+        default = "r79";
+        r79 {
+            description = "";
+            kernel = "kernel";
+            fdt = "args";
+            signature-1 {
+                algo = "sha256,rsa2048";
+                key-name-hint = "dev";
+                sign-images = "args", "kernel";
+            };
+        };
+    };
+};
