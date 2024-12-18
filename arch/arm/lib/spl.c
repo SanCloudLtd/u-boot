@@ -74,7 +74,7 @@ void __noreturn jump_to_image_linux(struct spl_image_info *spl_image)
 	machid = CONFIG_MACH_TYPE;
 #endif
 
-	printf("Entering kernel arg pointer: 0x%p  \n"
+	debug("Entering kernel arg pointer: 0x%p  \n"
 	      "Os entry pointer: 0x%lx \n"
 		  "MachID : 0x%lx \n", spl_image->arg,spl_image->entry_point,machid);
 	typedef void (*image_entry_arg_t)(int, int, void *)

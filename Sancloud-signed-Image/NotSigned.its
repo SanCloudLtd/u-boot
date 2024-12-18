@@ -13,15 +13,8 @@
             load =  <0x89000000>;
             entry = <0x89000000>;
             compression = "none";
-            hash-1 {
-                algo = "sha256";
-            };
-            signature {
-                algo = "sha256,rsa2048";
-                key-name-hint = "dev";
-            };
         };
-        fdt-ligth {
+        main_fdt {
             description = "am335x-sancloud-bbe-lite.dtb";
             data = /incbin/("./am335x-sancloud-bbe-lite.dtb");
             type = "flat_dt";
@@ -29,13 +22,6 @@
             os = "linux";
             compression = "none";
             load =<0x88000000>;
-            hash-1 {
-                algo = "sha256";
-            };
-            signature {
-                algo = "sha256,rsa2048";
-                key-name-hint = "dev";
-            };
         };
         fdt-ADC {
             description = "BB-ADC-00A0.dtbo";
@@ -45,13 +31,6 @@
             os = "linux";
             compression = "none";
             load =<0x88f00000>;
-            hash-1 {
-                algo = "sha256";
-            };
-            signature {
-                algo = "sha256,rsa2048";
-                key-name-hint = "dev";
-            };
         };
         fdt-eMMC1 {
             description = "BB-BONE-eMMC1-01-00A0.dtbo";
@@ -61,13 +40,6 @@
             os = "linux";
             compression = "none";
             load =<0x88f00000>;
-            hash-1 {
-                algo = "sha256";
-            };
-            signature {
-                algo = "sha256,rsa2048";
-                key-name-hint = "dev";
-            };
         };
         fdt-SPI {
             description = "BB-SPIDEV0-00A0.dtbo";
@@ -77,14 +49,6 @@
             arch = "arm";
             compression = "none";
             load =<0x88f00000>;
-            hash-1 {
-                algo = "sha256";
-            };
-            signature {
-                algo = "sha256,rsa2048";
-                key-name-hint = "dev";
-            };
-
         };
         initrd {
             description = "Initrd";
@@ -95,28 +59,29 @@
             load =<0x88080000>;
             entry=<0x88080000>;
             compression = "none";
-            hash-1 {
-                algo = "sha256";
-            };
-            signature {
-                algo = "sha256,rsa2048";
-                key-name-hint = "dev";
-            };
 
         };
     };
     configurations {
-        default = "r79";
-        r79 {
-            description = "";
+        default = "KERNEL_ONLY";
+        KERNEL_ONLY{
+            description = "LOAD DEBEIAN KERNEL";
             kernel = "kernel";
-            fdt = "fdt-ligth","fdt-ADC","fdt-SPI","fdt-eMMC1";
+            fdt = "main_fdt";
             #ramdisk = "initrd";
-            signature-1 {
-                algo = "sha256,rsa2048";
-                key-name-hint = "dev";
-                sign-images = "fdt", "kernel";
-            };
         };
+        ADC {
+            description = "ADC support FDT";
+            fdt ="fdt-ADC";
+        };
+        SPI {
+            description = "SPI support FDT";
+            fdt ="fdt-SPI";
+        };
+        eMMC1 {
+            description = "eMMC1 support FDT";
+            fdt ="fdt-eMMC1";
+        };
+     
     };
 };

@@ -40,18 +40,18 @@ fi
 
 env -C $WORK $UOUT/tools/mkimage  -f signFalcom.its -K am335x-sancloud-bbe-lite-pubkey.dtb -T fdt_legacy -k keys -r SanCloud-Falcon-image.fit
 if [ $? -ne 0 ]; then
-        echo -e "${Red}unable to signe image SanCloud-Falcon-image.fit ${RESET}"
+        echo -e "${Red}unable to sign image SanCloud-Falcon-image.fit ${RESET}"
         exit 1
 else
         echo -e "${Green}Successfully image SanCloud-Falcon-image.fit is signed ${RESET}"
 fi
 
-env -C $WORK $UOUT/tools/mkimage -f sign.its -K am335x-sancloud-bbe-lite-pubkey.dtb -T fdt_legacy -k keys -r SanCloud-sined-image.fit
+env -C $WORK $UOUT/tools/mkimage -f NotSigned.its -T fdt_legacy  -r SanCloud-Not-signed-image.fit
 if [ $? -ne 0 ]; then
-        echo -e "${Red}unable to signe image SanCloud-sined-image.fit ${RESET}"
+        echo -e "${Red}unable to create image SanCloud-Not-signed-image.fit ${RESET}"
         exit 1
 else
-        echo -e "${Green}Successfully image SanCloud-sined-image.fit is signed ${RESET}"
+        echo -e "${Green}Successfully image SanCloud-Not-signed-image.fit is signed ${RESET}"
 fi
 env -C $UBOOT make O=${UOUT} EXT_DTB=${WORK}/am335x-sancloud-bbe-lite-pubkey.dtb -j$(nproc)  
 if [ $? -ne 0 ]; then
@@ -70,7 +70,7 @@ IPs=(
 for IP in "${IPs[@]}"; do
     # Check if the IP is reachable
     if ping -c 1 -W 1 "$IP" &> /dev/null; then
-       env ADDITIONAL_FILES="$WORK/SanCloud-sined-image.fit $WORK/SanCloud-Falcon-image.fit $WORK/uboot.env" $UBOOT/b/Boardcp.sh $IP &
+       env ADDITIONAL_FILES="$WORK/SanCloud-Not-signed-image.fit $WORK/SanCloud-Falcon-image.fit" $UBOOT/b/Boardcp.sh $IP &
     else
          echo -e "${Green}device $IP does not exist. ${RESET}"
     fi
