@@ -135,7 +135,7 @@ defaults:
 #endif
 #if (!CONFIG_IS_ENABLED(LOAD_FIT) &&  !CONFIG_IS_ENABLED(LOAD_FIT_FULL))
 		return -1;
-#endif;
+#endif
 	}
 
 	return spl_load_image_ext(spl_image, bootdev, block_dev, partition,
