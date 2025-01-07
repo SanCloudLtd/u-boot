@@ -44,7 +44,7 @@ if [ "$C1" == "$DEF_CRC" ]; then
     #     echo -e "${Red} MLO size is $FILESIZE biger then 0x1B000"
     #     exit 1
     # fi
-    sshpass -p "$PASSWORD" ssh "debian@${IP_ADDRESS}" "rm -rf $REMOTE_DIR"
+    sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "debian@${IP_ADDRESS}" "rm -rf $REMOTE_DIR"
     if [ $? -ne 0 ]; then
         echo -e "${Red}Failed to remove directory $REMOTE_DIR on $IP_ADDRESS${RESET}"
         #exit 1
@@ -52,7 +52,7 @@ if [ "$C1" == "$DEF_CRC" ]; then
         echo -e "${Green}Successfully created directory $REMOTE_DIR on $IP_ADDRESS${RESET}"
     fi
 
-    sshpass -p "$PASSWORD" ssh "debian@${IP_ADDRESS}" "mkdir -p $REMOTE_DIR"
+    sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "debian@${IP_ADDRESS}" "mkdir -p $REMOTE_DIR"
     if [ $? -ne 0 ]; then
         echo -e "${Red}Failed to create directory $REMOTE_DIR on $IP_ADDRESS${RESET}"
         exit 1
@@ -70,14 +70,14 @@ if [ "$C1" == "$DEF_CRC" ]; then
                 echo -e "${Green}Successfully copied $FILE to $IP_ADDRESS${RESET}"
             fi
          if [[ "$FILE" == *"uboot.env" ]]; then
-            sshpass -p "$PASSWORD" ssh "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S rm -rf /boot/uboot.env"
+            sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S rm -rf /boot/uboot.env"
             if [ $? -ne 0 ]; then
                 echo -e "${Red}Failed to REMOVE old uboot.env FROM /boot on ${IP_ADDRESS} ${RESET}"
             else
                 echo -e "${Green}Successfully RMOVED olde uboot.env from on ${IP_ADDRESS}  /boot ${RESET}"
             fi
 
-            sshpass -p "$PASSWORD" ssh "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S mv $REMOTE_DIR/uboot.env /boot/"
+            sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S mv $REMOTE_DIR/uboot.env /boot/"
             if [ $? -ne 0 ]; then
                 echo -e "${Red}Failed to MOV \"$REMOTE_DIR/uboot.env\" to /boot ${RESET} on ${IP_ADDRESS}"
             else
@@ -85,14 +85,14 @@ if [ "$C1" == "$DEF_CRC" ]; then
             fi
           fi 
           if [[ "$FILE" == *"SanCloud-"*"-image.fit" ]]; then
-            sshpass -p "$PASSWORD" ssh "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S rm -rf /boot/SanCloud-*-image.fit"
+            sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S rm -rf /boot/SanCloud-*-image.fit"
             if [ $? -ne 0 ]; then
                 echo -e "${Red}Failed to REMOVE old /boot/SanCloud-sined-image.fit FROM /boot on ${IP_ADDRESS} ${RESET}"
             else
                 echo -e "${Green}Successfully RMOVED olde /boot/SanCloud-sined-image.fit from on ${IP_ADDRESS}  /boot ${RESET}"
             fi
 
-            sshpass -p "$PASSWORD" ssh "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S cp $REMOTE_DIR/SanCloud-*-image.fit /boot/"
+            sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S cp $REMOTE_DIR/SanCloud-*-image.fit /boot/"
             if [ $? -ne 0 ]; then
                 echo -e "${Red}Failed to MOV \"$REMOTE_DIR/SanCloud-sined-image.fit\" to /boot ${RESET} on ${IP_ADDRESS}"
             else
@@ -107,17 +107,17 @@ if [ "$C1" == "$DEF_CRC" ]; then
 fi
 
 #secure program section 0 and 1
-#sshpass -p "$PASSWORD" ssh "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S env -C ~/winbond-lib/build/ ./TESTAPP -u $REMOTE_DIR/MLO.byteswap -s 0 -D 0 -k 589505315,606348324,623191333,640034342 -v 0 --fk -C $C1 -d $D1 && echo \"$PASSWORD\" | sudo -S env -C ~/winbond-lib/build/  ./TESTAPP -u $REMOTE_DIR/u-boot-dtb.img -s 1 -D 0 -k 589505315,606348324,623191333,640034342 -v 0 --fk -S 57852 -C $C2 -d $D2 "
+#sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S env -C ~/winbond-lib/build/ ./TESTAPP -u $REMOTE_DIR/MLO.byteswap -s 0 -D 0 -k 589505315,606348324,623191333,640034342 -v 0 --fk -C $C1 -d $D1 && echo \"$PASSWORD\" | sudo -S env -C ~/winbond-lib/build/  ./TESTAPP -u $REMOTE_DIR/u-boot-dtb.img -s 1 -D 0 -k 589505315,606348324,623191333,640034342 -v 0 --fk -S 57852 -C $C2 -d $D2 "
 
 #secure program section 0
-#sshpass -p "$PASSWORD" ssh "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S env -C ~/winbond-lib/build/  ./TESTAPP -u $REMOTE_DIR/MLO.byteswap -s 0 -D 0 -k 589505315,606348324,623191333,640034342 -v 0 --fk -S 57852 -C $C2 -d $D2 "
+#sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S env -C ~/winbond-lib/build/  ./TESTAPP -u $REMOTE_DIR/MLO.byteswap -s 0 -D 0 -k 589505315,606348324,623191333,640034342 -v 0 --fk -S 57852 -C $C2 -d $D2 "
 
 #unsecure program  
-sshpass -p "$PASSWORD" ssh "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S env -C ~/winbond-lib/build/ ./TESTAPP -w -p -s 0 -D 0 -f $REMOTE_DIR/MLO.byteswap && echo \"$PASSWORD\" | sudo -S env -C ~/winbond-lib/build/  ./TESTAPP -w -p -s 1 -D 0 -f $REMOTE_DIR/u-boot-dtb.img"
+#sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S env -C ~/winbond-lib/build/ ./TESTAPP -w -p -s 0 -D 0 -f $REMOTE_DIR/MLO.byteswap && echo \"$PASSWORD\" | sudo -S env -C ~/winbond-lib/build/  ./TESTAPP -w -p -s 1 -D 0 -f $REMOTE_DIR/u-boot-dtb.img"
 
 
 #unsecure program section 0
-#sshpass -p "$PASSWORD" ssh "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S env -C ~/winbond-lib/build/  ./TESTAPP -w -p -s 0 -D 0 -f $REMOTE_DIR/MLO.byteswap"
+sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S env -C ~/winbond-lib/build/  ./TESTAPP -w -p -s 0 -D 0 -f $REMOTE_DIR/MLO.byteswap"
 if [ $? -ne 0 ]; then
     echo -e "${Red}Failed to write on chip ${RESET}"
     exit 1
