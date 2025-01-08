@@ -13,9 +13,14 @@
             load =  <0x89000000>;
             entry = <0x89000000>;
             compression = "none";
-            hash {
+            hash{
                 algo = "sha256";
             };
+            signature{
+                algo = "sha256,rsa2048";
+                key-name-hint = "image";
+            };
+
         };
         args {
             description = "FALCON BOOT ARGS";
@@ -29,19 +34,37 @@
             hash {
                 algo = "sha256";
             };
+            signature{
+                algo = "sha256,rsa2048";
+                key-name-hint = "image";
+            };
+
         };
     };
     configurations {
         default = "SanCloud-Secure";
+        SanCloud-boneenhanced {
+            description = "";
+            kernel = "kernel";
+            fdt = "args";
+            compatible ="sancloud,am335x-boneenhanced";
+            signature{
+                algo = "sha256,rsa2048";
+                key-name-hint = "conf";
+                sign-images = "fdt", "kernel";
+            };
+        };
         SanCloud-Secure {
             description = "";
             kernel = "kernel";
             fdt = "args";
             signature{
                 algo = "sha256,rsa2048";
-                key-name-hint = "dev";
-                sign-images = "args", "kernel";
+                key-name-hint = "conf";
+                sign-images = "fdt", "kernel";
             };
         };
+  
+
     };
 };

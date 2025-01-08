@@ -105,6 +105,12 @@ if [ "$C1" == "$DEF_CRC" ]; then
         fi
     done  
 fi
+#ext4 nedds to resync with new address
+sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S ls -l /boot/"
+
+
+
+
 
 #secure program section 0 and 1
 #sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S env -C ~/winbond-lib/build/ ./TESTAPP -u $REMOTE_DIR/MLO.byteswap -s 0 -D 0 -k 589505315,606348324,623191333,640034342 -v 0 --fk -C $C1 -d $D1 && echo \"$PASSWORD\" | sudo -S env -C ~/winbond-lib/build/  ./TESTAPP -u $REMOTE_DIR/u-boot-dtb.img -s 1 -D 0 -k 589505315,606348324,623191333,640034342 -v 0 --fk -S 57852 -C $C2 -d $D2 "

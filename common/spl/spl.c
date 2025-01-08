@@ -71,7 +71,17 @@ const char big_text_sd_card[] =
 " \\___ \\| |  | | | |    / _` | '__/ _` |\r\n" \
 " ____) | |__| | | |___| (_| | | | (_| |\r\n" \
 "|_____/|_____/   \\_____\\__,_|_|  \\__,_|\r\n" \
-;                                       
+; 
+
+const char big_text_mmc_card[] = 
+" ______ __  __ __  __  _____ \r\n" \
+"|  ____|  \\/  |  \\/  |/ ____|\r\n" \
+"| |__  | \\  / | \\  / | |     \r\n" \
+"|  __| | |\\/| | |\\/| | |     \r\n" \
+"| |____| |  | | |  | | |____ \r\n" \
+"|______|_|  |_|_|  |_|\\_____|\r\n" \
+;
+
 
 const char big_text_question[] = 
 " ___  \r\n" \
@@ -647,7 +657,10 @@ static void printBigBoot(const char * const loaderName)
 	}
 	else if(0 == strncmp(loaderName, "MMC", 3))
 	{
+      if(0 == strncmp(loaderName, "MMC1", 4))
 		bigStr = (char * )big_text_sd_card;
+	  else if(0 == strncmp(loaderName, "MMC2", 4))
+		bigStr = (char * )big_text_mmc_card;		
 	}
 
 	printf("Booting from: %s\r\n", loaderName);

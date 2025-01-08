@@ -688,7 +688,8 @@ endif
 # and any properties in CONFIG_OF_SPL_REMOVE_PROPS
 quiet_cmd_fdtgrep = FDTGREP $@
       cmd_fdtgrep = $(objtree)/tools/fdtgrep $(fdtgrep_props) -u -RT $< \
-		-n /chosen -n /config -n /signature -n /signature/key-dev -O dtb | \
+		-n /chosen -n /config -n /signature -n /signature/key-conf -n /signature/key-image -n /signature/key-dev \
+		 -O dtb | \
 	$(objtree)/tools/fdtgrep -r -O dtb - -o $@ \
 		-P bootph-all -P bootph-pre-ram -P bootph-pre-sram \
 		-P bootph-verify -P bootph-some-ram \

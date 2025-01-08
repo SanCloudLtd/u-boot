@@ -197,6 +197,10 @@ int fit_image_verify_required_sigs(const void *fit, int image_noffset,
 	if (key_node < 0) {
 		debug("%s: No signature node found: %s\n", __func__,
 		      fdt_strerror(key_node));
+#if defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_RSA_VERIFY_WITH_PKEY) && defined(CONFIG_SPL_FIT_SIGNATURE) 	  
+	    puts("\n********** SPL's DTB Dos Not Contain PUBLIC KEY ****** \n");
+		return -EPERM;
+#endif    
 		return 0;
 	}
 
@@ -491,10 +495,10 @@ static int fit_config_verify_required_keys(const void *fit, int conf_noffset,
 	if (key_node < 0) {
 		debug("%s: No signature node found: %s\n", __func__,
 		      fdt_strerror(key_node));
-		#if defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_RSA_VERIFY_WITH_PKEY) && defined(CONFIG_SPL_FIT_SIGNATURE) 	  
-		printf("\n********** SPL's DTB Dos Not Contain PUBLIC KEY ****** \n");
-		   return -EPERM;
-		#endif    
+#if defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_RSA_VERIFY_WITH_PKEY) && defined(CONFIG_SPL_FIT_SIGNATURE) 	  
+    	puts("\n********** SPL's DTB Dos Not Contain PUBLIC KEY for configuration(s) ****** \n");
+		return -EPERM;
+#endif    
 		return 0;
 	}
 

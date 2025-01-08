@@ -64,33 +64,25 @@ else
         echo -e "${Green}Successfully add signature required-mode to dtb ${RESET}"
 fi
 
-env -C $WORK fdtput -t s am335x-sancloud-bbe-lite-pubkey.dtb /signature/key-dev "required" "conf"
-if [ $? -ne 0 ]; then
-        echo -e "${Red}unable to add signature key-dev's required to dtb ${RESET}"
-        exit 1
-else
-        echo -e "${Green}Successfully add signature key-dev's required to dtb ${RESET}"
-fi
 
 
-env -C ${WORK} cp am335x-sancloud-bbe-lite-pubkey.dtb ${UOUT}/arch/arm/dts/ 
-if [ $? -ne 0 ]; then
-        echo -e "${Red}unable to copy dtb pubkey ${RESET}"
-        exit 1
-else
-        echo -e "${Green}Successfully dtb pubkey is copid ${RESET}"
-fi
+# env -C ${WORK} cp am335x-sancloud-bbe-lite-pubkey.dtb ${UOUT}/arch/arm/dts/ 
+# if [ $? -ne 0 ]; then
+#         echo -e "${Red}unable to copy dtb pubkey ${RESET}"
+#         exit 1
+# else
+#         echo -e "${Green}Successfully dtb pubkey is copid ${RESET}"
+# fi
 
 
-#env -C $UBOOT make O=${UOUT} EXT_DTB=${WORK}/am335x-sancloud-bbe-lite-pubkey.dtb -j$(nproc)  
-env -C $UBOOT make O=${UOUT} DEVICE_TREE=am335x-sancloud-bbe-lite-pubkey -j$(nproc)   
+env -C $UBOOT make O=${UOUT} EXT_DTB=${WORK}/am335x-sancloud-bbe-lite-pubkey.dtb -j$(nproc)  
+#env -C $UBOOT make O=${UOUT} DEVICE_TREE=am335x-sancloud-bbe-lite-pubkey -j$(nproc)   
 if [ $? -ne 0 ]; then
         echo -e "${Red}unable to compile uboot ${RESET}"
         exit 1
 else
         echo -e "${Green}Successfully uboot is compiled ${RESET}"
 fi
-
 
 IPs=(
 #"82.5.144.219"
