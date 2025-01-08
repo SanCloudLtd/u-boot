@@ -69,6 +69,7 @@
   "C_Cpp_Runner.showCompilationTime": false,
   "C_Cpp_Runner.useLinkTimeOptimization": false,
   "C_Cpp_Runner.msvcSecureNoWarnings": false,
+  "terminal.integrated.scrollback": 100000,
   "files.associations": {
     "*.module": "plaintext",
     "*.module-extension": "plaintext",
