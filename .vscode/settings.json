@@ -7,7 +7,7 @@
       "path": "bash",
       "args": [
         "-c",
-        "export CC=~/gcc-11.3.0-nolibc/arm-linux-gnueabi/bin/arm-linux-gnueabi-; export CROSS_COMPILE=$CC; export UBOOT=${workspaceFolder};export UOUT=$UBOOT/b/am355x_Sancloude;export WORK=$UBOOT/Sancloud-signed-Image; exec bash"
+        "export CC=~/gcc-11.3.0-nolibc/arm-linux-gnueabi/bin/arm-linux-gnueabi-; export CROSS_COMPILE=$CC; export UBOOT=${workspaceFolder};export UOUT=$UBOOT/b/am335x_Sancloude;export WORK=$UBOOT/Sancloud-signed-Image; exec bash"
       ]
     }
   },

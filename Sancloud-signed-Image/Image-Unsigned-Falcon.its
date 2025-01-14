@@ -13,24 +13,47 @@
             load =  <0x89000000>;
             entry = <0x89000000>;
             compression = "none";
+            hash{
+                algo = "sha256";
+            };
+
         };
         args {
             description = "FALCON BOOT ARGS";
-            data = /incbin/("./falconargs");
+            data = /incbin/("./falconargs-BBE-Light-SD");
             type = "flat_dt";
             arch = "arm";
             os = "linux";
             compression = "none";
             load =<0x8f81f000>;
             entry = <0x8f81f000>;
+            hash{
+                algo = "sha256";
+            };
         };
     };
     configurations {
-        default = "SanCloud-None-Secure";
-        SanCloud-None-Secure {
+        default = "SanCloud-Secure";
+        SanCloud-boneenhanced {
             description = "";
             kernel = "kernel";
             fdt = "args";
+            compatible ="sancloud,am335x-boneenhanced";
+            signature{
+                algo = "sha256,rsa2048";
+                key-name-hint = "conf";
+                sign-images = "fdt", "kernel";
+            };
+        };
+        SanCloud-Secure {
+            description = "";
+            kernel = "kernel";
+            fdt = "args";
+            signature{
+                algo = "sha256,rsa2048";
+                key-name-hint = "conf";
+                sign-images = "fdt", "kernel";
+            };
         };
     };
 };
