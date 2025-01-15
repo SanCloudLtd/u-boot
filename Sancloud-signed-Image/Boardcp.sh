@@ -87,7 +87,7 @@ fi
 FILES=(
     "$UOUT/MLO.byteswap"
     "$UOUT/u-boot-dtb.img"
-    $ADDITIONAL_FILES
+    "${ADDITIONAL_FILES[@]}"
 )  
 
 
@@ -115,14 +115,19 @@ else
     echo -e "${Green}Successfully created directory $REMOTE_DIR on $IP_ADDRESS${RESET}"
 fi
 # Copy each file in the list
+contains_fit_file=false
 for FILE in "${FILES[@]}"; do
     if [[ -e "$FILE" ]]; then
         # Use sshpass to provide the password to scp
         sshpass -p "$PASSWORD" scp "$FILE" "debian@${IP_ADDRESS}:$REMOTE_DIR"
         if [ $? -ne 0 ]; then
             echo -e "${Red}Failed to copy $FILE to $IP_ADDRESS${RESET}"
+            exit
         else
             echo -e "${Green}Successfully copied $FILE to $IP_ADDRESS${RESET}"
+        fi
+        if [[ "$FILE" == *.fit ]]; then
+            contains_fit_file=true
         fi
         if [[ "$FILE" == *"uboot.env" ]]; then
             sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S rm -rf /boot/uboot.env"
@@ -138,28 +143,29 @@ for FILE in "${FILES[@]}"; do
                 echo -e "${Green}Successfully Moved \"$REMOTE_DIR/uboot.env\" to /boot${RESET} on ${IP_ADDRESS}"
             fi
         fi 
-        if [[ "$FILE" == *"SanCloud-"*"-image.fit" ]]; then
-            sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S rm -rf /boot/SanCloud-*-image.fit"
-            if [ $? -ne 0 ]; then
-                echo -e "${Red}Failed to REMOVE old /boot/SanCloud-sined-image.fit FROM /boot on ${IP_ADDRESS} ${RESET}"
-            else
-                echo -e "${Green}Successfully RMOVED olde /boot/SanCloud-sined-image.fit from on ${IP_ADDRESS}  /boot ${RESET}"
-            fi
-
-            sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S cp $REMOTE_DIR/SanCloud-*-image.fit /boot/"
-            if [ $? -ne 0 ]; then
-                echo -e "${Red}Failed to MOV \"$REMOTE_DIR/SanCloud-sined-image.fit\" to /boot ${RESET} on ${IP_ADDRESS}"
-            else
-                echo -e "${Green}Successfully Moved \"$REMOTE_DIR/SanCloud-sined-image.fit\" to /boot${RESET} on ${IP_ADDRESS}"
-            fi
-        fi
     else
         echo -e "${Red}File $FILE does not exist.${RESET}"
     fi
 done  
 
+if $contains_fit_file; then
+    sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S rm -rf /boot/SanCloud-*-image.fit"
+    if [ $? -ne 0 ]; then
+        echo -e "${Red}Failed to REMOVE old /boot/SanCloud-*-image.fit FROM /boot on ${IP_ADDRESS} ${RESET}"
+    else
+        echo -e "${Green}Successfully RMOVED olde /boot/SanCloud-*-image.fit from on ${IP_ADDRESS}  /boot ${RESET}"
+    fi
+    sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S mv $REMOTE_DIR/*.fit /boot/"
+    if [ $? -ne 0 ]; then
+        echo -e "${Red}Failed to MOV \"$REMOTE_DIR/*.fit\" to /boot ${RESET} on ${IP_ADDRESS}"
+    else
+        echo -e "${Green}Successfully Moved \"$REMOTE_DIR/*.fit\" to /boot${RESET} on ${IP_ADDRESS}"
+    fi
+fi
+
+
 #ext4 nedds to resync with new address
-sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "debian@${IP_ADDRESS}" "ls -l /boot/"
+sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "debian@${IP_ADDRESS}" "sync"
 
 if [ -n "$MLO_SPI_KEY" ]; then
     if [ -n "$UBOOT_SPI_KEY" ]; then
@@ -182,4 +188,4 @@ if [ $? -ne 0 ]; then
 else
     echo -e "${Green}Successfully chip programed ${RESET}"
 fi
-sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "debian@${IP_ADDRESS}" "rm -rf $REMOTE_DIR"
+#sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "debian@${IP_ADDRESS}" "rm -rf $REMOTE_DIR"
