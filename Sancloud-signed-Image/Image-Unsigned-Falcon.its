@@ -20,7 +20,7 @@
         };
         args {
             description = "FALCON BOOT ARGS";
-            data = /incbin/("./falconargs-BBE-Light-SD");
+            data = /incbin/("./falconargs-BBE-Light-EMMC");
             type = "flat_dt";
             arch = "arm";
             os = "linux";
