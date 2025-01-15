@@ -144,7 +144,6 @@ if [ ${#IPs[@]} -gt 0 ]; then
         for IP in "${IPs[@]}"; do
             # Check if the IP is reachable
             if ping -c 1 -W 1 "$IP" &> /dev/null; then
-              echo -e "${Red}call Boardcp.sh --IP $IP $MLO_CRC $MLO_Digest $MLO_SPI_KEY $PASSWORD $ADDITIONAL_FILES --IP $IP  ${RESET}" 
                $WORK/Boardcp.sh $MLO_CRC $MLO_Digest $MLO_SPI_KEY $PASSWORD $ADDITIONAL_FILES "--IP" $IP   &
             else
                  echo -e "${Red}device $IP does not exist. ${RESET}"
