@@ -2486,7 +2486,11 @@ static int udma_send(struct dma *dma, void *src, size_t len, void *metadata)
 		packet_data = *((struct ti_udma_drv_packet_data *)metadata);
 
 	if (dma->id >= (ud->rchan_cnt + ud->tchan_cnt)) {
+#ifdef CONFIG_DMA_CHANNELS
 		dev_err(dma->dev, "invalid dma ch_id %lu\n", dma->id);
+#else
+		dev_err(dma->dev, "invalid dma \n");
+#endif	
 		return -EINVAL;
 	}
 	uc = &ud->channels[dma->id];
@@ -2520,8 +2524,10 @@ static int udma_send(struct dma *dma, void *src, size_t len, void *metadata)
 
 	ret = udma_push_to_ring(uc->tchan->t_ring, uc->desc_tx);
 	if (ret) {
+#ifdef CONFIG_DMA_CHANNELS
 		dev_err(dma->dev, "TX dma push fail ch_id %lu %d\n",
 			dma->id, ret);
+#endif			
 		return ret;
 	}
 
@@ -2697,7 +2703,9 @@ static int udma_get_cfg(struct dma *dma, u32 id, void **data)
 	struct udma_chan *uc;
 
 	if (dma->id >= (ud->rchan_cnt + ud->tchan_cnt)) {
+#ifdef CONFIG_DMA_CHANNELS
 		dev_err(dma->dev, "invalid dma ch_id %lu\n", dma->id);
+#endif
 		return -EINVAL;
 	}
 
