@@ -103,7 +103,7 @@
 	u-boot,dm-spl;
 };
 
-&local_i2c_pins_default {
+&local_i2c0_pins_default {
 	u-boot,dm-spl;
 };
 
