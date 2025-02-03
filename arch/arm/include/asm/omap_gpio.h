@@ -20,7 +20,7 @@
 #ifndef _GPIO_H
 #define _GPIO_H
 
-#include <asm/arch/cpu.h>
+//#include <asm/arch/cpu.h>
 
 #if CONFIG_IS_ENABLED(DM_GPIO)
 

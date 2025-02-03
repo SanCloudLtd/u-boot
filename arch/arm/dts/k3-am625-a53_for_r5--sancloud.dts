@@ -20,11 +20,21 @@
     model = "SanCloud.org SanCloudAM62";
  
     aliases {
+        ethernet0 = &cpsw_port1;
+        ethernet1 = &cpsw_port2;
         gpio0 = &main_gpio0;
+        gpio1 = &main_gpio1;
         gpio2 = &mcu_gpio0;
+        i2c0 = &main_i2c0;
+        i2c1 = &main_i2c1;
+        i2c2 = &main_i2c2;
+        i2c3 = &main_i2c3;
         // i2c4 = &wkup_i2c0;
         // i2c5 = &mcu_i2c0;
         mdio-gpio0 = &mdio0;
+        mmc0 = &sdhci0;
+        mmc1 = &sdhci1;
+        mmc2 = &sdhci2;
         rtc1 = &wkup_rtc0;
         serial0 = &wkup_uart0;
         serial1 = &mcu_uart0;
@@ -34,23 +44,8 @@
         spi0 = &ospi0;
         spi1 = &main_spi0;
         spi2 = &main_spi2;
-   		mmc0 = &sdhci0;
-		mmc1 = &sdhci1;
-		mmc2 = &sdhci2;
         usb0 = &usb0;
         usb1 = &usb1;
-		i2c0 = &main_i2c0;
-		i2c1 = &main_i2c1;
-		i2c2 = &main_i2c2;
-		i2c3 = &main_i2c3;
-		i2c4 = &wkup_i2c0;
-		i2c5 = &mcu_i2c0;
-		//rtc0 = &rtc;
-		ethernet0 = &cpsw_port1;
-		ethernet1 = &cpsw_port2;
-		//gpio0 = &main_gpio0;
-		gpio1 = &main_gpio1;
-		//gpio2 = &mcu_gpio2;
     };
  
     chosen {
@@ -151,7 +146,7 @@
         regulator-always-on;
         /* regulator-off-in-suspend; */
         vin-supply = <&vdd_3v3>;
-        gpios = <&main_gpio0 38 GPIO_ACTIVE_HIGH>;
+        gpio = <&main_gpio0 38 GPIO_ACTIVE_HIGH>;
         pinctrl-names = "default";
         pinctrl-0 = <&wifi_en_pins_default>;
     };
@@ -162,10 +157,8 @@
         regulator-name = "vdd_3v3_sd";
         regulator-min-microvolt = <3300000>;
         regulator-max-microvolt = <3300000>;
-		enable-active-high;
         regulator-always-on;
         vin-supply = <&vdd_3v3>;
-		gpios = <&main_gpio1 19 GPIO_ACTIVE_HIGH>;
     };
  
     vdd_sd_dv: regulator-5 {
@@ -224,30 +217,6 @@
         clock-frequency = <12288000>;
     };    
  
-    leds {
-        compatible = "gpio-leds";
- 
-        led-0 {
-            gpios = <&main_gpio1 10 GPIO_ACTIVE_HIGH>;
-            linux,default-trigger = "heartbeat";
-            function = LED_FUNCTION_HEARTBEAT;
-            default-state = "off";
-        };
- 
-        led-1 {
-            gpios = <&main_gpio1 9 GPIO_ACTIVE_HIGH>;
-            linux,default-trigger = "mmc1";
-            function = LED_FUNCTION_DISK;
-            default-state = "off";
-        };
- 
-        led-2 {
-            gpios = <&main_gpio1 12 GPIO_ACTIVE_HIGH>;
-            linux,default-trigger = "cpu0";
-            function = LED_FUNCTION_CPU;
-            default-state = "off";          
-        };
-    };
  
     transceiver1: can-phy0 {
         compatible = "ti,tcan1042";
@@ -266,7 +235,6 @@
         #phy-cells = <0>;
         max-bitrate = <5000000>;
     };
- 
 };
  
 /*
@@ -446,6 +414,15 @@
             // AM62X_IOPAD(0x024, PIN_INPUT, 0) /* (H25) OSPI0_D6 */
             // AM62X_IOPAD(0x028, PIN_INPUT, 0) /* (J22) OSPI0_D7 */
             // AM62X_IOPAD(0x008, PIN_INPUT, 0) /* (J24) OSPI0_DQS */          
+        >;
+    };
+ 
+    spi_gpio_default_pins: spi-gpio-pins {
+        pinctrl-single,pins = <
+            AM62X_IOPAD(0x000, PIN_OUTPUT, 7) /* (H24) OSPI0_CLK */
+            AM62X_IOPAD(0x02c, PIN_OUTPUT, 7) /* (F23) OSPI0_CSn0 */
+            AM62X_IOPAD(0x00c, PIN_OUTPUT, 7) /* (E25) OSPI0_D0 MOSI*/
+            AM62X_IOPAD(0x010, PIN_INPUT, 7) /* (G24) OSPI0_D1 MISO*/
         >;
     };
  
@@ -629,6 +606,7 @@
 &mcu_i2c0 {
     pinctrl-names = "default";
     pinctrl-0 = <&i2c_qwiic_pins_default>;
+    /* Bump Up to 400 if desired */
     clock-frequency = <10000>;
     symlink = "play/qwiic/i2c";
 };
@@ -646,6 +624,11 @@
       status = "disabled";
 };  
  
+//&mcu_m4fss {
+//    mboxes = <&mailbox0_cluster0 &mbox_m4_0>;
+//    memory-region = <&mcu_m4fss_dma_memory_region>,
+//            <&mcu_m4fss_memory_region>;
+//};
  
 // &fss {
 //  status = "disabled";
@@ -708,81 +691,26 @@
     status = "disabled";
 };
  
-&ospi0 {
+&ospi0{
+    compatible = "ti,am654-ospi", "cdns,qspi-nor";
+    #address-cells = <1>;
+    #size-cells = <0>;
     status = "okay";
-    pinctrl-names = "default";
-    pinctrl-0 = <&ospi0_pins_default>;
- 
-    spidev@0 {
-        reg = <0>;
-        compatible = "linux,spidev";
-        spi-tx-bus-width = <1>;
-        spi-rx-bus-width = <4>;
+    flash0: spi@0 {
+        compatible = "jedec,spi-nor";
+        reg = <0>;                       // Chip Select 0
+        spi-max-frequency = <25000000>;  // Adjust based on your flash
+        spi-rx-bus-width = <4>;          // QuadSPI (4-bit)
+        spi-tx-bus-width = <4>;          // QuadSPI (4-bit)
+        spi-cpol;                        // Clock polarity
+        spi-cpha;                        // Clock phase
         cdns,tshsl-ns = <60>;
         cdns,tsd2d-ns = <60>;
         cdns,tchsh-ns = <60>;
         cdns,tslch-ns = <60>;
         cdns,read-delay = <4>;
         cdns,phy-mode;
- 
-        // create symlink (using /etc/udev/rules.d/10-of-symlink.rules)
-        // NOTE: again, consider using something more descriptive
-        symlink = "spi/0.0";  // create /dev/spi/0.0 symlink
- 
-        // XXX replace by actual max frequency supported by device
-        spi-max-frequency = <25000000>;
- 
-        // XXX this selects SPI mode 3 by default, adjust as appropriate
-        // spi-cpol;
-        // spi-cpha;
     };
- 
- 
- 
-    // spi_nor_flash: flash@0 {
-    //  compatible = "jedec,spi-nor";
-    //  reg = <0x0>;
-    //  spi-tx-bus-width = <1>;
-    //  spi-rx-bus-width = <4>;
-    //  spi-max-frequency = <25000000>;
-    //  cdns,tshsl-ns = <60>;
-    //  cdns,tsd2d-ns = <60>;
-    //  cdns,tchsh-ns = <60>;
-    //  cdns,tslch-ns = <60>;
-    //  cdns,read-delay = <4>;
-    //  cdns,phy-mode;
- 
-    //  // partitions {
-    //  //  compatible = "fixed-partitions";
-    //  //  #address-cells = <1>;
-    //  //  #size-cells = <1>;
- 
-    //  //  partition@0 {
-    //  //      label = "ospi.tiboot3";
-    //  //      reg = <0x0 0x80000>;
-    //  //  };
- 
-    //  //  partition@80000 {
-    //  //      label = "ospi.tispl";
-    //  //      reg = <0x80000 0x200000>;
-    //  //  };
- 
-    //  //  partition@280000 {
-    //  //      label = "ospi.u-boot";
-    //  //      reg = <0x280000 0x400000>;
-    //  //  };
- 
-    //  //  partition@680000 {
-    //  //      label = "ospi.env";
-    //  //      reg = <0x680000 0x40000>;
-    //  //  };
- 
-    //  //  partition@6c0000 {
-    //  //      label = "ospi.env.backup";
-    //  //      reg = <0x6c0000 0x40000>;
-    //  //  };
-    //  // };
-    // };  
 };
  
 &main_gpio0 {
@@ -934,6 +862,9 @@
     };
 };
  
+ 
+ 
+ 
 &main_i2c1 {
     pinctrl-names = "default";
     pinctrl-0 = <&local_i2c1_pins_default>;
@@ -1035,12 +966,11 @@
  
 &sdhci0 {
     // bootph-all;
-    // pinctrl-names = "default";
-    // pinctrl-0 = <&emmc_pins_default>;
-    // ti,driver-strength-ohm = <50>;
-    // disable-wp;
-    // status = "okay";
-    status = "disabled";
+    pinctrl-names = "default";
+    pinctrl-0 = <&emmc_pins_default>;
+    ti,driver-strength-ohm = <50>;
+    disable-wp;
+    status = "okay";
 };
  
 &sdhci1 {

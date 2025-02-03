@@ -46,6 +46,52 @@
 DECLARE_GLOBAL_DATA_PTR;
 DECLARE_BINMAN_MAGIC_SYM;
 
+const char big_text_boot[] = 
+" ____              _     \r\n" \
+"|  _ \\            | |  _ \r\n" \
+"| |_) | ___   ___ | |_(_)\r\n" \
+"|  _ < / _ \\ / _ \\| __|  \r\n" \
+"| |_) | (_) | (_) | |_ _ \r\n" \
+"|____/ \\___/ \\___/ \\__(_)\r\n" \
+;      
+					
+const char big_text_spi_nor[] = 
+"  _____ _____ _____   _   _  ____  _____   \r\n" \
+" / ____|  __ \\_   _| | \\ | |/ __ \\|  __ \\  \r\n" \
+"| (___ | |__) || |   |  \\| | |  | | |__) | \r\n" \
+" \\___ \\|  ___/ | |   | . ` | |  | |  _  /  \r\n" \
+" ____) | |    _| |_  | |\\  | |__| | | \\ \\  \r\n" \
+"|_____/|_|   |_____| |_| \\_|\\____/|_|  \\_\\ \r\n" \
+;
+
+const char big_text_sd_card[] = 
+"  _____ _____     _____              _\r\n" \
+" / ____|  __ \\   / ____|            | |\r\n" \
+"| (___ | |  | | | |     __ _ _ __ __| |\r\n" \
+" \\___ \\| |  | | | |    / _` | '__/ _` |\r\n" \
+" ____) | |__| | | |___| (_| | | | (_| |\r\n" \
+"|_____/|_____/   \\_____\\__,_|_|  \\__,_|\r\n" \
+; 
+
+const char big_text_mmc_card[] = 
+" ______ __  __ __  __  _____ \r\n" \
+"|  ____|  \\/  |  \\/  |/ ____|\r\n" \
+"| |__  | \\  / | \\  / | |     \r\n" \
+"|  __| | |\\/| | |\\/| | |     \r\n" \
+"| |____| |  | | |  | | |____ \r\n" \
+"|______|_|  |_|_|  |_|\\_____|\r\n" \
+;
+
+
+const char big_text_question[] = 
+" ___  \r\n" \
+"|__ \\ \r\n" \
+"   ) |\r\n" \
+"  / / \r\n" \
+" |_|  \r\n" \
+" (_)  \r\n" \
+;
+
 u32 *boot_params_ptr = NULL;
 
 #if CONFIG_IS_ENABLED(BINMAN_UBOOT_SYMBOLS)
@@ -592,6 +638,27 @@ static int spl_load_image(struct spl_image_info *spl_image,
 	return ret;
 }
 
+static void printBigBoot(const char * const loaderName)
+{
+	char * bigStr = (char * )big_text_question;
+
+	if(0 == strncmp(loaderName, "SPI", 3))
+	{
+		bigStr = (char * )big_text_spi_nor;
+	}
+	else if(0 == strncmp(loaderName, "MMC", 3))
+	{
+      if(0 == strncmp(loaderName, "MMC1", 4))
+		bigStr = (char * )big_text_sd_card;
+	  else if(0 == strncmp(loaderName, "MMC2", 4))
+		bigStr = (char * )big_text_mmc_card;		
+	}
+
+	printf("Booting from: %s\r\n", loaderName);
+
+	printf("%s%s", big_text_boot, bigStr);
+}
+
 /**
  * boot_from_devices() - Try loading a booting U-Boot from a list of devices
  *
@@ -622,9 +689,11 @@ static int boot_from_devices(struct spl_image_info *spl_image,
 			if (bootdev != loader->boot_device)
 				continue;
 			if (!CONFIG_IS_ENABLED(SILENT_CONSOLE)) {
-				if (loader)
+				if (loader){
 					printf("Trying to boot from %s\n",
 					       spl_loader_name(loader));
+					printBigBoot(spl_loader_name(loader));
+				}
 				else if (CONFIG_IS_ENABLED(SHOW_ERRORS)) {
 					printf(SPL_TPL_PROMPT
 					       "Unsupported Boot Device %d\n",

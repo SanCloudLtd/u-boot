@@ -10,7 +10,7 @@
 #include <asm/cache.h>
 #include <asm/global_data.h>
 #include <asm/io.h>
-#include <asm/arch/omap.h>
+//#include <asm/arch/omap.h>
 #include <malloc.h>
 #include <spi.h>
 #include <spi-mem.h>
