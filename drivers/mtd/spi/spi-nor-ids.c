@@ -554,8 +554,7 @@ const struct flash_info spi_nor_ids[] = {
 	{ INFO("w25h02jv", 0xef9022, 0, 64 * 1024, 4096, SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ) },
 	{
 		INFO("w77q128jw", 0xef8a18, 0, 64 * 1024, 256,
-			SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ |
-			SPI_NOR_HAS_LOCK | SPI_NOR_HAS_TB)
+			SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ |SPI_NOR_HAS_LOCK | SPI_NOR_HAS_TB)
 	},
 	{
 		INFO("w77q51jw", 0xef8a1a, 0, 64 * 1024, 1024,
@@ -563,9 +562,9 @@ const struct flash_info spi_nor_ids[] = {
 			SPI_NOR_HAS_LOCK | SPI_NOR_HAS_TB)
 	},
 	{
-		INFO("w77q25jw", 0xef8a19, 0, 64 * 1024, 1024,
+		INFO("w77q25jw", 0xef8a19, 0, 64 * 1024, 512,
 			SECT_4K | SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ |
-			SPI_NOR_HAS_LOCK | SPI_NOR_HAS_TB)
+			SPI_NOR_HAS_LOCK | SPI_NOR_HAS_TB   )
 	},
 
 #endif
