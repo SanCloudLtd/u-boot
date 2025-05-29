@@ -393,9 +393,8 @@ static ssize_t spi_nor_read_data(struct spi_nor *nor, loff_t from, size_t len,
 		op.dummy.nbytes *= 2;
 
 	while (remaining) {
-		//op.data.nbytes = remaining < UINT_MAX ? remaining : UINT_MAX;
+		op.data.nbytes = remaining < UINT_MAX ? remaining : UINT_MAX;
 
-		op.data.nbytes = remaining < 255 ? remaining : 255;
 
 		if (CONFIG_IS_ENABLED(SPI_DIRMAP) && nor->dirmap.rdesc) {
 			/*

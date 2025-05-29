@@ -439,9 +439,18 @@ static int cadence_spi_of_to_plat(struct udevice *bus)
 	return 0;
 }
 
+static int cadence_spi_adjust_op_size(struct spi_slave *spi,
+				   struct spi_mem_op *op)
+{
+	struct cadence_spi_priv *priv = dev_get_priv(spi->dev->parent);
+	op->data.nbytes = min(priv->page_size, op->data.nbytes);
+	return 0;
+}
+
 static const struct spi_controller_mem_ops cadence_spi_mem_ops = {
 	.exec_op = cadence_spi_mem_exec_op,
 	.supports_op = cadence_spi_mem_supports_op,
+	.adjust_op_size = cadence_spi_adjust_op_size,
 };
 
 static const struct dm_spi_ops cadence_spi_ops = {
