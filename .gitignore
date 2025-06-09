@@ -14,6 +14,7 @@
 *.cfgout
 *.cover
 *.dtb
+!Sancloud-signed-Image/FIT_SourceFiles/k3-am625-sancloud.dtb
 *.dtbo
 *.dtb.S
 *.elf
@@ -23,6 +24,7 @@
 *.gcno
 *.i
 *.img
+!Sancloud-signed-Image/FIT_SourceFiles/initrd.img
 *.itb
 *.lex.c
 *.lst

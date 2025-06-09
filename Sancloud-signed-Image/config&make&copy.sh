@@ -14,24 +14,24 @@ RESET="\033[0m"
 
 IPs=(
 "10.0.0.156"
-#"10.0.0.225"
-#"10.0.0.202"
+#"82.5.144.219"
+"10.0.0.155"
     )  
-
 #---------------------------------------------------------------------------------------------------------
 # parameter for pass to Boardcp
 #---------------------------------------------------------------------------------------------------------
-PASSWORD=""
-TIBOOT3_KEY="" #"589505315,606348324,623191333,640034342"
-TIBOOT3_CRC=""
-TIBOOT3_Digest=""
 ADDITIONAL_FILES="" #"--ADDITIONAL_FILES $WORK/SanCloud-FalconArgGenerator-image.fit,$WORK/SanCloud-Falcon-image.fit"
 ALLYESNO=""
+PASSWORD="--PASSWORD temppwd"
+S1_KEY="--S1_KEY 589505315,606348324,623191333,640034342"
+S7_KEY="--S7_KEY 589505315,606348324,623191333,640034342"
+
+ 
 #---------------------------------------------------------------------------------------------------------
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --ips)
+        --IPs)
             IFS=',' read -r -a IPs <<< "$2"
             shift 2
             ;;
@@ -47,47 +47,23 @@ while [[ $# -gt 0 ]]; do
 #---------------------------------------------------------------------------------------------------------
 # parameter for pass to Boardcp 
 #---------------------------------------------------------------------------------------------------------
-        --TIBOOT3_CRC)
-            TIBOOT3_CRC="--TIBOOT3_CRC $2"
+        --ADDITIONAL_FILES)
+            ADDITIONAL_FILES="--ADDITIONAL_FILES $2"  # keep as a single string
+            shift 2
+             ;;
+        --S1_KEY)
+            S1_KEY="--S1_KEY $2"
             shift 2
             ;;
-        --TIBOOT3_Digest)
-            TIBOOT3_Digest="--TIBOOT3_Digest $2"
+        --S7_KEY)
+            S7_KEY="--S7_KEY $2"
             shift 2
             ;;
-        --TIBOOT3_KEY)
-            TIBOOT3_KEY="--TIBOOT3_KEY $2"
-            shift 2
-            ;;
-        --SPL_CRC)
-            SPL_CRC="--SPL_CRC $2"
-            shift 2
-            ;;
-        --SPL_Digest)
-            SPL_Digest="--SPL_Digest $2"
-            shift 2
-            ;;
-        --SPL_KEY)
-            SPL_KEY="--SPL_KEY $2"
-            shift 2
-            ;;
-        --UBOOT_CRC)
-            UBOOT_CRC="--UBOOT_CRC $2"
-            shift 2
-            ;;
-        --UBOOT_Digest)
-            UBOOT_Digest="--UBOOT_Digest $2"
-            shift 2
-            ;;
-        --UBOOT_KEY)
-            UBOOT_KEY="--UBOOT_KEY $2"
-            shift 2
-            ;;
-
         --PASSWORD)
             PASSWORD="--PASSWORD $2"
             shift 2
             ;;
+           
 #---------------------------------------------------------------------------------------------------------
         --)
             shift
@@ -98,6 +74,23 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+#********************************************************************************************************************
+#                Defconfig if not found
+#********************************************************************************************************************
+if [ ! -f $UOUT/r5/BOOT/.config ]; then
+   env -C $UBOOT make CROSS_COMPILE=arm-none-linux-gnueabihf-  O=$UOUT/r5/BOOT  am62x_sancloud_spi_r5_boot_defconfig
+fi
+if [ ! -f $UOUT/r5/FALLBACK/.config ]; then
+   env -C $UBOOT make CROSS_COMPILE=arm-none-linux-gnueabihf-  O=$UOUT/r5/FALLBACK  am62x_sancloud_spi_r5_fallback_defconfig
+fi
+
+if [ ! -f $UOUT/a53/BOOT/.config ]; then
+    env -C $UBOOT make  CROSS_COMPILE=arm-none-linux-gnueabihf-  O=$UOUT/a53/BOOT am62x_sancloud_spi_a53_boot_defconfig
+fi
+
+if [ ! -f $UOUT/a53/FALLBACK/.config ]; then
+   env -C $UBOOT make  CROSS_COMPILE=arm-none-linux-gnueabihf-  O=$UOUT/a53/FALLBACK am62x_sancloud_spi_a53_fallback_defconfig
+fi   
 
 #********************************************************************************************************************
 #                Configurng R5 and R5 FALLBACK
@@ -296,27 +289,38 @@ echo -e "${Blue}Generating Unified images ${RESET}"
 
 IMGS=(BOOT
       FALLBACK)
+CPUS=(gp
+      hs-fs
+      hs)      
 SPLADDR=512 #512KB
 UBOOTADDR=2560 #0x280000 2.5MB
 IMGMAX=4 #4MB
 echo SPLADDR=$SPLADDR UBOOTADDR=$UBOOTADDR
 for IMG in "${IMGS[@]}"; do
-    OFILE="$UOUT/SanCloud-$IMG.bin"
+   for CPU in "${CPUS[@]}"; do
+    if [ "$CPU" == "gp" ]; then
+      UNSIGNEG="_unsigned"
+    else
+      UNSIGNEG="" 
+    fi
+    OFILE="$UOUT/SanCloud-$IMG-$CPU.bin"
     dd if=/dev/zero of=$OFILE bs=1M count=$IMGMAX
-    dd if=$UOUT/r5/$IMG/tiboot3-am62x-gp-evm.bin of=$OFILE conv=notrunc bs=1M 
-    dd if=$UOUT/a53/$IMG/tispl.bin_unsigned of=$OFILE conv=notrunc bs=1k seek=$SPLADDR
-    dd if=$UOUT/a53/$IMG/u-boot.img of=$OFILE bs=1k seek=$UBOOTADDR
+    dd if=$UOUT/r5/$IMG/tiboot3-am62x-$CPU-evm.bin of=$OFILE conv=notrunc bs=1M 
+    dd if=$UOUT/a53/$IMG/tispl.bin$UNSIGNEG of=$OFILE conv=notrunc bs=1k seek=$SPLADDR
+    dd if=$UOUT/a53/$IMG/u-boot.img$UNSIGNEG of=$OFILE bs=1k seek=$UBOOTADDR
+   done  
 done
 
 
 #********************************************************************************************************************
 #                Copying the images to the target device
 #********************************************************************************************************************
+
 if [ ${#IPs[@]} -gt 0 ]; then
         for IP in "${IPs[@]}"; do
             # Check if the IP is reachable
             if ping -c 1 -W 1 "$IP" &> /dev/null; then
-               $WORK/Boardcp.sh $TIBOOT3_CRC $TIBOOT3_Digest $TIBOOT3_KEY $SPL_CRC $SPL_Digest $SPL_KEY $UBOOT_CRC $UBOOT_Digest $UBOOT_KEY $PASSWORD $ADDITIONAL_FILES "--IP" $IP   &
+               $WORK/Boardcp.sh $PASSWORD $ADDITIONAL_FILES "--IP" $IP $PASSWORD $S7_KEY $S1_KEY $ADDITIONAL_FILES &
             else
                  echo -e "${Red}device $IP does not exist. ${RESET}"
             fi

@@ -15,28 +15,11 @@ RESET="\033[0m"
 
 # Get the IP address and password from the command-line arguments
 IP_ADDRESS=""
-PASSWORD="temppwd"
 REMOTE_DIR="~/MHF-UBOOT"
 
+PASSWORD="temppwd"
 S1_KEY="589505315,606348324,623191333,640034342"
 S7_KEY="589505315,606348324,623191333,640034342"
-
-
-# TIBOOT3_KEY="589505315,606348324,623191333,640034342"
-# SPL_KEY="589505315,606348324,623191333,640034342"
-# UBOOT_KEY="589505315,606348324,623191333,640034342"
-
-
-# TIBOOT3_CRC="010101"
-# TIBOOT3_Digest="0  --high-verbose"
-
-# SPL_CRC="010101"
-# SPL_Digest="0  --high-verbose"
-
-# UBOOT_CRC="010101"
-# UBOOT_Digest="0  --high-verbose"
-
-
 
 ADDITIONAL_FILES=()
 
@@ -47,45 +30,6 @@ while [[ $# -gt 0 ]]; do
             IFS=',' read -r -a ADDITIONAL_FILES <<< "$2"
             shift 2
             ;;
-        # --TIBOOT3_CRC)
-        #     TIBOOT3_CRC="$2"
-        #     shift 2
-        #     ;;
-        # --TIBOOT3_Digest)
-        #     TIBOOT3_Digest="$2"
-        #     shift 2
-        #     ;;
-
-        # --SPL_CRC)
-        #     SPL_CRC="$2"
-        #     shift 2
-        #     ;;
-        # --SPL_Digest)
-        #     SPL_Digest="$2"
-        #     shift 2
-        #     ;;
-      
-        # --UBOOT_CRC)
-        #     UBOOT_CRC="$2"
-        #     shift 2
-        #     ;;
-        # --UBOOT_Digest)
-        #     UBOOT_Digest="$2"
-        #     shift 2
-        #     ;;
-
-        # --TIBOOT3_KEY)
-        #     TIBOOT3_KEY="$2"
-        #     shift 2
-        #     ;;
-        # --SPL_KEY)
-        #     SPL_KEY="$2"
-        #     shift 2
-        #     ;;
-        # --UBOOT_KEY)
-        #     UBOOT_KEY="$2"
-        #     shift 2
-        #     ;;
         --S1_KEY)
             S1_KEY="$2"
             shift 2
@@ -117,14 +61,42 @@ if [ -z "$IP_ADDRESS" ]; then
     echo -e "${Red} --IP not found in the command parameters ${RESET}"
     exit;
 fi
+# recognize board cpu type
+
+jtagid_raw=$(sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR  -o UserKnownHostsFile=/dev/null "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S -p '' devmem2 0x43000018" | grep "Read at address" | awk '{print $NF}')
+
+jtagid=$((jtagid_raw))
+device_type_raw=$(( (jtagid >> 11) & 0x3 ))
+case "$device_type_raw" in
+    0)
+        CPU="gp"
+        UNSIGNEG="_unsigned"
+        ;;
+    1)
+        CPU="hs"
+        UNSIGNEG=""
+        ;;
+
+    2|3)
+        CPU="hs-fs"
+        UNSIGNEG=""
+        ;;
+    *)
+        echo "Unknown device type: raw=$device_type_raw (JTAGID=0x$(printf "%08X\n" $jtagid))"
+        exit 2
+        ;;
+esac
+
+echo -e "${Green}Detected CPU type: ${CPU^^}${RESET}"
+
 
 # Define the list of files to copy
 FILES=(
-    "$UOUT/r5/BOOT/tiboot3-am62x-gp-evm.bin"
-    "$UOUT/a53/BOOT/tispl.bin_unsigned"
-    "$UOUT/a53/BOOT/u-boot.img_unsigned"
-    "$UOUT/SanCloud-BOOT.bin"
-    "$UOUT/SanCloud-FALLBACK.bin"
+    "$UOUT/r5/BOOT/tiboot3-am62x-$CPU-evm.bin"
+    "$UOUT/a53/BOOT/tispl.bin$UNSIGNEG"
+    "$UOUT/a53/BOOT/u-boot.img$UNSIGNEG"
+    "$UOUT/SanCloud-BOOT-$CPU.bin"
+    "$UOUT/SanCloud-FALLBACK-$CPU.bin"
 )
 FSIZE=()
 cnt=0
@@ -184,20 +156,6 @@ for FILE in "${FILES[@]}"; do
         if [[ "$FILE" == *.fit ]]; then
             contains_fit_file=true
         fi
-        if [[ "$FILE" == *"uboot.env" ]]; then
-            sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR  -o UserKnownHostsFile=/dev/null "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S -p ''   rm -rf /boot/uboot.env"
-            if [ $? -ne 0 ]; then
-                echo -e "${Red}Failed to REMOVE old uboot.env FROM /boot on ${IP_ADDRESS} ${RESET}"
-            else
-                echo -e "${Green}Successfully RMOVED olde uboot.env from on ${IP_ADDRESS}  /boot ${RESET}"
-            fi
-            sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S -p ''   mv $REMOTE_DIR/uboot.env /boot/"
-            if [ $? -ne 0 ]; then
-                echo -e "${Red}Failed to MOV \"$REMOTE_DIR/uboot.env\" to /boot ${RESET} on ${IP_ADDRESS}"
-            else
-                echo -e "${Green}Successfully Moved \"$REMOTE_DIR/uboot.env\" to /boot${RESET} on ${IP_ADDRESS}"
-            fi
-        fi 
     else
         echo -e "${Red}File $FILE does not exist.${RESET}"
     fi
@@ -231,13 +189,13 @@ echo -e "${Blue}Unsecure program section 0 BOOT unified image size ${FSIZE[3]} $
 if [[ -n "${FSIZE[3]}" ]]; then
     FSIZE[3]="--FSIZE ${FSIZE[3]}"
 fi
-$WORK/ProgramSection.sh --KEY "${S1_KEY}" --Ver 0 --DIE 0 --SECTION 0 --IP ${IP_ADDRESS} --FILE "${REMOTE_DIR}/SanCloud-BOOT.bin" ${FSIZE[3]}
+$WORK/ProgramSection.sh --KEY "${S1_KEY}" --Ver 0 --DIE 0 --SECTION 0 --IP ${IP_ADDRESS} --FILE "${REMOTE_DIR}/SanCloud-BOOT-$CPU.bin" ${FSIZE[3]}
 
 echo -e "${Blue}Unsecure program section 7 fallback unified image  size ${FSIZE[4]} ${RESET}"
 if [[ -n "${FSIZE[4]}" ]]; then
     FSIZE[4]="--FSIZE ${FSIZE[4]}"
 fi
-$WORK/ProgramSection.sh --KEY "${S7_KEY}" --Ver 0 --DIE 0 --SECTION 7 --IP ${IP_ADDRESS} --FILE "${REMOTE_DIR}/SanCloud-FALLBACK.bin" ${FSIZE[4]}
+$WORK/ProgramSection.sh --KEY "${S7_KEY}" --Ver 0 --DIE 0 --SECTION 7 --IP ${IP_ADDRESS} --FILE "${REMOTE_DIR}/SanCloud-FALLBACK-$CPU.bin" ${FSIZE[4]}
 
 
 #********************************************************************************************************************
@@ -245,9 +203,9 @@ $WORK/ProgramSection.sh --KEY "${S7_KEY}" --Ver 0 --DIE 0 --SECTION 7 --IP ${IP_
 #********************************************************************************************************************
 echo -e "${Blue}Updating  flash boot partition files  ${RESET}"
 sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S -p ''   mount -t vfat /dev/mmcblk1p1 /mnt/"
-sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S -p ''   cp $REMOTE_DIR/tiboot3-am62x-gp-evm.bin /mnt/tiboot3.bin"
-sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S -p ''   cp $REMOTE_DIR/tispl.bin_unsigned /mnt/tispl.bin"
-sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S -p ''   cp $REMOTE_DIR/u-boot.img_unsigned /mnt/u-boot.img"
+sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S -p ''   cp $REMOTE_DIR/tiboot3-am62x-$CPU-evm.bin /mnt/tiboot3.bin"
+sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S -p ''   cp $REMOTE_DIR/tispl.bin$UNSIGNEG /mnt/tispl.bin"
+sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S -p ''   cp $REMOTE_DIR/u-boot.img$UNSIGNEG /mnt/u-boot.img"
 sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S -p ''   umount /mnt/"
 sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S -p ''   sync"
 #sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S -p ''   reboot"
@@ -258,15 +216,15 @@ sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o User
 echo -e "${Blue}Copying the file to my windows machine  ${RESET}"
 winpass="Mina9175"
 winaddr="hosseinf@10.0.0.124:C:\Users\hosseinf\Desktop\1\AM62\U-boot"
-sshpass -p "$winpass" scp -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null -q "$UOUT/a53/BOOT/u-boot.img_unsigned" "$winaddr\u-boot.img"
+sshpass -p "$winpass" scp -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null -q "$UOUT/a53/BOOT/u-boot.img$UNSIGNEG" "$winaddr\u-boot.img"
 if [ $? -ne 0 ]; then
     echo -e "${Red}Failed to write ti3boot on windows distination ${RESET}"
 fi
-sshpass -p "$winpass" scp -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null -q "$UOUT/a53/BOOT/tispl.bin_unsigned" "$winaddr\tispl.bin"
+sshpass -p "$winpass" scp -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null -q "$UOUT/a53/BOOT/tispl.bin$UNSIGNEG" "$winaddr\tispl.bin"
 if [ $? -ne 0 ]; then
     echo -e "${Red}Failed to write tispl on windows distination ${RESET}"
 fi
-sshpass -p "$winpass" scp -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null -q "$UOUT/r5/BOOT/tiboot3-am62x-gp-evm.bin" "$winaddr\tiboot3.bin"
+sshpass -p "$winpass" scp -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null -q "$UOUT/r5/BOOT/tiboot3-am62x-$CPU-evm.bin" "$winaddr\tiboot3.bin"
 if [ $? -ne 0 ]; then
     echo -e "${Red}Failed to write on windows distination ${RESET}"
 fi

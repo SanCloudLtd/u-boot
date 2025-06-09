@@ -1,0 +1,80 @@
+/dts-v1/;
+
+/ {
+    description = "Beaglebone black";
+    #address-cells = <1>;
+    images {
+        kernel-1 {
+            description = "Image";
+            data = /incbin/("./FIT_SourceFiles/Image");
+            type = "kernel";
+            arch = "arm64";
+            os = "linux";
+            load =  <0x82000000>;
+            entry = <0x82000000>;
+            compression = "none";
+            hash-1 {
+                algo = "sha512";
+            };
+            signature-1 {
+                algo = "sha512,rsa4096";
+                key-name-hint = "dev";
+                sign-images = "kernel", "fdt";
+            };
+
+        };
+        fdt-ti_k3-am625-sancloud.dtb {
+            description = "k3-am625-sancloud.dtb";
+            data = /incbin/("./FIT_SourceFiles/k3-am625-sancloud.dtb");
+            type = "flat_dt";
+            arch = "arm64";
+            os = "linux";
+            compression = "none";
+            load =<0x88000000>;
+            hash-1 {
+                algo = "sha512";
+            };
+            signature-1 {
+                algo = "sha512,rsa4096";
+                key-name-hint = "dev";
+                sign-images = "kernel", "fdt";
+            };
+
+        };
+        initrd {
+            description = "Initrd";
+            data = /incbin/("./FIT_SourceFiles/initrd.img");
+            type = "ramdisk";
+            arch = "arm";
+            os = "linux";
+            load =<0x88080000>;
+            entry=<0x88080000>;
+            compression = "gzip";
+            hash-1 {
+                algo = "sha512";
+            };
+            signature-1 {
+                algo = "sha512,rsa4096";
+                key-name-hint = "dev";
+                sign-images = "kernel", "fdt";
+            };
+
+        };
+    };
+    configurations {
+        default = "conf-ti_k3-am625-sancloud.dtb";
+        conf-ti_k3-am625-sancloud.dtb{
+            description = "LOAD DEBEIAN KERNEL";
+            kernel = "kernel-1";
+            fdt = "fdt-ti_k3-am625-sancloud.dtb";
+            #ramdisk = "initrd";
+            signature-1 {
+                algo = "sha512,rsa4096";
+                key-name-hint = "dev";
+                sign-images = "kernel", "fdt";
+            };
+
+        };
+  
+    };
+};
