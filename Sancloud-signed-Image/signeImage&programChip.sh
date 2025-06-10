@@ -189,7 +189,7 @@ BOOTCFGS=(
 for BOOTCFG in "${BOOTCFGS[@]}"; do
     cp $UOUT/a53/$BOOTCFG/.config $UOUT/a53/$BOOTCFG/.config.back 
 
-    env -C $UOUT/a53/$BOOTCFG  $UBOOT/scripts/config --set-str CONFIG_BOOTCOMMAND "run scan_secure_fit"
+    env -C $UOUT/a53/$BOOTCFG  $UBOOT/scripts/config --set-str CONFIG_BOOTCOMMAND "sf probe;run scan_secure_fit;poweroff;" #;sf probe 0:0;sf writeaddrmode 3;reset"
 
     # Disable legacy “boot” commands
     #env -C $UOUT/a53/$BOOTCFG $UBOOT/scripts/config --disable CONFIG_CMD_BOOTM
@@ -219,7 +219,7 @@ for BOOTCFG in "${BOOTCFGS[@]}"; do
     env -C $UOUT/a53/$BOOTCFG $UBOOT/scripts/config --set-val CONFIG_BOOTDELAY   -3
     env -C $UOUT/a53/$BOOTCFG $UBOOT/scripts/config --set-val CONFIG_AUTOBOOT_DELAY_STR "\"\""
     env -C $UOUT/a53/$BOOTCFG $UBOOT/scripts/config --set-val CONFIG_AUTOBOOT_STOP_STR "\"\""
-    env -C $UOUT/a53/$BOOTCFG $UBOOT/scripts/config --disable CONFIG_AUTOBOOT_USE_MENUKEY
+    env -C $UOUT/a53/$BOOTCFG $UBOOT/scripts/config --enable CONFIG_AUTOBOOT_USE_MENUKEY
     env -C $UOUT/a53/$BOOTCFG $UBOOT/scripts/config --disable CONFIG_AUTOBOOT_KEYED_CTRLC
     env -C $UOUT/a53/$BOOTCFG $UBOOT/scripts/config --disable CONFIG_BOOTSTD
 
@@ -231,7 +231,15 @@ for BOOTCFG in "${BOOTCFGS[@]}"; do
     env -C $UOUT/a53/$BOOTCFG $UBOOT/scripts/config --disable CONFIG_CMD_ENV
     env -C $UOUT/a53/$BOOTCFG $UBOOT/scripts/config --disable CONFIG_CMD_SAVEENV
     env -C $UOUT/a53/$BOOTCFG $UBOOT/scripts/config --set-val CONFIG_ENV_IS_NOWHERE   y
-
+    #disable hush in fallback
+    env -C $UOUT/a53/$BOOTCFG $UBOOT/scripts/config --disable CONFIG_HUSH_PARSER
+    env -C $UOUT/a53/$BOOTCFG $UBOOT/scripts/config --disable CONFIG_CMDLINE
+    env -C $UOUT/a53/$BOOTCFG $UBOOT/scripts/config --disable CONFIG_AUTO_COMPLETE
+    env -C $UOUT/a53/$BOOTCFG $UBOOT/scripts/config --disable CONFIG_CMD_CONSOLE
+    env -C $UOUT/a53/$BOOTCFG $UBOOT/scripts/config --disable CONFIG_MENU 
+    env -C $UOUT/a53/$BOOTCFG $UBOOT/scripts/config --disable CONFIG_CMD_SOURCE
+    env -C $UOUT/a53/$BOOTCFG $UBOOT/scripts/config --enable CONFIG_DISABLE_CONSOLE
+    env -C $UOUT/a53/$BOOTCFG $UBOOT/scripts/config --enable CONFIG_RESET_TO_RETRY
     #env -C $UBOOT make O=$UOUT/a53/$BOOTCFG clean
 done
 
