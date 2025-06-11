@@ -189,7 +189,7 @@ BOOTCFGS=(
 for BOOTCFG in "${BOOTCFGS[@]}"; do
     cp $UOUT/a53/$BOOTCFG/.config $UOUT/a53/$BOOTCFG/.config.back 
 
-    env -C $UOUT/a53/$BOOTCFG  $UBOOT/scripts/config --set-str CONFIG_BOOTCOMMAND "sf probe;run scan_secure_fit;poweroff;" #;sf probe 0:0;sf writeaddrmode 3;reset"
+    env -C $UOUT/a53/$BOOTCFG  $UBOOT/scripts/config --set-str CONFIG_BOOTCOMMAND "run scan_secure_fit;poweroff;"
 
     # Disable legacy “boot” commands
     #env -C $UOUT/a53/$BOOTCFG $UBOOT/scripts/config --disable CONFIG_CMD_BOOTM
