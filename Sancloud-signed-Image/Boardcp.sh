@@ -233,4 +233,4 @@ fi
 #sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR "debian@${IP_ADDRESS}" "rm -rf $REMOTE_DIR"
 
 
-echo -e "${Green}COMPLITED ${RESET}"
+echo -e "${Green}$IP_ADDRESS COMPLITED ${RESET}"
