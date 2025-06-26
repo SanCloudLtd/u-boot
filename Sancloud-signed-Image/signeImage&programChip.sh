@@ -22,7 +22,7 @@ IPs=(
 #"82.5.144.219"
 "10.0.0.155"
     )  
-ADDITIONAL_FILES="--ADDITIONAL_FILES $UBOOT/Sancloud-signed-Image/SanCloud-AM62_signed-image.fit"
+ADDITIONAL_FILES="--ADDITIONAL_FILES $UBOOT/Sancloud-signed-Image/SanCloud-AM62_signed-image.fit,$UBOOT/Sancloud-signed-Image/SanCloud-Recovery-AM62_signed-image.fit"
 PASSWORD="--PASSWORD temppwd"
 S1_KEY="--S1_KEY 589505315,606348324,623191333,640034342"
 S7_KEY="--S7_KEY 589505315,606348324,623191333,640034342"
@@ -118,6 +118,12 @@ fi
 if [ ! -f "$UOUT/a53/BOOT/dts/upstream/src/arm64/ti/k3-am625-sancloud.dtb"   ] || [ ! -f "$UOUT/a53/BOOT/dts/upstream/src/arm64/ti/k3-am625-sancloud.dtb" ]; then
    #compile source if not exist
    env -C $UBOOT/Sancloud-signed-Image ./config\&make\&copy.sh --IPs "" -N
+    if [ $? -ne 0 ]; then
+          echo -e "${Red}Unable to compile U-BOOT ${RESET}"
+          exit 1
+     else
+          echo -e "${Green}Successfully compiled U-BOOT ${RESET}"
+     fi
 fi
 
 #********************************************************************************************************************
@@ -138,7 +144,6 @@ fi
 echo -e "${Red}**********************${RESET}"
 echo -e "${Red}** Check singed FIT **${RESET}"
 echo -e "${Red}**********************${RESET}"
-
 env -C $UBOOT/Sancloud-signed-Image $UOUT/a53/BOOT/tools/fit_check_sign -f SanCloud-AM62_signed-image.fit -k $UOUT/a53/BOOT/dts/upstream/src/arm64/ti/k3-am625-sancloud.dtb
 if [ $? -ne 0 ]; then
     echo -e "${Red}FIT-Image sign ERROR ${RESET}"
@@ -159,15 +164,15 @@ else
         echo -e "${Green}Successfully add signature required-mode to dtb ${RESET}"
 fi
 
-echo -e "${Red}*******************************${RESET}"
-echo -e "${Red}*** Add key to FALLBACK  FDT **${RESET}"
-echo -e "${Red}*******************************${RESET}"
-env -C $UBOOT/Sancloud-signed-Image $UOUT/a53/FALLBACK/tools/fdt_add_pubkey -a sha512,rsa4096 -k keys -n dev -r conf-ti_k3-am625-sancloud.dtb  $UOUT/a53/FALLBACK/dts/upstream/src/arm64/ti/k3-am625-sancloud.dtb
+echo -e "${Red}***********************************${RESET}"
+echo -e "${Red}**  Sign FIT-Image for FALLBACK  **${RESET}"
+echo -e "${Red}***********************************${RESET}"
+env -C $UBOOT/Sancloud-signed-Image $UOUT/a53/BOOT/tools/mkimage -f Recovery-FitImageSigned.its -K $UOUT/a53/FALLBACK/dts/upstream/src/arm64/ti/k3-am625-sancloud.dtb    -T fdt_legacy -k ./keys -r SanCloud-Recovery-AM62_signed-image.fit
 if [ $? -ne 0 ]; then
-        echo -e "${Red}unable to add key to FALLBACK FDT ${RESET}"
-        exit 1
+    echo -e "${Red}Unable to sign  Recovery-FIT-Image ${RESET}"
+    exit 1
 else
-        echo -e "${Green}Successfully added key to FALLBACK FDT ${RESET}"
+    echo -e "${Green}Successfully signed Recovery-FIT-Image ${RESET}"
 fi
 
 env -C $UBOOT/Sancloud-signed-Image fdtput -t s $UOUT/a53/FALLBACK/dts/upstream/src/arm64/ti/k3-am625-sancloud.dtb /signature required-mode all
@@ -249,12 +254,20 @@ done
 #********************************************************************************************************************
 # passed copy fine to after revert config just in case on the result of fail or abort conf not damage.
 env -C $UBOOT/Sancloud-signed-Image ./config\&make\&copy.sh -N $ADDITIONAL_FILES --IPs "" $S1_KEY $S7_KEY $PASSWORD
+EXT=$?
 #********************************************************************************************************************
 #               Revert config  
 #********************************************************************************************************************
 for BOOTCFG in "${BOOTCFGS[@]}"; do
     cp $UOUT/a53/$BOOTCFG/.config.back $UOUT/a53/$BOOTCFG/.config
 done    
+
+if [ $EXT -ne 0 ]; then
+    echo -e "${Red}Unable to re-compile with public keys ${RESET}"
+    exit 1
+else
+    echo -e "${Green}Successfully re-compiled with public keys ${RESET}"
+fi
 #********************************************************************************************************************
 #               copy to board  
 #********************************************************************************************************************

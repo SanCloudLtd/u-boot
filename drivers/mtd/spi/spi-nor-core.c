@@ -4014,6 +4014,12 @@ int spi_nor_remove(struct spi_nor *nor)
 	if (nor->info->flags & SPI_NOR_OCTAL_DTR_READ &&
 	    nor->flags & SNOR_F_SOFT_RESET)
 		return spi_nor_soft_reset(nor);
+	if (nor->addr_width == 4 &&
+	    !(nor->info->flags & SPI_NOR_OCTAL_DTR_READ) &&
+	    (JEDEC_MFR(nor->info) != SNOR_MFR_SPANSION) &&
+	    !(nor->info->flags & SPI_NOR_4B_OPCODES)) 
+		set_4byte(nor, nor->info, 0);
+	   		
 #endif
 
 	return 0;
