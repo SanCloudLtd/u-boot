@@ -46,7 +46,14 @@ while [[ $# -gt 0 ]]; do
             IP_ADDRESS="$2"
             shift 2
             ;;
-
+        --NO_CHIP)
+            NO_CHIP=1
+            shift 1
+            ;;    
+        --NO_EMMC)
+            NO_EMMC=1
+            shift 1
+            ;;
         --)
             shift
             break
@@ -168,7 +175,7 @@ if $contains_fit_file; then
     else
         echo -e "${Green}Successfully RMOVED olde /boot/SanCloud-*-image.fit from on ${IP_ADDRESS}  /boot ${RESET}"
     fi
-    sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S -p ''   mv $REMOTE_DIR/*.fit /boot/"
+    sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S -p ''   cp $REMOTE_DIR/*.fit /boot/"
     if [ $? -ne 0 ]; then
         echo -e "${Red}Failed to MOV \"$REMOTE_DIR/*.fit\" to /boot ${RESET} on ${IP_ADDRESS}"
     else
@@ -185,49 +192,52 @@ sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o User
 #********************************************************************************************************************
 #               Program the chip
 #********************************************************************************************************************
-echo -e "${Blue}Unsecure program section 0 BOOT unified image size ${FSIZE[3]} ${RESET}"
-if [[ -n "${FSIZE[3]}" ]]; then
-    FSIZE[3]="--FSIZE ${FSIZE[3]}"
-fi
-$WORK/ProgramSection.sh --KEY "${S1_KEY}" --Ver 0 --DIE 0 --SECTION 0 --IP ${IP_ADDRESS} --FILE "${REMOTE_DIR}/SanCloud-BOOT-$CPU.bin" ${FSIZE[3]}
+if [[ -z "$NO_CHIP" ]] ;then
+    echo -e "${Blue}Unsecure program section 0 BOOT unified image size ${FSIZE[3]} ${RESET}"
+    if [[ -n "${FSIZE[3]}" ]]; then
+        FSIZE[3]="--FSIZE ${FSIZE[3]}"
+    fi
+    $WORK/ProgramSection.sh --KEY "${S1_KEY}" --Ver 0 --DIE 0 --SECTION 0 --IP ${IP_ADDRESS} --FILE "${REMOTE_DIR}/SanCloud-BOOT-$CPU.bin" ${FSIZE[3]}
 
-echo -e "${Blue}Unsecure program section 7 fallback unified image  size ${FSIZE[4]} ${RESET}"
-if [[ -n "${FSIZE[4]}" ]]; then
-    FSIZE[4]="--FSIZE ${FSIZE[4]}"
+    echo -e "${Blue}Unsecure program section 7 fallback unified image  size ${FSIZE[4]} ${RESET}"
+    if [[ -n "${FSIZE[4]}" ]]; then
+        FSIZE[4]="--FSIZE ${FSIZE[4]}"
+    fi
+    $WORK/ProgramSection.sh --KEY "${S7_KEY}" --Ver 0 --DIE 0 --SECTION 7 --IP ${IP_ADDRESS} --FILE "${REMOTE_DIR}/SanCloud-FALLBACK-$CPU.bin" ${FSIZE[4]}
 fi
-$WORK/ProgramSection.sh --KEY "${S7_KEY}" --Ver 0 --DIE 0 --SECTION 7 --IP ${IP_ADDRESS} --FILE "${REMOTE_DIR}/SanCloud-FALLBACK-$CPU.bin" ${FSIZE[4]}
-
 
 #********************************************************************************************************************
 #               copy the file to SD vfat partition
 #********************************************************************************************************************
-echo -e "${Blue}Updating  flash boot partition files  ${RESET}"
-sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S -p ''   mount -t vfat /dev/mmcblk1p1 /mnt/"
-sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S -p ''   cp $REMOTE_DIR/tiboot3-am62x-$CPU-evm.bin /mnt/tiboot3.bin"
-sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S -p ''   cp $REMOTE_DIR/tispl.bin$UNSIGNEG /mnt/tispl.bin"
-sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S -p ''   cp $REMOTE_DIR/u-boot.img$UNSIGNEG /mnt/u-boot.img"
-sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S -p ''   umount /mnt/"
-sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S -p ''   sync"
-#sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S -p ''   reboot"
+if [[ -z "$NO_EMMC" ]] ;then
+    echo -e "${Blue}Updating  flash boot partition files  ${RESET}"
+    sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S -p ''   mount -t vfat /dev/mmcblk1p1 /mnt/"
+    sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S -p ''   cp $REMOTE_DIR/tiboot3-am62x-$CPU-evm.bin /mnt/tiboot3.bin"
+    sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S -p ''   cp $REMOTE_DIR/tispl.bin$UNSIGNEG /mnt/tispl.bin"
+    sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S -p ''   cp $REMOTE_DIR/u-boot.img$UNSIGNEG /mnt/u-boot.img"
+    sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S -p ''   umount /mnt/"
+    sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S -p ''   sync"
+    #sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S -p ''   reboot"
+fi
 
 #********************************************************************************************************************
 #               copy the file to my windows machine
 #********************************************************************************************************************
-echo -e "${Blue}Copying the file to my windows machine  ${RESET}"
-winpass="Mina9175"
-winaddr="hosseinf@10.0.0.124:C:\Users\hosseinf\Desktop\1\AM62\U-boot"
-sshpass -p "$winpass" scp -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null -q "$UOUT/a53/BOOT/u-boot.img$UNSIGNEG" "$winaddr\u-boot.img"
-if [ $? -ne 0 ]; then
-    echo -e "${Red}Failed to write ti3boot on windows distination ${RESET}"
-fi
-sshpass -p "$winpass" scp -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null -q "$UOUT/a53/BOOT/tispl.bin$UNSIGNEG" "$winaddr\tispl.bin"
-if [ $? -ne 0 ]; then
-    echo -e "${Red}Failed to write tispl on windows distination ${RESET}"
-fi
-sshpass -p "$winpass" scp -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null -q "$UOUT/r5/BOOT/tiboot3-am62x-$CPU-evm.bin" "$winaddr\tiboot3.bin"
-if [ $? -ne 0 ]; then
-    echo -e "${Red}Failed to write on windows distination ${RESET}"
-fi
+# echo -e "${Blue}Copying the file to my windows machine  ${RESET}"
+# winpass="Mina9175"
+# winaddr="hosseinf@10.0.0.124:C:\Users\hosseinf\Desktop\1\AM62\U-boot"
+# sshpass -p "$winpass" scp -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null -q "$UOUT/a53/BOOT/u-boot.img$UNSIGNEG" "$winaddr\u-boot.img"
+# if [ $? -ne 0 ]; then
+#     echo -e "${Red}Failed to write ti3boot on windows distination ${RESET}"
+# fi
+# sshpass -p "$winpass" scp -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null -q "$UOUT/a53/BOOT/tispl.bin$UNSIGNEG" "$winaddr\tispl.bin"
+# if [ $? -ne 0 ]; then
+#     echo -e "${Red}Failed to write tispl on windows distination ${RESET}"
+# fi
+# sshpass -p "$winpass" scp -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null -q "$UOUT/r5/BOOT/tiboot3-am62x-$CPU-evm.bin" "$winaddr\tiboot3.bin"
+# if [ $? -ne 0 ]; then
+#     echo -e "${Red}Failed to write on windows distination ${RESET}"
+# fi
 #********************************************************************************************************************
 
 #sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR "debian@${IP_ADDRESS}" "rm -rf $REMOTE_DIR"

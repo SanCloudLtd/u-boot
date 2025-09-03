@@ -18,10 +18,9 @@ NEWKEY="N"
 #---------------------------------------------------------------------------------------------------------
 PASSWORD=""
 IPs=(
-"10.0.0.156"
+"$BOARD1"    
 #"82.5.144.219"
-"10.0.0.155"
-    )  
+    )    
 ADDITIONAL_FILES="--ADDITIONAL_FILES $UBOOT/Sancloud-signed-Image/SanCloud-AM62_signed-image.fit,$UBOOT/Sancloud-signed-Image/SanCloud-Recovery-AM62_signed-image.fit"
 PASSWORD="--PASSWORD temppwd"
 S1_KEY="--S1_KEY 589505315,606348324,623191333,640034342"
@@ -54,6 +53,16 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
 
+        --NO_CHIP)
+            NO_CHIP="--NO_CHIP"
+            shift 1
+            ;;    
+        --NO_EMMC)
+            NO_EMMC="--NO_EMMC"
+            shift 1
+            ;;
+
+
 #---------------------------------------------------------------------------------------------------------
         --)
             shift
@@ -64,8 +73,6 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
-
-
 #********************************************************************************************************************
 #                generate new keys
 #********************************************************************************************************************
@@ -194,7 +201,7 @@ BOOTCFGS=(
 for BOOTCFG in "${BOOTCFGS[@]}"; do
     cp $UOUT/a53/$BOOTCFG/.config $UOUT/a53/$BOOTCFG/.config.back 
 
-    env -C $UOUT/a53/$BOOTCFG  $UBOOT/scripts/config --set-str CONFIG_BOOTCOMMAND "run scan_secure_fit;poweroff;"
+    env -C $UOUT/a53/$BOOTCFG  $UBOOT/scripts/config --set-str CONFIG_BOOTCOMMAND "sf probe||true;run scan_secure_fit;poweroff;"
 
     # Disable legacy “boot” commands
     #env -C $UOUT/a53/$BOOTCFG $UBOOT/scripts/config --disable CONFIG_CMD_BOOTM
@@ -275,7 +282,7 @@ if [ ${#IPs[@]} -gt 0 ]; then
         for IP in "${IPs[@]}"; do
             # Check if the IP is reachable
             if ping -c 1 -W 1 "$IP" &> /dev/null; then
-               $WORK/Boardcp.sh $PASSWORD $ADDITIONAL_FILES "--IP" $IP $PASSWORD $S7_KEY $S1_KEY $ADDITIONAL_FILES &
+               $WORK/Boardcp.sh $PASSWORD $ADDITIONAL_FILES "--IP" $IP $PASSWORD $S7_KEY $S1_KEY $ADDITIONAL_FILES  $NO_CHIP  $NO_EMMC  &
             else
                  echo -e "${Red}device $IP does not exist. ${RESET}"
             fi

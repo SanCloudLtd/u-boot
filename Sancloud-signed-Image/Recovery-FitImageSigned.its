@@ -6,20 +6,20 @@
     images {
         kernel-1 {
             description = "Image";
-            data = /incbin/("./FIT_SourceFiles/Recover-Image");
+            data = /incbin/("./FIT_SourceFiles/Recover-Image.gz");
             type = "kernel";
             arch = "arm64";
             os = "linux";
             load =  <0x82000000>;
             entry = <0x82000000>;
-            compression = "none";
+            compression = "gzip";
             hash-1 {
                 algo = "sha512";
             };
             signature-1 {
                 algo = "sha512,rsa4096";
                 key-name-hint = "dev";
-                sign-images = "kernel", "fdt";
+                sign-images = "kernel", "fdt","ramdisk";
             };
 
         };
@@ -30,14 +30,13 @@
             arch = "arm64";
             os = "linux";
             compression = "none";
-            load =<0x88000000>;
             hash-1 {
                 algo = "sha512";
             };
             signature-1 {
                 algo = "sha512,rsa4096";
                 key-name-hint = "dev";
-                sign-images = "kernel", "fdt";
+                sign-images = "kernel", "fdt","ramdisk";
             };
 
         };
@@ -45,18 +44,15 @@
             description = "Initrd";
             data = /incbin/("./FIT_SourceFiles/initrd.img");
             type = "ramdisk";
-            arch = "arm";
+            arch = "arm64";
             os = "linux";
-            load =<0x88080000>;
-            entry=<0x88080000>;
-            compression = "gzip";
             hash-1 {
                 algo = "sha512";
             };
             signature-1 {
                 algo = "sha512,rsa4096";
                 key-name-hint = "dev";
-                sign-images = "kernel", "fdt";
+                sign-images = "kernel", "fdt","ramdisk";
             };
 
         };
@@ -71,7 +67,7 @@
             signature-1 {
                 algo = "sha512,rsa4096";
                 key-name-hint = "dev";
-                sign-images = "kernel", "fdt";
+                sign-images = "kernel", "fdt","ramdisk";
             };
 
         };

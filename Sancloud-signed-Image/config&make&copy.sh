@@ -13,9 +13,8 @@ White="\033[0;37m"
 RESET="\033[0m"
 
 IPs=(
-"10.0.0.156"
+"$BOARD1"    
 #"82.5.144.219"
-"10.0.0.155"
     )  
 #---------------------------------------------------------------------------------------------------------
 # parameter for pass to Boardcp
@@ -63,6 +62,14 @@ while [[ $# -gt 0 ]]; do
             PASSWORD="--PASSWORD $2"
             shift 2
             ;;
+        --NO_CHIP)
+            NO_CHIP="--NO_CHIP"
+            shift 1
+            ;;
+        --NO_EMMC)
+            NO_EMMC="--NO_EMMC"
+            shift 1
+            ;;    
            
 #---------------------------------------------------------------------------------------------------------
         --)
@@ -320,7 +327,7 @@ if [ ${#IPs[@]} -gt 0 ]; then
         for IP in "${IPs[@]}"; do
             # Check if the IP is reachable
             if ping -c 1 -W 1 "$IP" &> /dev/null; then
-               $WORK/Boardcp.sh $PASSWORD $ADDITIONAL_FILES "--IP" $IP $PASSWORD $S7_KEY $S1_KEY $ADDITIONAL_FILES &
+               $WORK/Boardcp.sh $PASSWORD $ADDITIONAL_FILES "--IP" $IP $PASSWORD $S7_KEY $S1_KEY $ADDITIONAL_FILES $NO_CHIP $NO_EMMC &
             else
                  echo -e "${Red}device $IP does not exist. ${RESET}"
             fi
