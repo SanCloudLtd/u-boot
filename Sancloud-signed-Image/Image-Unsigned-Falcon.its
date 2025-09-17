@@ -6,7 +6,7 @@
     images {
         kernel {
             description = "vmlinuz-5.10.168-ti-r79";
-            data = /incbin/("./vmlinuz-5.10.168-ti-r79");
+            data = /incbin/("./FitSourceFile/5.10.168-ti-r79/vmlinuz-5.10.168-ti-r79");
             type = "kernel";
             arch = "arm";
             os = "linux";
@@ -20,7 +20,7 @@
         };
         args {
             description = "FALCON BOOT ARGS";
-            data = /incbin/("./falconargs-BBE-Light-EMMC");
+            data = /incbin/("./FitSourceFile/5.10.168-ti-r79/falconargs-BBE-Light-EMMC");
             type = "flat_dt";
             arch = "arm";
             os = "linux";

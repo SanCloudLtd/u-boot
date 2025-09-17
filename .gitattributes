@@ -6,5 +6,4 @@
 *.ttf binary
 *.gz binary
 *.png binary
-Sancloud-signed-Image/falconargs*  binary
-Sancloud-signed-Image/vmlinuz-* binary
+Sancloud-signed-Image/FitSourceFile/*/*  binary

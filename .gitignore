@@ -131,3 +131,7 @@ __pycache__
 /compile_commands.json
 b/*/
 !.vscode/settings.json
+#!Sancloud-signed-Image/FitSourceFile/*/*.dtb*
+Sancloud-signed-Image/FitSourceFile/*/*.its
+Sancloud-signed-Image/FitSourceFile/*/initrd.img*
+Sancloud-signed-Image/FitSourceFile/*/vmlinuz*

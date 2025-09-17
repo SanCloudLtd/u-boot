@@ -100,6 +100,69 @@
 #include <env/ti/dfu.h>
 #include <env/ti/mmc.h>
 
+#if CONFIG_SPI_FALLBACK
+#define INIT_SECURE_FIT_SCAN "init_secure_fit_scan=" \
+		"setenv addr_fit 0x90000000;" \
+		"run importbootenv;" \
+		"run switch_recovery;\0" 
+#else
+#define INIT_SECURE_FIT_SCAN "init_secure_fit_scan=" \
+		"setenv addr_fit 0x90000000;"\
+		"setenv secure_fit_filename SanCloud-SecureBOOT-image.fit;" \
+		"run importbootenv;\0"
+#endif	
+#			
+#define SECURE_FIT_BOOT \
+	INIT_SECURE_FIT_SCAN \
+	"secure_fit_filename=SanCloud-SecureBOOT-image.fit;\0" \
+	"switch_recovery=" \
+		"setenv secure_fit_filename SanCloud-SecureFALLBACK-image.fit;" \
+		"setenv bootargs console=ttyS0,115200n8 rootwait coherent_pool=1M net.ifnames=0 lpj=1990656 rng_core.default_quality=100 ${cmdline} init=/init FALLBACK=TRUE quiet;\0" \
+	"boot_secureFIT=" \
+				"if test \"$secure_fit_filename\" = \"SanCloud-SecureBOOT-image.fit\"; then  " \
+					"echo seting bootargs for normal boot...; " \
+					"setenv bootargs console=ttyS0,115200n8 root=/dev/mmcblk${devnum}p${part} ro rootfstype=ext4 rootwait coherent_pool=1M net.ifnames=0 lpj=1990656 rng_core.default_quality=100 ${cmdline} quiet;" \
+				"fi;" \
+				"load ${devtype} ${devnum}:${part} ${addr_fit} ${bootdir}/${secure_fit_filename};" \
+				" echo Booting ${bootdir}/${secure_fit_filename} from ${devtype} ${devnum}:${part} ...; " \
+				" echo bootargs=${bootargs}; " \
+				"bootm ${addr_fit}||poweroff;\0" \
+	"sleep_5s=for sec in 5 4 3 2 1; do " \
+	            "echo -n \" ${sec}\";" \
+				"sleep 1; 	" \
+			"done;\0" \
+	"scan_secure_fit=" \
+		"run init_secure_fit_scan;" \
+		"for retry in 1 2 3 4 5 6 7 8 9 10; do " \
+			"for devtype in mmc usb; do " \
+				"for devnum in 0 1; do " \
+					"if ${devtype} dev ${devnum}; then " \
+						"for part in 1 2 3 4; do " \
+							"if test -e ${devtype} ${devnum}:${part} ${bootdir}/${secure_fit_filename}; then " \
+								"echo Found ${secure_fit_filename} on ${devtype} ${devnum}:${part}; " \
+								"setenv devtype ${devtype}; " \
+								"setenv devnum ${devnum};" \
+								"setenv part ${part}; " \
+								"run boot_secureFIT;" \
+								"exit;" \
+							"fi; " \
+						"done;" \
+					"fi;" \
+				"done;" \
+			"done;" \
+			"if test \"$secure_fit_filename\" = \"SanCloud-SecureBOOT-image.fit\"; then " \
+				"if test \"$retry\" = 2; then " \
+					"echo switching to recovery mod;" \
+					"run switch_recovery;" \
+				"fi;" \
+			"fi;	" \
+			"echo ${secure_fit_filename} image not found;" \
+			"echo -n \"Retry #${retry} starting \";" \
+			"run sleep_5s;" \
+			"done;\0" 
+
+
+
 #define CFG_EXTRA_ENV_SETTINGS \
 	DEFAULT_LINUX_BOOT_ENV \
 	DEFAULT_MMC_TI_ARGS \
@@ -229,6 +292,7 @@
 			"setenv console ttyS0,115200n8;" \
 		"fi;\0" \
 	EEWIKI_BOOT \
+	SECURE_FIT_BOOT \
 	EEWIKI_UNAME_BOOT \
 	EEPROM_PROGRAMMING \
 	NANDARGS \

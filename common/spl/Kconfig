@@ -19,6 +19,11 @@ config SPL
 menu "SPL configuration options"
 	depends on SPL
 
+config SPI_FALLBACK
+    bool "Sancloud recovery DTB "
+    help
+      Enable configs for  Sancloud's fallback on SPI boot.
+
 config SPL_FRAMEWORK
 	bool "Support SPL based upon the common SPL framework"
 	default y
