@@ -46,6 +46,7 @@ FILES=(
 	"/boot/dtbs/$REMOTE_KERNEL/overlays/BB-SPIDEV0-00A0.dtbo"
 	"/boot/dtbs/$REMOTE_KERNEL/overlays/BB-SPIDEV0-00A0.dtbo"
 	"/boot/dtbs/$REMOTE_KERNEL/am335x-sancloud-bbe-lite.dtb"
+	"/lib/firmware/BB-SPIDEV0-00A0.dtbo"
 	"/boot/initrd.img-$REMOTE_KERNEL"
 	"/boot/vmlinuz-$REMOTE_KERNEL"
 )
