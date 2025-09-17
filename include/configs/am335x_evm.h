@@ -117,11 +117,11 @@
 	"secure_fit_filename=SanCloud-SecureBOOT-image.fit;\0" \
 	"switch_recovery=" \
 		"setenv secure_fit_filename SanCloud-SecureFALLBACK-image.fit;" \
-		"setenv bootargs console=ttyS0,115200n8 rootwait coherent_pool=1M net.ifnames=0 lpj=1990656 rng_core.default_quality=100 ${cmdline} init=/init FALLBACK=TRUE quiet;\0" \
+		"setenv bootargs console=ttyS0,115200n8 rootwait coherent_pool=1M net.ifnames=0 lpj=1990656 rng_core.default_quality=100 init=/init FALLBACK=TRUE quiet;\0" \
 	"boot_secureFIT=" \
 				"if test \"$secure_fit_filename\" = \"SanCloud-SecureBOOT-image.fit\"; then  " \
 					"echo seting bootargs for normal boot...; " \
-					"setenv bootargs console=ttyS0,115200n8 root=/dev/mmcblk${devnum}p${part} ro rootfstype=ext4 rootwait coherent_pool=1M net.ifnames=0 lpj=1990656 rng_core.default_quality=100 ${cmdline} quiet;" \
+					"setenv bootargs console=ttyS0,115200n8 root=/dev/mmcblk${devnum}p${part} ro rootfstype=ext4 rootwait coherent_pool=1M net.ifnames=0 lpj=1990656 rng_core.default_quality=100 quiet;" \
 				"fi;" \
 				"load ${devtype} ${devnum}:${part} ${addr_fit} ${bootdir}/${secure_fit_filename};" \
 				" echo Booting ${bootdir}/${secure_fit_filename} from ${devtype} ${devnum}:${part} ...; " \
