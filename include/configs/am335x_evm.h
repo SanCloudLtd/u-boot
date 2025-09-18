@@ -111,7 +111,7 @@
 		"setenv secure_fit_filename SanCloud-SecureBOOT-image.fit;" \
 		"run importbootenv;\0"
 #endif	
-#			
+			
 #define SECURE_FIT_BOOT \
 	INIT_SECURE_FIT_SCAN \
 	"secure_fit_filename=SanCloud-SecureBOOT-image.fit;\0" \

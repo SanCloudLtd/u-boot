@@ -201,22 +201,23 @@ for UBOOTCFG in "${UBOOTCFGS[@]}"; do
     env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable CONFIG_CMD_SPI
     env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --set-val CONFIG_BOOTDELAY   -2
     env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable  CONFIG_AUTOBOOT_KEYED
-    env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable  AUTOBOOT_FLUSH_STDIN
-	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable  AUTOBOOT_ENCRYPTION 
-    env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --set-val AUTOBOOT_PROMPT "\"Autoboot in %d seconds\n\""
-	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable AUTOBOOT_STOP_STR_ENABLE
-	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable CRYPT_PW
+    env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable  CONFIG_AUTOBOOT_FLUSH_STDIN
+	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable  CONFIG_AUTOBOOT_ENCRYPTION 
+	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable CONFIG_AUTOBOOT_STOP_STR_ENABLE
+	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable CONFIG_CRYPT_PW
+
 
     env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --set-val CONFIG_AUTOBOOT_DELAY_STR "\"\""
     env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --set-val CONFIG_AUTOBOOT_STOP_STR "\"\""
     env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable CONFIG_AUTOBOOT_USE_MENUKEY
     env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable CONFIG_AUTOBOOT_KEYED_CTRLC
     env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable CONFIG_BOOTSTD
+    env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --set-str CONFIG_AUTOBOOT_PROMPT "Autoboot in %d seconds \n"
+
    #silent console 
    #env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config -e  CONFIG_SILENT_CONSOLE
 
 
-    #env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable CONFIG_AUTOBOOT_PROMPT  # if present
     env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable CONFIG_CMD_ENV
     env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable CONFIG_CMD_SAVEENV
     env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --set-val CONFIG_ENV_IS_NOWHERE   y
