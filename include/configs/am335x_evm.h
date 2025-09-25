@@ -103,30 +103,46 @@
 #if CONFIG_SPI_FALLBACK
 #define INIT_SECURE_FIT_SCAN "init_secure_fit_scan=" \
 		"setenv addr_fit 0x90000000;" \
-		"run importbootenv;" \
 		"run switch_recovery;\0" 
 #else
 #define INIT_SECURE_FIT_SCAN "init_secure_fit_scan=" \
 		"setenv addr_fit 0x90000000;"\
-		"setenv secure_fit_filename SanCloud-SecureBOOT-image.fit;" \
-		"run importbootenv;\0"
+		"setenv secure_fit_filename SanCloud-SecureBOOT-image.fit;\0"
 #endif	
 			
 #define SECURE_FIT_BOOT \
 	INIT_SECURE_FIT_SCAN \
 	"secure_fit_filename=SanCloud-SecureBOOT-image.fit;\0" \
+	"halt=sleep 100; run halt;\0" \
+	"FIT_recovery="\
+   	    "if test \"$secure_fit_filename\" = \"SanCloud-SecureBOOT-image.fit\"; then " \
+   	        "setenv init_secure_fit_scan 'echo Unable to boot SanCloud-SecureBOOT-image.fit.'; " \
+   	        "run switch_recovery; " \
+   	        "run scan_secure_fit; " \
+   	    "else " \
+   	        "echo 'Unable to boot, use SD card with signed recovery image'; " \
+   	        "run halt; " \
+   	    "fi \0" \
 	"switch_recovery=" \
 		"setenv secure_fit_filename SanCloud-SecureFALLBACK-image.fit;" \
 		"setenv bootargs console=ttyS0,115200n8 rootwait coherent_pool=1M net.ifnames=0 lpj=1990656 rng_core.default_quality=100 init=/init FALLBACK=TRUE quiet;\0" \
-	"boot_secureFIT=" \
-				"if test \"$secure_fit_filename\" = \"SanCloud-SecureBOOT-image.fit\"; then  " \
-					"echo seting bootargs for normal boot...; " \
-					"setenv bootargs console=ttyS0,115200n8 root=/dev/mmcblk${devnum}p${part} ro rootfstype=ext4 rootwait coherent_pool=1M net.ifnames=0 lpj=1990656 rng_core.default_quality=100 quiet;" \
-				"fi;" \
-				"load ${devtype} ${devnum}:${part} ${addr_fit} ${bootdir}/${secure_fit_filename};" \
-				" echo Booting ${bootdir}/${secure_fit_filename} from ${devtype} ${devnum}:${part} ...; " \
-				" echo bootargs=${bootargs}; " \
-				"bootm ${addr_fit}||poweroff;\0" \
+    "boot_secureFIT=" \
+        "if test \"$secure_fit_filename\" = \"SanCloud-SecureBOOT-image.fit\"; then " \
+            "echo setting bootargs for normal boot...; " \
+            "setenv bootargs console=ttyS0,115200n8 root=/dev/mmcblk${devnum}p${part} ro rootfstype=ext4 rootwait coherent_pool=1M net.ifnames=0 lpj=1990656 rng_core.default_quality=100 quiet; " \
+        "fi; " \
+        "load ${devtype} ${devnum}:${part} ${addr_fit} ${bootdir}/${secure_fit_filename}; " \
+        "echo Booting ${bootdir}/${secure_fit_filename} from ${devtype} ${devnum}:${part} ...; " \
+        "echo bootargs=${bootargs}; " \
+        "if iminfo ${addr_fit}; then "\
+			"if bootm ${addr_fit}; then " \
+        	    "echo never show this; " \
+        	"else " \
+        	    "run FIT_recovery;" \
+			"fi; " \
+		"else " \
+       	    "run FIT_recovery;" \
+        "fi\0" \
 	"sleep_5s=for sec in 5 4 3 2 1; do " \
 	            "echo -n \" ${sec}\";" \
 				"sleep 1; 	" \

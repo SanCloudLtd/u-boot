@@ -100,7 +100,7 @@ UBOOTCFGS=(
 )
 # build boot
 for UBOOTCFG in "${UBOOTCFGS[@]}"; do
-	if [ ! -d "${UOUT}/am335x_$UBOOTCFG" ]; then
+	if [ ! -d "${UOUT}/am335x_$UBOOTCFG" ] || [ ! -f "${UOUT}/am335x_$UBOOTCFG/.config" ]; then
 	  env -C $UBOOT make O="${UOUT}/am335x_$UBOOTCFG" sancloud_winbond_spi_defconfig
 	fi
 	# clean befor build
@@ -111,71 +111,10 @@ for UBOOTCFG in "${UBOOTCFGS[@]}"; do
 	# else
 	# 	echo -e "${Green}Successfully ${UBOOTCFG}'s uboot is cleaned ${RESET}"
 	# fi
-	env -C $UBOOT make O="${UOUT}/am335x_$UBOOTCFG" -j$(nproc)
-	if [ $? -ne 0 ]; then
-		echo -e "${Red}unable to compile U-Boot for $UBOOTCFG  ${RESET}"
-		exit 1
-	else
-		echo -e "${Green}Successfully U-Boot is for $UBOOTCFG ${RESET}"
-	fi
-	env -C ${WORK} cp ${UOUT}/am335x_$UBOOTCFG/arch/arm/dts/${DTB}.dtb ${DTB}-$UBOOTCFG-pubkey.dtb
-	if [ $? -ne 0 ]; then
-		echo -e "${Red}unable to copy dtb of $UBOOTCFG  ${RESET}"
-		exit 1
-	else
-		echo -e "${Green}Successfully dtb of $UBOOTCFG is copied ${RESET}"
-	fi
-done
-
-#********************************************************************************************************************
-#                make & sign images
-#********************************************************************************************************************
-
-#compile fit for all kernels
-FIT_SOURCE_DIR=$WORK/FitSourceFile
-
-for dir in $(env -C "$FIT_SOURCE_DIR" sh -c 'ls -d -- */' | sed 's:/$::'); do
-	echo "compiling fits for : $dir"
-	for UBOOTCFG in "${UBOOTCFGS[@]}"; do
-		sed "s|@VERSION@|$dir|g" Secure-$UBOOTCFG.its >"${FIT_SOURCE_DIR}/${dir}/Secure-$UBOOTCFG.its"
-		env -C $WORK ${UOUT}/am335x_$UBOOTCFG/tools/mkimage -f "${FIT_SOURCE_DIR}/${dir}/Secure-$UBOOTCFG.its" -K ${DTB}-$UBOOTCFG-pubkey.dtb -T fdt_legacy -k keys -r "${FIT_SOURCE_DIR}/${dir}/SanCloud-Secure$UBOOTCFG-image.fit"
-		if [ $? -ne 0 ]; then
-			echo -e "${Red}unable to sign image ${dir}/Secure-$UBOOTCFG-image.fit ${RESET}"
-			exit 1
-		else
-			echo -e "${Green}Successfully image ${dir}/Secure-$UBOOTCFG-image.fit is signed ${RESET}"
-		fi
-	done
-done
-
-#********************************************************************************************************************
-#                change signature require mode and re compile create unified images
-#********************************************************************************************************************
-
-for UBOOTCFG in "${UBOOTCFGS[@]}"; do
 	#------------------------------------------------------------------------------------------------
-	# change signature require mode to all
+	# change cofig to secure boot
 	#------------------------------------------------------------------------------------------------
-	env -C $WORK fdtput -t s ${DTB}-$UBOOTCFG-pubkey.dtb /signature required-mode all
-	if [ $? -ne 0 ]; then
-		echo -e "${Red}unable to add signature's required-mode to dtb ${RESET}"
-		exit 1
-	else
-		echo -e "${Green}Successfully add signature required-mode to dtb ${RESET}"
-	fi
-	#------------------------------------------------------------------------------------------------
-	# change config to secure boot
-	#------------------------------------------------------------------------------------------------
-    if [ $UBOOTCFG == "BOOT" ]; then
-		env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable CONFIG_SPI_FALLBACK
-	else
-		env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable CONFIG_SPI_FALLBACK
-	fi
-	
 	cp ${UOUT}/am335x_$UBOOTCFG/.config ${UOUT}/am335x_$UBOOTCFG/.config.back 
-
-    env -C ${UOUT}/am335x_$UBOOTCFG  $UBOOT/scripts/config --set-str CONFIG_BOOTCOMMAND "sf probe||true;run scan_secure_fit;poweroff;"
-
     # Disable legacy “boot” commands
     #env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable CONFIG_CMD_BOOTM
     env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable CONFIG_CMD_BOOTZ
@@ -199,7 +138,7 @@ for UBOOTCFG in "${UBOOTCFGS[@]}"; do
     # Disable block‐device commands if they give access (optional, but recommended)
     #env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable CONFIG_CMD_MMC
     env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable CONFIG_CMD_SPI
-    env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --set-val CONFIG_BOOTDELAY   -2
+    env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --set-val CONFIG_BOOTDELAY   -3
     env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable  CONFIG_AUTOBOOT_KEYED
     env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable  CONFIG_AUTOBOOT_FLUSH_STDIN
 	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable  CONFIG_AUTOBOOT_ENCRYPTION 
@@ -230,21 +169,129 @@ for UBOOTCFG in "${UBOOTCFGS[@]}"; do
     env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable CONFIG_CMD_SOURCE
     env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable CONFIG_DISABLE_CONSOLE
     env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable CONFIG_RESET_TO_RETRY
+	#signiture check
+	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable  CONFIG_FIT_SIGNATURE
+	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --set-val CONFIG_FIT_SIGNATURE_MAX_SIZE 0x10000000
+	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable  CONFIG_FIT_RSASSA_PSS
+	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable  CONFIG_FIT_CIPHER
+	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable	CONFIG_ASYMMETRIC_KEY_TYPE 
+	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable	CONFIG_SPL_ASYMMETRIC_KEY_TYPE 
+	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable	CONFIG_ASYMMETRIC_PUBLIC_KEY_SUBTYPE
+	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable	CONFIG_SPL_ASYMMETRIC_PUBLIC_KEY_SUBTYPE
+	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable	CONFIG_RSA_PUBLIC_KEY_PARSER
+	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable CONFIG_SPL_RSA_PUBLIC_KEY_PARSER 
+	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable	CONFIG_X509_CERTIFICATE_PARSER 
+	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable	CONFIG_PKCS7_MESSAGE_PARSER 
+	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable	CONFIG_MSCODE_PARSER
+	
+	#cmds poweroff & source
+	#env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable	CONFIG_CMD_SOURCE
+	#env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable	CONFIG_CMD_POWEROFF
+	#env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable	CONFIG_POWEROFF_GPIO
+	#env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable	CONFIG_SYSRESET_CMD_POWEROFF
+	#disable efi secure boot
+	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable CONFIG_EFI_SECURE_BOOT  
+	#env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable CONFIG_CMD_BOOTEFI
+	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable CONFIG_EFI_LOADER
+
+	#------------------------------------------------------------------------------------------------
+	# make uboot
+	#------------------------------------------------------------------------------------------------
+
+
+	env -C $UBOOT make O="${UOUT}/am335x_$UBOOTCFG" -j$(nproc)
+	if [ $? -ne 0 ]; then
+		echo -e "${Red}unable to compile U-Boot for $UBOOTCFG  ${RESET}"
+	    #revert config befor error check
+		cp ${UOUT}/am335x_BOOT/.config.back ${UOUT}/am335x_$UBOOTCFG/.config
+		cp ${UOUT}/am335x_FALLBACK/.config.back ${UOUT}/am335x_$UBOOTCFG/.config
+		exit 1
+	else
+		echo -e "${Green}Successfully U-Boot is for $UBOOTCFG ${RESET}"
+	fi
+	#------------------------------------------------------------------------------------------------
+	# copy dtb to work dir
+	#------------------------------------------------------------------------------------------------
+	env -C ${WORK} cp ${UOUT}/am335x_$UBOOTCFG/arch/arm/dts/${DTB}.dtb ${DTB}-$UBOOTCFG-pubkey.dtb
+	if [ $? -ne 0 ]; then
+		echo -e "${Red}unable to copy dtb of $UBOOTCFG  ${RESET}"
+	    #revert config befor error check
+		cp ${UOUT}/am335x_BOOT/.config.back ${UOUT}/am335x_$UBOOTCFG/.config
+		cp ${UOUT}/am335x_FALLBACK/.config.back ${UOUT}/am335x_$UBOOTCFG/.config
+		exit 1
+	else
+		echo -e "${Green}Successfully dtb of $UBOOTCFG is copied ${RESET}"
+	fi
+done
+
+#********************************************************************************************************************
+#                make & sign images
+#********************************************************************************************************************
+
+#compile fit for all kernels
+FIT_SOURCE_DIR=$WORK/FitSourceFile
+
+for dir in $(env -C "$FIT_SOURCE_DIR" sh -c 'ls -d -- */' | sed 's:/$::'); do
+	echo "compiling fits for : $dir"
+	for UBOOTCFG in "${UBOOTCFGS[@]}"; do
+		env -C $WORK sed "s|@VERSION@|$dir|g" Secure-$UBOOTCFG.its >"${FIT_SOURCE_DIR}/${dir}/Secure-$UBOOTCFG.its"
+		env -C $WORK ${UOUT}/am335x_$UBOOTCFG/tools/mkimage -f "${FIT_SOURCE_DIR}/${dir}/Secure-$UBOOTCFG.its" -K ${DTB}-$UBOOTCFG-pubkey.dtb -T fdt_legacy -k keys -r "${FIT_SOURCE_DIR}/${dir}/SanCloud-Secure$UBOOTCFG-image.fit"
+		if [ $? -ne 0 ]; then
+			echo -e "${Red}unable to make its for ${FIT_SOURCE_DIR}/${dir}/Secure-$UBOOTCFG.its  ${RESET}"
+			cp ${UOUT}/am335x_BOOT/.config.back ${UOUT}/am335x_$UBOOTCFG/.config
+			cp ${UOUT}/am335x_FALLBACK/.config.back ${UOUT}/am335x_$UBOOTCFG/.config
+			exit 1
+		else
+			echo -e "${Green}Successfully image ${dir}/Secure-$UBOOTCFG-image.fit is signed ${RESET}"
+		fi
+	done
+done
+
+#********************************************************************************************************************
+#                change signature require mode and re compile create unified images
+#********************************************************************************************************************
+
+for UBOOTCFG in "${UBOOTCFGS[@]}"; do
+	#------------------------------------------------------------------------------------------------
+	# change signature require mode to all
+	#------------------------------------------------------------------------------------------------
+	env -C $WORK fdtput -t s ${DTB}-$UBOOTCFG-pubkey.dtb /signature required-mode all
+	if [ $? -ne 0 ]; then
+		echo -e "${Red}unable to add signature's required-mode to dtb ${RESET}"
+		cp ${UOUT}/am335x_BOOT/.config.back ${UOUT}/am335x_$UBOOTCFG/.config
+		cp ${UOUT}/am335x_FALLBACK/.config.back ${UOUT}/am335x_$UBOOTCFG/.config
+		exit 1
+	else
+		echo -e "${Green}Successfully add signature required-mode to dtb ${RESET}"
+	fi
+	#------------------------------------------------------------------------------------------------
+	# change config to secure boot
+	#------------------------------------------------------------------------------------------------
+    if [ $UBOOTCFG == "BOOT" ]; then
+		env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable CONFIG_SPI_FALLBACK
+	else
+		env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable CONFIG_SPI_FALLBACK
+	fi
+	
+
+    env -C ${UOUT}/am335x_$UBOOTCFG  $UBOOT/scripts/config --set-str CONFIG_BOOTCOMMAND "sf probe||true;run scan_secure_fit;poweroff;"
 
 	#------------------------------------------------------------------------------------------------
 	# recompile uboot with new dtb
 	#------------------------------------------------------------------------------------------------
 	env -C $UBOOT make O=${UOUT}/am335x_$UBOOTCFG EXT_DTB=${WORK}/${DTB}-$UBOOTCFG-pubkey.dtb -j$(nproc)
 
-    #revert config befor error check
-	cp ${UOUT}/am335x_$UBOOTCFG/.config.back ${UOUT}/am335x_$UBOOTCFG/.config
 
 	if [ $? -ne 0 ]; then
 		echo -e "${Red}unable to compile U-Boot $UBOOTCFG ${RESET}"
+		cp ${UOUT}/am335x_BOOT/.config.back ${UOUT}/am335x_$UBOOTCFG/.config
+		cp ${UOUT}/am335x_FALLBACK/.config.back ${UOUT}/am335x_$UBOOTCFG/.config
 		exit 1
 	else
 		echo -e "${Green}Successfully U-Boot is $UBOOTCFG compiled ${RESET}"
 	fi
+	cp ${UOUT}/am335x_BOOT/.config.back ${UOUT}/am335x_$UBOOTCFG/.config
+	cp ${UOUT}/am335x_FALLBACK/.config.back ${UOUT}/am335x_$UBOOTCFG/.config
 	#-----------------------------------------------------------------------------------------------
 	# BUILDING UNIFIED IMAGE
 	#-----------------------------------------------------------------------------------------------

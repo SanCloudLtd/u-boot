@@ -51,18 +51,6 @@ __weak void board_quiesce_devices(void)
  *
  * @fake: non-zero to do everything except actually boot
  */
-#ifdef CONFIG_SPI_FALLBACK 
-#define BOOT_BANER \
-"░█▀▀░█▀█░█▀█░█▀▀░█░░░█▀█░█░█░█▀▄\r\n" \
-"░▀▀█░█▀█░█░█░█░░░█░░░█░█░█░█░█░█\r\n" \
-"░▀▀▀░▀░▀░▀░▀░▀▀▀░▀▀▀░▀▀▀░▀▀▀░▀▀░\r\n" \
-"░█▀▄░█▀▀░█▀▀░█▀█░█░█░█▀▀░█▀▄░█░█\r\n" \
-"░█▀▄░█▀▀░█░░░█░█░▀▄▀░█▀▀░█▀▄░░█░\r\n" \
-"░▀░▀░▀▀▀░▀▀▀░▀▀▀░░▀░░▀▀▀░▀░▀░░▀░\r\n" \
-"░█░█░█▀▀░█▀▄░█▀█░█▀▀░█░░        \r\n" \
-"░█▀▄░█▀▀░█▀▄░█░█░█▀▀░█░░        \r\n" \
-"░▀░▀░▀▀▀░▀░▀░▀░▀░▀▀▀░▀▀▀        \r\n"
-#endif
 static void announce_and_cleanup(int fake)
 {
 	bootstage_mark_name(BOOTSTAGE_ID_BOOTM_HANDOFF, "start_kernel");
@@ -81,9 +69,6 @@ static void announce_and_cleanup(int fake)
 
 	printf("\nStarting kernel ...%s\n\n", fake ?
 		"(fake run for tracing)" : "");
-	#ifdef CONFIG_SPI_FALLBACK
-	printf(BOOT_BANER); 
-	#endif
 	
 	/*
 	 * Call remove function of all devices with a removal flag set.
