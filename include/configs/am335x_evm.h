@@ -134,13 +134,9 @@
         "load ${devtype} ${devnum}:${part} ${addr_fit} ${bootdir}/${secure_fit_filename}; " \
         "echo Booting ${bootdir}/${secure_fit_filename} from ${devtype} ${devnum}:${part} ...; " \
         "echo bootargs=${bootargs}; " \
-        "if iminfo ${addr_fit}; then "\
-			"if bootm ${addr_fit}; then " \
-        	    "echo never show this; " \
-        	"else " \
-        	    "run FIT_recovery;" \
-			"fi; " \
-		"else " \
+		"if bootm ${addr_fit}; then " \
+       	    "echo never show this; " \
+       	"else " \
        	    "run FIT_recovery;" \
         "fi\0" \
 	"sleep_5s=for sec in 5 4 3 2 1; do " \
@@ -151,16 +147,24 @@
 		"run init_secure_fit_scan;" \
 		"for retry in 1 2 3 4 5 6 7 8 9 10; do " \
 			"for devtype in mmc usb; do " \
-				"for devnum in 0 1; do " \
+				"for devnum in 1 0; do " \
 					"if ${devtype} dev ${devnum}; then " \
 						"for part in 1 2 3 4; do " \
 							"if test -e ${devtype} ${devnum}:${part} ${bootdir}/${secure_fit_filename}; then " \
 								"echo Found ${secure_fit_filename} on ${devtype} ${devnum}:${part}; " \
-								"setenv devtype ${devtype}; " \
-								"setenv devnum ${devnum};" \
-								"setenv part ${part}; " \
-								"run boot_secureFIT;" \
-								"exit;" \
+								"echo testing fit image ...; " \
+								"load ${devtype} ${devnum}:${part} ${addr_fit} ${bootdir}/${secure_fit_filename};" \
+								"if iminfo ${addr_fit}; then " \
+									"echo ${secure_fit_filename} image OK; " \
+									"setenv devtype ${devtype}; " \
+									"setenv devnum ${devnum};" \
+									"setenv part ${part}; " \
+									"run boot_secureFIT;" \
+									"exit;" \
+								"else " \
+									"echo ${secure_fit_filename} image corrupted!;" \
+									"echo trying next ...;" \
+								"fi; " \
 							"fi; " \
 						"done;" \
 					"fi;" \
@@ -175,7 +179,8 @@
 			"echo ${secure_fit_filename} image not found;" \
 			"echo -n \"Retry #${retry} starting \";" \
 			"run sleep_5s;" \
-			"done;\0" 
+		"done; " \
+		"run halt; \0"
 
 
 
