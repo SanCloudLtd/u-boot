@@ -28,8 +28,9 @@ ADDITIONAL_FILES="--ADDITIONAL_FILES "
 
 PASSWORD="temppwd"
 
-S1_KEY="--S1_KEY 589505315,606348324,623191333,640034342"
-S7_KEY="--S7_KEY 589505315,606348324,623191333,640034342"
+#default keys for sancloud configs
+#S1_KEY="--S1_KEY 589505315,606348324,623191333,640034342"
+#S7_KEY="--S7_KEY 589505315,606348324,623191333,640034342"
 
 #---------------------------------------------------------------------------------------------------------
 DTB="am335x-sancloud-bbe-lite"
@@ -117,6 +118,7 @@ for UBOOTCFG in "${UBOOTCFGS[@]}"; do
 	cp ${UOUT}/am335x_$UBOOTCFG/.config ${UOUT}/am335x_$UBOOTCFG/.config.back 
     # Disable legacy “boot” commands
     #env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable CONFIG_CMD_BOOTM
+	DTB=$(env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --state CONFIG_DEFAULT_DEVICE_TREE)
     env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable CONFIG_CMD_BOOTZ
     env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable CONFIG_CMD_BOOTI
     
@@ -170,6 +172,8 @@ for UBOOTCFG in "${UBOOTCFGS[@]}"; do
     env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable CONFIG_DISABLE_CONSOLE
     env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable CONFIG_RESET_TO_RETRY
 	#signiture check
+	#env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable  CONFIG_OF_EMBED
+	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable  CONFIG_FIT_FULL_CHECK
 	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable  CONFIG_FIT_SIGNATURE
 	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --set-val CONFIG_FIT_SIGNATURE_MAX_SIZE 0x10000000
 	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable  CONFIG_FIT_RSASSA_PSS
@@ -179,11 +183,11 @@ for UBOOTCFG in "${UBOOTCFGS[@]}"; do
 	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable	CONFIG_ASYMMETRIC_PUBLIC_KEY_SUBTYPE
 	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable	CONFIG_SPL_ASYMMETRIC_PUBLIC_KEY_SUBTYPE
 	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable	CONFIG_RSA_PUBLIC_KEY_PARSER
+	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable	CONFIG_RSA_VERIFY_WITH_PKEY
 	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable CONFIG_SPL_RSA_PUBLIC_KEY_PARSER 
 	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable	CONFIG_X509_CERTIFICATE_PARSER 
 	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable	CONFIG_PKCS7_MESSAGE_PARSER 
 	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable	CONFIG_MSCODE_PARSER
-	
 	#cmds poweroff & source
 	#env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable	CONFIG_CMD_SOURCE
 	#env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable	CONFIG_CMD_POWEROFF
@@ -193,6 +197,16 @@ for UBOOTCFG in "${UBOOTCFGS[@]}"; do
 	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable CONFIG_EFI_SECURE_BOOT  
 	#env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable CONFIG_CMD_BOOTEFI
 	env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable CONFIG_EFI_LOADER
+
+    if [ $UBOOTCFG == "BOOT" ]; then
+		env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable CONFIG_SPI_FALLBACK
+	else
+		env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable CONFIG_SPI_FALLBACK
+	fi
+	
+
+    env -C ${UOUT}/am335x_$UBOOTCFG  $UBOOT/scripts/config --set-str CONFIG_BOOTCOMMAND "sf probe||true;run scan_secure_fit||run halt;"
+
 
 	#------------------------------------------------------------------------------------------------
 	# make uboot
@@ -228,7 +242,7 @@ done
 #                make & sign images
 #********************************************************************************************************************
 
-#compile fit for all kernels
+#generate fit for all kernels
 FIT_SOURCE_DIR=$WORK/FitSourceFile
 
 for dir in $(env -C "$FIT_SOURCE_DIR" sh -c 'ls -d -- */' | sed 's:/$::'); do
@@ -264,24 +278,14 @@ for UBOOTCFG in "${UBOOTCFGS[@]}"; do
 	else
 		echo -e "${Green}Successfully add signature required-mode to dtb ${RESET}"
 	fi
-	#------------------------------------------------------------------------------------------------
-	# change config to secure boot
-	#------------------------------------------------------------------------------------------------
-    if [ $UBOOTCFG == "BOOT" ]; then
-		env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --disable CONFIG_SPI_FALLBACK
-	else
-		env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --enable CONFIG_SPI_FALLBACK
-	fi
-	
-
-    env -C ${UOUT}/am335x_$UBOOTCFG  $UBOOT/scripts/config --set-str CONFIG_BOOTCOMMAND "sf probe||true;run scan_secure_fit;poweroff;"
 
 	#------------------------------------------------------------------------------------------------
 	# recompile uboot with new dtb
 	#------------------------------------------------------------------------------------------------
-	env -C $UBOOT make O=${UOUT}/am335x_$UBOOTCFG EXT_DTB=${WORK}/${DTB}-$UBOOTCFG-pubkey.dtb -j$(nproc)
-
-
+	#env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --set-val CONFIG_OF_LIST	\"${WORK}/${DTB}-$UBOOTCFG-pubkey\"
+	#env -C ${UOUT}/am335x_$UBOOTCFG $UBOOT/scripts/config --set-val CONFIG_DEFAULT_DEVICE_TREE	\"${WORK}/${DTB}-$UBOOTCFG-pubkey\"
+	cp ${WORK}/${DTB}-$UBOOTCFG-pubkey.dtb   ${UOUT}/am335x_$UBOOTCFG/arch/arm/dts/${DTB}.dtb
+	env -C $UBOOT make O=${UOUT}/am335x_$UBOOTCFG -j$(nproc)
 	if [ $? -ne 0 ]; then
 		echo -e "${Red}unable to compile U-Boot $UBOOTCFG ${RESET}"
 		cp ${UOUT}/am335x_BOOT/.config.back ${UOUT}/am335x_$UBOOTCFG/.config

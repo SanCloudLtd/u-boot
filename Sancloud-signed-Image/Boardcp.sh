@@ -134,7 +134,7 @@ for FILE in "${FILES[@]}"; do
 				else
 					echo -e "${Green}Successfully RMOVED olde uboot.env from on ${IP_ADDRESS}  /boot ${RESET}"
 				fi
-				sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S mv $REMOTE_DIR/uboot.env /boot/"
+				sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S cp $REMOTE_DIR/uboot.env /boot/"
 				if [ $? -ne 0 ]; then
 					echo -e "${Red}Failed to MOV \"$REMOTE_DIR/uboot.env\" to /boot ${RESET} on ${IP_ADDRESS}"
 				else
@@ -153,7 +153,7 @@ if $contains_fit_file; then
 	else
 		echo -e "${Green}Successfully RMOVED olde /boot/SanCloud-*-image.fit from on ${IP_ADDRESS}  /boot ${RESET}"
 	fi
-	sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S mv $REMOTE_DIR/*.fit /boot/"
+	sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S cp $REMOTE_DIR/*.fit /boot/"
 	if [ $? -ne 0 ]; then
 		echo -e "${Red}Failed to MOV \"$REMOTE_DIR/*.fit\" to /boot ${RESET} on ${IP_ADDRESS}"
 	else
@@ -201,13 +201,13 @@ if [[ -z "$NO_CHIP" ]]; then
 	if [[ -n "$FSIZE" ]]; then
 		FSIZE="--FSIZE $FSIZE"
 	fi
-	$WORK/ProgramSection.sh --KEY "${S1_KEY}" --Ver 0 --DIE 0 --SECTION 0 --IP ${IP_ADDRESS}${PLAIN_ACCESS} --FILE "${REMOTE_DIR}/SanCloud-BOOT.bin" ${FSIZE}
+	$WORK/ProgramSection.sh --KEY "${S1_KEY}" --Ver 4 --DIE 0 --SECTION 0 --IP ${IP_ADDRESS}${PLAIN_ACCESS} --FILE "${REMOTE_DIR}/SanCloud-BOOT.bin" ${FSIZE}
 	FSIZE=$(get_remote_size "$REMOTE_DIR/SanCloud-FALLBACK.bin")
 	echo -e "${Blue}Unsecure program section 7 fallback unified image  size $FSIZE ${RESET}"
 	if [[ -n "FSIZE" ]]; then
 		FSIZE[4]="--FSIZE $FSIZE"
 	fi
-	$WORK/ProgramSection.sh --KEY "${S7_KEY}" --Ver 0 --DIE 0 --SECTION 7 --IP ${IP_ADDRESS}${PLAIN_ACCESS} --FILE "${REMOTE_DIR}/SanCloud-FALLBACK.bin" $FSIZE
+	$WORK/ProgramSection.sh --KEY "${S7_KEY}" --Ver 4 --DIE 0 --SECTION 7 --IP ${IP_ADDRESS}${PLAIN_ACCESS} --FILE "${REMOTE_DIR}/SanCloud-FALLBACK.bin" $FSIZE
 fi
 
 #sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "debian@${IP_ADDRESS}" "rm -rf $REMOTE_DIR"

@@ -499,7 +499,11 @@ static int fit_config_verify_required_keys(const void *fit, int conf_noffset,
     	puts("\n********** SPL's DTB Dos Not Contain PUBLIC KEY for configuration(s) ****** \n");
 		return -EPERM;
 #endif    
-		return 0;
+#if !defined(CONFIG_SPL_BUILD) && defined(CONFIG_RSA_VERIFY_WITH_PKEY) && defined(CONFIG_FIT_SIGNATURE) 	  
+    	puts("\n********** U-BOOT's DTB Dos Not Contain PUBLIC KEY for configuration(s) ****** \n");
+		return -EPERM;
+#endif    
+	return 0;
 	}
 
 	/* Get required-mode policy property from DTB */
@@ -507,7 +511,7 @@ static int fit_config_verify_required_keys(const void *fit, int conf_noffset,
 	if (reqd_mode && !strcmp(reqd_mode, "any"))
 		reqd_policy_all = false;
 
-	debug("%s: required-mode policy set to '%s'\n", __func__,
+		debug("%s: required-mode policy set to '%s'\n", __func__,
 	      reqd_policy_all ? "all" : "any");
 
 	/*
