@@ -170,10 +170,12 @@
 					"fi;" \
 				"done;" \
 			"done;" \
-			"if test \"$secure_fit_filename\" = \"SanCloud-SecureBOOT-image.fit\"; then " \
-				"if test \"$retry\" = 2; then " \
+			"if test \"$retry\" = 2; then " \
+				"if test \"$secure_fit_filename\" = \"SanCloud-SecureBOOT-image.fit\"; then " \
 					"echo switching to recovery mod;" \
 					"run switch_recovery;" \
+				"else " \
+					"setenv secure_fit_filename SanCloud-SecureBOOT-image.fit;" \
 				"fi;" \
 			"fi;	" \
 			"echo ${secure_fit_filename} image not found;" \
