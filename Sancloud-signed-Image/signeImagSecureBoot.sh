@@ -28,23 +28,15 @@ ADDITIONAL_FILES="--ADDITIONAL_FILES "
 
 PASSWORD="temppwd"
 
-S1_KEY="--S1_KEY 1678123982,272822699,2073704512,141335249"
-S7_KEY="--S7_KEY 4200133682,876780295,3707339696,85005015"
-
 #default keys for sancloud configs
 #S1_KEY="--S1_KEY 589505315,606348324,623191333,640034342"
 #S7_KEY="--S7_KEY 589505315,606348324,623191333,640034342"
 
 #---------------------------------------------------------------------------------------------------------
 DTB="am335x-sancloud-bbe-lite"
-sign_all_images=false
 IPLIST=${BOARDS_IPS}
 while [[ $# -gt 0 ]]; do
 	case $1 in
-	--sign_all_images)
-		sign_all_images=true
-		shift
-		;;
 	--dtb)
 		DTB="$2"
 		shift 2
