@@ -13,6 +13,7 @@ RESET="\033[0m"
 
 
 IP_ADDRESS=""
+PLAIN_ACCESS=0
 PASSWORD="temppwd"
 KEY=""
 
@@ -44,10 +45,18 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         --IP)
-            IP_ADDRESS="$2"
-            shift 2
-            ;;
-
+			shift
+			if [[ $1 =~ ^(([0-9]{1,3}\.){3}[0-9]{1,3})([Pp])?$ ]]; then
+				IP_ADDRESS="${BASH_REMATCH[1]}"
+				if [[ -n "${BASH_REMATCH[3]}" ]]; then
+				PLAIN_ACCESS=1
+				fi
+			else
+				echo "Invalid IP format: $1" >&2
+				exit 1
+			fi
+			shift
+			;;
         --FILE)
             FILE="$2"
             shift 2

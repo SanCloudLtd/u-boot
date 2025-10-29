@@ -12,18 +12,17 @@ Cyan="\033[0;36m"
 White="\033[0;37m"
 RESET="\033[0m"
 
-IPs=(
-"$BOARD1"    
-#"82.5.144.219"
-    )  
+IPLIST=${BOARDS_IPS}
+IPS=()
+IFS=',' read -r -a IPs <<<"$IPLIST"
 #---------------------------------------------------------------------------------------------------------
 # parameter for pass to Boardcp
 #---------------------------------------------------------------------------------------------------------
 ADDITIONAL_FILES="" #"--ADDITIONAL_FILES $WORK/SanCloud-FalconArgGenerator-image.fit,$WORK/SanCloud-Falcon-image.fit"
 ALLYESNO=""
-PASSWORD="--PASSWORD temppwd"
-S1_KEY="--S1_KEY 589505315,606348324,623191333,640034342"
-S7_KEY="--S7_KEY 589505315,606348324,623191333,640034342"
+PASSWORD=${PASSWORD:-"temppwd"}
+S0_KEY=${S0_KEY:-"2365974234,3466640016,4186352255,3105254121"}
+S7_KEY=${S7_KEY:-"3398150088,1878052703,4211812016,2500719804"}
 
  
 #---------------------------------------------------------------------------------------------------------
@@ -50,16 +49,16 @@ while [[ $# -gt 0 ]]; do
             ADDITIONAL_FILES="--ADDITIONAL_FILES $2"  # keep as a single string
             shift 2
              ;;
-        --S1_KEY)
-            S1_KEY="--S1_KEY $2"
+        --S0_KEY)
+            S0_KEY="$2"
             shift 2
             ;;
         --S7_KEY)
-            S7_KEY="--S7_KEY $2"
+            S7_KEY="$2"
             shift 2
             ;;
         --PASSWORD)
-            PASSWORD="--PASSWORD $2"
+            PASSWORD="$2"
             shift 2
             ;;
         --NO_CHIP)
@@ -81,6 +80,14 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+#********************************************************************************************************************
+#                preparing parameters
+#********************************************************************************************************************
+S0_KEY="--S0_KEY $S0_KEY"
+S7_KEY="--S7_KEY $S7_KEY"
+if [ -n "$PASSWORD" ]; then
+	PASSWORD="--PASSWORD $PASSWORD"
+fi	
 #********************************************************************************************************************
 #                Defconfig if not found
 #********************************************************************************************************************
@@ -323,15 +330,27 @@ done
 #                Copying the images to the target device
 #********************************************************************************************************************
 
+
 if [ ${#IPs[@]} -gt 0 ]; then
-        for IP in "${IPs[@]}"; do
-            # Check if the IP is reachable
-            if ping -c 1 -W 1 "$IP" &> /dev/null; then
-               $WORK/Boardcp.sh $PASSWORD $ADDITIONAL_FILES "--IP" $IP $PASSWORD $S7_KEY $S1_KEY $ADDITIONAL_FILES $NO_CHIP $NO_EMMC &
-            else
-                 echo -e "${Red}device $IP does not exist. ${RESET}"
-            fi
-        
-            done  
-        wait
+	for IP in "${IPs[@]}"; do
+		PLAIN_ACCESS=""
+		if [[ $IP =~ ^(([0-9]{1,3}\.){3}[0-9]{1,3})([Pp])?$ ]]; then
+			IP="${BASH_REMATCH[1]}"
+			PLAIN_ACCESS="${BASH_REMATCH[3]:-}"
+		else
+			echo "Invalid IP format: $1" >&2
+			exit 1
+		fi
+        # Check if the IP is reachable
+        if ping -c 1 -W 1 "$IP" &> /dev/null; then
+			KEYS="$S7_KEY $S0_KEY"
+			if [[ -n "$PLAIN_ACCESS" ]]; then
+				KEYS="";	
+			fi
+        	$WORK/Boardcp.sh $PASSWORD $ADDITIONAL_FILES "--IP" $IP $PASSWORD $KEYS  $NO_CHIP  $NO_EMMC  &
+        else
+            echo -e "${Red}device $IP does not exist. ${RESET}"
+        fi
+    done  
+    wait
 fi

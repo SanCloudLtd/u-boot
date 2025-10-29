@@ -6,38 +6,53 @@
     images {
         kernel-1 {
             description = "Image";
-            data = /incbin/("./FIT_SourceFiles/Image");
+            data = /incbin/("./vmlinuz-@VERSION@");
             type = "kernel";
             arch = "arm64";
             os = "linux";
             load =  <0x82000000>;
             entry = <0x82000000>;
-            compression = "none";
+            compression = "gzip";
             hash-1 {
                 algo = "sha512";
             };
             signature-1 {
                 algo = "sha512,rsa4096";
                 key-name-hint = "dev";
-                sign-images = "kernel", "fdt";
+                sign-images = "kernel", "fdt","ramdisk";
             };
 
         };
         fdt-ti_k3-am625-sancloud.dtb {
             description = "k3-am625-sancloud.dtb";
-            data = /incbin/("./FIT_SourceFiles/k3-am625-sancloud.dtb");
+            data = /incbin/("./k3-am625-sancloud.dtb");
             type = "flat_dt";
             arch = "arm64";
             os = "linux";
             compression = "none";
-            load =<0x88000000>;
             hash-1 {
                 algo = "sha512";
             };
             signature-1 {
                 algo = "sha512,rsa4096";
                 key-name-hint = "dev";
-                sign-images = "kernel", "fdt";
+                sign-images = "kernel", "fdt","ramdisk";
+            };
+
+        };
+        initrd {
+            description = "Initrd";
+            data = /incbin/("./initrd.img-@VERSION@");
+            type = "ramdisk";
+            arch = "arm64";
+            os = "linux";
+            hash-1 {
+                algo = "sha512";
+            };
+            signature-1 {
+                algo = "sha512,rsa4096";
+                key-name-hint = "dev";
+                sign-images = "kernel", "fdt","ramdisk";
             };
 
         };
@@ -48,10 +63,11 @@
             description = "LOAD DEBEIAN KERNEL";
             kernel = "kernel-1";
             fdt = "fdt-ti_k3-am625-sancloud.dtb";
+            ramdisk = "initrd";
             signature-1 {
                 algo = "sha512,rsa4096";
                 key-name-hint = "dev";
-                sign-images = "kernel", "fdt";
+                sign-images = "kernel", "fdt","ramdisk";
             };
 
         };

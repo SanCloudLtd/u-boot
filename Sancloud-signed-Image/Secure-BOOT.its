@@ -6,7 +6,7 @@
     images {
         kernel-1 {
             description = "Image";
-            data = /incbin/("./FIT_SourceFiles/Recover-Image.gz");
+            data = /incbin/("./vmlinuz-@VERSION@");
             type = "kernel";
             arch = "arm64";
             os = "linux";
@@ -19,40 +19,25 @@
             signature-1 {
                 algo = "sha512,rsa4096";
                 key-name-hint = "dev";
-                sign-images = "kernel", "fdt","ramdisk";
+                sign-images = "kernel", "fdt";
             };
 
         };
         fdt-ti_k3-am625-sancloud.dtb {
             description = "k3-am625-sancloud.dtb";
-            data = /incbin/("./FIT_SourceFiles/k3-am625-sancloud.dtb");
+            data = /incbin/("./k3-am625-sancloud.dtb");
             type = "flat_dt";
             arch = "arm64";
             os = "linux";
             compression = "none";
+            load =<0x88000000>;
             hash-1 {
                 algo = "sha512";
             };
             signature-1 {
                 algo = "sha512,rsa4096";
                 key-name-hint = "dev";
-                sign-images = "kernel", "fdt","ramdisk";
-            };
-
-        };
-        initrd {
-            description = "Initrd";
-            data = /incbin/("./FIT_SourceFiles/initrd.img");
-            type = "ramdisk";
-            arch = "arm64";
-            os = "linux";
-            hash-1 {
-                algo = "sha512";
-            };
-            signature-1 {
-                algo = "sha512,rsa4096";
-                key-name-hint = "dev";
-                sign-images = "kernel", "fdt","ramdisk";
+                sign-images = "kernel", "fdt";
             };
 
         };
@@ -63,11 +48,10 @@
             description = "LOAD DEBEIAN KERNEL";
             kernel = "kernel-1";
             fdt = "fdt-ti_k3-am625-sancloud.dtb";
-            ramdisk = "initrd";
             signature-1 {
                 algo = "sha512,rsa4096";
                 key-name-hint = "dev";
-                sign-images = "kernel", "fdt","ramdisk";
+                sign-images = "kernel", "fdt";
             };
 
         };

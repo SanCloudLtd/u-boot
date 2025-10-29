@@ -18,8 +18,8 @@ IP_ADDRESS=""
 REMOTE_DIR="~/MHF-UBOOT"
 
 PASSWORD="temppwd"
-S1_KEY="589505315,606348324,623191333,640034342"
-S7_KEY="589505315,606348324,623191333,640034342"
+S0_KEY=""
+S7_KEY=""
 
 ADDITIONAL_FILES=()
 
@@ -30,8 +30,8 @@ while [[ $# -gt 0 ]]; do
             IFS=',' read -r -a ADDITIONAL_FILES <<< "$2"
             shift 2
             ;;
-        --S1_KEY)
-            S1_KEY="$2"
+        --S0_KEY)
+            S0_KEY="$2"
             shift 2
             ;;
         --S7_KEY)
@@ -105,25 +105,6 @@ FILES=(
     "$UOUT/SanCloud-BOOT-$CPU.bin"
     "$UOUT/SanCloud-FALLBACK-$CPU.bin"
 )
-FSIZE=()
-cnt=0
-for FILE in "${FILES[@]}"; do
-    if [[ -e "$FILE" ]]; then
-        SIZE=$(stat -c %s "$FILE")
-        # Calculate remainder
-        REMAINDER=$((SIZE % 4))
-        if [[ $REMAINDER -ne 0 ]]; then
-            # Calculate padding needed
-            PADDING=$((4 - REMAINDER))
-            FSIZE[cnt]=$((SIZE + PADDING))
-        else
-            FSIZE[cnt]=""
-        fi    
-    else
-        echo -e "{Red}File $FILE does not exist.${RESET}"
-    fi
-    cnt=$((cnt+1))
-done  
 
 # Append additional files 
 if [[ -n "${ADDITIONAL_FILES[*]}" ]]; then
@@ -192,18 +173,46 @@ sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o User
 #********************************************************************************************************************
 #               Program the chip
 #********************************************************************************************************************
-if [[ -z "$NO_CHIP" ]] ;then
-    echo -e "${Blue}Unsecure program section 0 BOOT unified image size ${FSIZE[3]} ${RESET}"
-    if [[ -n "${FSIZE[3]}" ]]; then
-        FSIZE[3]="--FSIZE ${FSIZE[3]}"
+get_aligned_size() {
+    local FILE="$1"
+    if [[ ! -e "$FILE" ]]; then
+        echo -e "${Red}error: file not found: $FILE${RESET}" >&2
+        return 1
     fi
-    $WORK/ProgramSection.sh --KEY "${S1_KEY}" --Ver 0 --DIE 0 --SECTION 0 --IP ${IP_ADDRESS} --FILE "${REMOTE_DIR}/SanCloud-BOOT-$CPU.bin" ${FSIZE[3]}
+
+    local SIZE
+    SIZE=$(stat -c %s "$FILE") || { echo -e "${Red}error: stat failed${RESET}" >&2; return 2; }
+    #Calculate remainder
+    local REMAINDER=$((SIZE % 4))
+    if [[ $REMAINDER -ne 0 ]]; then
+		SIZE=$(( SIZE + 4 - REMAINDER ))
+		echo "--FSIZE ${SIZE}"
+	else
+		echo ""
+    fi
+	echo ""    
+}
+
+if [[ -z "$NO_CHIP" ]] ;then
+	FSIZE=$(get_aligned_size "${FILES[3]}") ||{
+    echo -e "${Red}Failed to get aligned size${RESET}"
+    exit 1
+	}
+	if [ -n "$FSIZE" ]; then
+		echo -e "${Blue}unified image size set to ${FSIZE} ${RESET}"
+	fi
+    $WORK/ProgramSection.sh --KEY "${S0_KEY}" --Ver 0 --DIE 0 --SECTION 0 --IP ${IP_ADDRESS} --FILE "${REMOTE_DIR}/SanCloud-BOOT-$CPU.bin" $FSIZE
 
     echo -e "${Blue}Unsecure program section 7 fallback unified image  size ${FSIZE[4]} ${RESET}"
-    if [[ -n "${FSIZE[4]}" ]]; then
-        FSIZE[4]="--FSIZE ${FSIZE[4]}"
-    fi
-    $WORK/ProgramSection.sh --KEY "${S7_KEY}" --Ver 0 --DIE 0 --SECTION 7 --IP ${IP_ADDRESS} --FILE "${REMOTE_DIR}/SanCloud-FALLBACK-$CPU.bin" ${FSIZE[4]}
+
+	FSIZE=$(get_aligned_size "${FILES[4]}") ||{
+    echo -e "${Red}Failed to get aligned size${RESET}"
+    exit 1
+	}
+	if [ -n "$FSIZE" ]; then
+		echo -e "${Blue}unified image size set to ${FSIZE} ${RESET}"
+	fi
+    $WORK/ProgramSection.sh --KEY "${S7_KEY}" --Ver 0 --DIE 0 --SECTION 7 --IP ${IP_ADDRESS} --FILE "${REMOTE_DIR}/SanCloud-FALLBACK-$CPU.bin" $FSIZE
 fi
 
 #********************************************************************************************************************

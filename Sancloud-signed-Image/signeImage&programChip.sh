@@ -16,16 +16,13 @@ NEWKEY="N"
 #---------------------------------------------------------------------------------------------------------
 # parameter for pass to config&make&copy.sh
 #---------------------------------------------------------------------------------------------------------
-PASSWORD=""
-IPs=(
-"$BOARD1"    
-#"82.5.144.219"
-    )    
-ADDITIONAL_FILES="--ADDITIONAL_FILES $UBOOT/Sancloud-signed-Image/SanCloud-AM62_signed-image.fit,$UBOOT/Sancloud-signed-Image/SanCloud-Recovery-AM62_signed-image.fit"
-PASSWORD="--PASSWORD temppwd"
-S1_KEY="--S1_KEY 589505315,606348324,623191333,640034342"
-S7_KEY="--S7_KEY 589505315,606348324,623191333,640034342"
-
+PASSWORD=${PASSWORD:-temppwd}
+IPLIST=${BOARDS_IPS}
+IPS=()
+IFS=',' read -r -a IPs <<<"$IPLIST"
+ADDITIONAL_FILES="--ADDITIONAL_FILES"
+S0_KEY=${S0_KEY:-"2365974234,3466640016,4186352255,3105254121"}
+S7_KEY=${S7_KEY:-"3398150088,1878052703,4211812016,2500719804"}
 #---------------------------------------------------------------------------------------------------------
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -40,16 +37,16 @@ while [[ $# -gt 0 ]]; do
             IFS=',' read -r -a IPs <<< "$2"
             shift 2
             ;;
-        --S1_KEY)
-            S1_KEY="--S1_KEY $2"
+        --S0_KEY)
+            S0_KEY="$2"
             shift 2
             ;;
         --S7_KEY)
-            S7_KEY="--S7_KEY $2"
+            S7_KEY="$2"
             shift 2
             ;;
         --PASSWORD)
-            PASSWORD="--PASSWORD $2"
+            PASSWORD="$2"
             shift 2
             ;;
 
@@ -73,6 +70,16 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+#*********************************************************************************************************************
+#               prepare password parameter
+#*********************************************************************************************************************
+
+
+if [ -n "$PASSWORD" ]; then
+		PASS="--PASSWORD $PASSWORD"
+fi
+S0_KEY="--S0_KEY $S0_KEY"
+S7_KEY="--S7_KEY $S7_KEY"
 #********************************************************************************************************************
 #                generate new keys
 #********************************************************************************************************************
@@ -136,67 +143,79 @@ fi
 #********************************************************************************************************************
 #                SIGN the images
 #********************************************************************************************************************
-echo -e "${Red}**********************${RESET}"
-echo -e "${Red}**  Sign FIT-Image  **${RESET}"
-echo -e "${Red}**********************${RESET}"
-
-env -C $UBOOT/Sancloud-signed-Image $UOUT/a53/BOOT/tools/mkimage -f FitImageSigned.its -K $UOUT/a53/BOOT/dts/upstream/src/arm64/ti/k3-am625-sancloud.dtb    -T fdt_legacy -k ./keys -r SanCloud-AM62_signed-image.fit
-if [ $? -ne 0 ]; then
-    echo -e "${Red}Unable to sign FIT-Image ${RESET}"
-    exit 1
-else
-    echo -e "${Green}Successfully signed FIT-Image ${RESET}"
-fi
-
-echo -e "${Red}**********************${RESET}"
-echo -e "${Red}** Check singed FIT **${RESET}"
-echo -e "${Red}**********************${RESET}"
-env -C $UBOOT/Sancloud-signed-Image $UOUT/a53/BOOT/tools/fit_check_sign -f SanCloud-AM62_signed-image.fit -k $UOUT/a53/BOOT/dts/upstream/src/arm64/ti/k3-am625-sancloud.dtb
-if [ $? -ne 0 ]; then
-    echo -e "${Red}FIT-Image sign ERROR ${RESET}"
-    exit 1
-else
-    echo -e "${Green}Successfully checked signed FIT-Image ${RESET}"
-fi
-
-echo -e "${Red}**********************${RESET}"
-echo -e "${Red}* Securing BOOT FDT **${RESET}"
-echo -e "${Red}**********************${RESET}"
-
-env -C $UBOOT/Sancloud-signed-Image fdtput -t s $UOUT/a53/BOOT/dts/upstream/src/arm64/ti/k3-am625-sancloud.dtb /signature required-mode all
-if [ $? -ne 0 ]; then
-        echo -e "${Red}unable to add signature's required-mode to dtb ${RESET}"
-        exit 1
-else
-        echo -e "${Green}Successfully add signature required-mode to dtb ${RESET}"
-fi
-
-echo -e "${Red}***********************************${RESET}"
-echo -e "${Red}**  Sign FIT-Image for FALLBACK  **${RESET}"
-echo -e "${Red}***********************************${RESET}"
-env -C $UBOOT/Sancloud-signed-Image $UOUT/a53/BOOT/tools/mkimage -f Recovery-FitImageSigned.its -K $UOUT/a53/FALLBACK/dts/upstream/src/arm64/ti/k3-am625-sancloud.dtb    -T fdt_legacy -k ./keys -r SanCloud-Recovery-AM62_signed-image.fit
-if [ $? -ne 0 ]; then
-    echo -e "${Red}Unable to sign  Recovery-FIT-Image ${RESET}"
-    exit 1
-else
-    echo -e "${Green}Successfully signed Recovery-FIT-Image ${RESET}"
-fi
-
-env -C $UBOOT/Sancloud-signed-Image fdtput -t s $UOUT/a53/FALLBACK/dts/upstream/src/arm64/ti/k3-am625-sancloud.dtb /signature required-mode all
-if [ $? -ne 0 ]; then
-        echo -e "${Red}unable to add signature's required-mode to dtb ${RESET}"
-        exit 1
-else
-        echo -e "${Green}Successfully add signature required-mode to dtb ${RESET}"
-fi
-#********************************************************************************************************************
-#               change config to boot from FIT 
-#********************************************************************************************************************
- 
 BOOTCFGS=(
     "BOOT"
     "FALLBACK"
 )
+DTB=k3-am625-sancloud
+#generate fit for all kernels
+FIT_SOURCE_DIR=$UBOOT/Sancloud-signed-Image/FIT_SourceFiles
+
+for dir in $(env -C "$FIT_SOURCE_DIR" sh -c 'ls -d -- */' | sed 's:/$::'); do
+	echo "compiling fits for : $dir"
+	for UBOOTCFG in "${BOOTCFGS[@]}"; do
+		echo -e "${Red}*******************************************${RESET}"
+		echo -e "${Red}	Signing ${UBOOTCFG}'s FIT-Image for $dir ${RESET}"
+		echo -e "${Red}*******************************************${RESET}"
+		env -C $UBOOT/Sancloud-signed-Image sed "s|@VERSION@|$dir|g" Secure-$UBOOTCFG.its >"${FIT_SOURCE_DIR}/${dir}/Secure-$UBOOTCFG.its"
+		env -C $UBOOT/Sancloud-signed-Image $UOUT/a53/$UBOOTCFG/tools/mkimage -f "${FIT_SOURCE_DIR}/${dir}/Secure-$UBOOTCFG.its" -K $UOUT/a53/${UBOOTCFG}/dts/upstream/src/arm64/ti/${DTB}.dtb -T fdt_legacy -k ./keys -r "${FIT_SOURCE_DIR}/${dir}/SanCloud-Secure$UBOOTCFG-image.fit"
+		if [ $? -ne 0 ]; then
+		    echo -e "${Red}Unable to sign FIT-Image ${RESET}"
+		    exit 1
+		else
+		    echo -e "${Green}Successfully signed FIT-Image ${RESET}"
+		fi
+		echo -e "${Red}***********************************************${RESET}"
+		echo -e "${Red}   Checking ${UBOOTCFG}'s FIT-Image for $dir ${RESET}"
+		echo -e "${Red}***********************************************${RESET}"
+		env -C $UBOOT/Sancloud-signed-Image $UOUT/a53/${UBOOTCFG}/tools/fit_check_sign -f "${FIT_SOURCE_DIR}/${dir}/SanCloud-Secure$UBOOTCFG-image.fit" -k $UOUT/a53/${UBOOTCFG}/dts/upstream/src/arm64/ti/${DTB}.dtb
+		if [ $? -ne 0 ]; then
+		    echo -e "${Red}FIT-Image sign ERROR ${RESET}"
+    		exit 1
+		else
+    		echo -e "${Green}Successfully checked signed FIT-Image ${RESET}"
+		fi
+	done
+done
+
+for UBOOTCFG in "${BOOTCFGS[@]}"; do
+	echo -e "${Red}*******************************${RESET}"
+	echo -e "${Red}* Securing ${UBOOTCFG}'s FDT ${RESET}"
+	echo -e "${Red}*******************************${RESET}"
+	env -C $UBOOT/Sancloud-signed-Image fdtput -t s $UOUT/a53/${UBOOTCFG}/dts/upstream/src/arm64/ti/${DTB}.dtb /signature required-mode all
+	if [ $? -ne 0 ]; then
+       	echo -e "${Red}unable to add signature's required-mode to dtb ${RESET}"
+       	exit 1
+	else
+       	echo -e "${Green}Successfully add signature required-mode to dtb ${RESET}"
+	fi
+done
+
+
+
+##old code for single fit image signing
+# echo -e "${Red}***********************************${RESET}"
+# echo -e "${Red}**  Sign FIT-Image for FALLBACK  **${RESET}"
+# echo -e "${Red}***********************************${RESET}"
+# env -C $UBOOT/Sancloud-signed-Image $UOUT/a53/BOOT/tools/mkimage -f Recovery-FitImageSigned.its -K $UOUT/a53/FALLBACK/dts/upstream/src/arm64/ti/k3-am625-sancloud.dtb    -T fdt_legacy -k ./keys -r SanCloud-Recovery-AM62_signed-image.fit
+# if [ $? -ne 0 ]; then
+#     echo -e "${Red}Unable to sign  Recovery-FIT-Image ${RESET}"
+#     exit 1
+# else
+#     echo -e "${Green}Successfully signed Recovery-FIT-Image ${RESET}"
+# fi
+
+# env -C $UBOOT/Sancloud-signed-Image fdtput -t s $UOUT/a53/FALLBACK/dts/upstream/src/arm64/ti/k3-am625-sancloud.dtb /signature required-mode all
+# if [ $? -ne 0 ]; then
+#         echo -e "${Red}unable to add signature's required-mode to dtb ${RESET}"
+#         exit 1
+# else
+#         echo -e "${Green}Successfully add signature required-mode to dtb ${RESET}"
+# fi
+#********************************************************************************************************************
+#               change config to boot from FIT 
+#********************************************************************************************************************
+ 
 
 for BOOTCFG in "${BOOTCFGS[@]}"; do
     cp $UOUT/a53/$BOOTCFG/.config $UOUT/a53/$BOOTCFG/.config.back 
@@ -260,13 +279,19 @@ done
 #               Re-Compiling with public keys 
 #********************************************************************************************************************
 # passed copy fine to after revert config just in case on the result of fail or abort conf not damage.
-env -C $UBOOT/Sancloud-signed-Image ./config\&make\&copy.sh -N $ADDITIONAL_FILES --IPs "" $S1_KEY $S7_KEY $PASSWORD
+env -C $UBOOT/Sancloud-signed-Image ./config\&make\&copy.sh -N --IPs "" 
 EXT=$?
 #********************************************************************************************************************
 #               Revert config  
 #********************************************************************************************************************
 for BOOTCFG in "${BOOTCFGS[@]}"; do
     cp $UOUT/a53/$BOOTCFG/.config.back $UOUT/a53/$BOOTCFG/.config
+	if [ $? -ne 0 ]; then
+		echo -e "${Red}Unable to revert config for $BOOTCFG ${RESET}"
+		exit 1
+	else
+		echo -e "${Green}Successfully reverted config for $BOOTCFG ${RESET}"
+	fi
 done    
 
 if [ $EXT -ne 0 ]; then
@@ -279,14 +304,29 @@ fi
 #               copy to board  
 #********************************************************************************************************************
 if [ ${#IPs[@]} -gt 0 ]; then
-        for IP in "${IPs[@]}"; do
-            # Check if the IP is reachable
-            if ping -c 1 -W 1 "$IP" &> /dev/null; then
-               $WORK/Boardcp.sh $PASSWORD $ADDITIONAL_FILES "--IP" $IP $PASSWORD $S7_KEY $S1_KEY $ADDITIONAL_FILES  $NO_CHIP  $NO_EMMC  &
-            else
-                 echo -e "${Red}device $IP does not exist. ${RESET}"
-            fi
-        
-        done  
-        wait
+	for IP in "${IPs[@]}"; do
+		PLAIN_ACCESS=""
+		if [[ $IP =~ ^(([0-9]{1,3}\.){3}[0-9]{1,3})([Pp])?$ ]]; then
+			IP="${BASH_REMATCH[1]}"
+			PLAIN_ACCESS="${BASH_REMATCH[3]:-}"
+		else
+			echo "Invalid IP format: $1" >&2
+			exit 1
+		fi
+        # Check if the IP is reachable
+        if ping -c 1 -W 1 "$IP" &> /dev/null; then
+			REMOTE_KERNEL=$((sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no "debian@${IP}"  "uname -r" 2>/dev/null)| tail -n 1)
+			echo -e "${Green}device $IP kernel version is $REMOTE_KERNEL ${RESET}"
+			ADDITIONAL_FILES="$ADDITIONAL_FILES $FIT_SOURCE_DIR/$REMOTE_KERNEL/SanCloud-SecureBOOT-image.fit"
+			ADDITIONAL_FILES="$ADDITIONAL_FILES,$FIT_SOURCE_DIR/$REMOTE_KERNEL/SanCloud-SecureFALLBACK-image.fit"
+			KEYS="$S7_KEY $S0_KEY"
+			if [[ -n "$PLAIN_ACCESS" ]]; then
+				KEYS="";	
+			fi
+	      	$WORK/Boardcp.sh $PASS "--IP" $IP $KEYS  $NO_CHIP  $NO_EMMC $ADDITIONAL_FILES  &
+        else
+            echo -e "${Red}device $IP does not exist. ${RESET}"
+        fi
+    done  
+    wait
 fi
