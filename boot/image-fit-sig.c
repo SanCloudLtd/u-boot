@@ -511,7 +511,7 @@ static int fit_config_verify_required_keys(const void *fit, int conf_noffset,
 	if (reqd_mode && !strcmp(reqd_mode, "any"))
 		reqd_policy_all = false;
 
-		debug("%s: required-mode policy set to '%s'\n", __func__,
+	debug("%s: required-mode policy set to '%s'\n", __func__,
 	      reqd_policy_all ? "all" : "any");
 
 	/*
