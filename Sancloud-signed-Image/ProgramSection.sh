@@ -79,9 +79,16 @@ done
 echo -e "${Blue}KEY : $KEY ${RESET}"
 
 if [ -n "$KEY" ]; then
-   log_output=$(sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S -p ''   env -C ~/winbond-lib/build/  ./TESTAPP -u $FILE -s ${SECTION} -D ${DIE} -k ${KEY} -v ${Ver} --fk $FSIZE -C $CRC -d $Digest ")
+	log_output=$(sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S -p ''   env -C ~/winbond-lib/build/  ./TESTAPP -u $FILE -s ${SECTION} -D ${DIE} -k ${KEY} -v ${Ver} --fk $FSIZE -C $CRC -d $Digest ")
+	## Check for version update in the output
+	NVer=$(echo "$log_output" | grep "old version=" | awk -F'=' '{print $2}')
+	if [[ -n "$NVer" ]]; then
+		Ver=$NVer
+		echo -e "${Blue}Updated Version to: $Ver ${RESET}"
+		log_output=$(sshpass -p "$PASSWORD" ssh -o StrictHostKeyChecking=no -o LogLevel=ERROR -o UserKnownHostsFile=/dev/null "debian@${IP_ADDRESS}" "echo \"$PASSWORD\" | sudo -S -p ''   env -C ~/winbond-lib/build/  ./TESTAPP -u $FILE -s ${SECTION} -D ${DIE} -k ${KEY} -v ${Ver} --fk $FSIZE -C $CRC -d $Digest ")
+	fi
+
    # Extract the calculated digest using grep and awk
-  
    CRC=$(echo "$log_output" | grep "Calculated CRC=" | awk -F'=' '{print $2}')
     # Check if the digest was extracted
     if [[ -n "$CRC" ]]; then
