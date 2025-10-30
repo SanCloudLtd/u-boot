@@ -130,6 +130,3 @@ __pycache__
 # Clang's compilation database file
 /compile_commands.json
 /b
-!Sancloud-signed-Image/FIT_SourceFiles/FetchSourceFromBoard.sh
-Sancloud-signed-Image/FIT_SourceFiles/*
-Sancloud-signed-Image/FIT_SourceFiles/Secure-.its
