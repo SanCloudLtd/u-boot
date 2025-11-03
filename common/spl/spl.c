@@ -100,7 +100,7 @@ const char big_text_mmc_card[] =
 "|______|_|  |_|_|  |_|\\_____|\r\n" \
 ;
 
-
+#ifndef CONFIG_SPI_FALLBACK
 const char big_text_question[] = 
 " ___  \r\n" \
 "|__ \\ \r\n" \
@@ -109,7 +109,7 @@ const char big_text_question[] =
 " |_|  \r\n" \
 " (_)  \r\n" \
 ;
-
+#endif
 u32 *boot_params_ptr = NULL;
 
 #if CONFIG_IS_ENABLED(BINMAN_UBOOT_SYMBOLS)
@@ -658,8 +658,10 @@ static int spl_load_image(struct spl_image_info *spl_image,
 
 static void printBigBoot(const char * const loaderName)
 {
-	char * bigStr = (char * )big_text_question;
-
+	char * bigStr= NULL;
+#ifndef CONFIG_SPI_FALLBACK
+	bigStr = (char * )big_text_question;
+#endif
 	if(0 == strncmp(loaderName, "SPI", 3))
 	{
 		bigStr = (char * )big_text_spi_nor;
