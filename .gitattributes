@@ -6,8 +6,3 @@
 *.ttf binary
 *.gz binary
 *.png binary
-Sancloud-signed-Image/FIT_SourceFiles/Image binary
-Sancloud-signed-Image/FIT_SourceFiles/initrd.img binary
-Sancloud-signed-Image/FIT_SourceFiles/k3-am625-sancloud.dtb binary
-Sancloud-signed-Image/FIT_SourceFiles/Recover-Image binary
-Sancloud-signed-Image/FIT_SourceFiles/Recover-Image.gz binary
