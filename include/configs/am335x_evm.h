@@ -103,11 +103,15 @@
 #if CONFIG_SPI_FALLBACK
 #define INIT_SECURE_FIT_SCAN "init_secure_fit_scan=" \
 		"setenv addr_fit 0x90000000;" \
-		"run switch_recovery;\0" 
+		"run switch_recovery;\0" \
+		"devtypes=usb mmc;\0" \
+		"devnums=0 1;\0"
 #else
 #define INIT_SECURE_FIT_SCAN "init_secure_fit_scan=" \
 		"setenv addr_fit 0x90000000;"\
-		"setenv secure_fit_filename SanCloud-SecureBOOT-image.fit;\0"
+		"setenv secure_fit_filename SanCloud-SecureBOOT-image.fit;\0" \
+		"devtypes=mmc usb;\0" \
+		"devnums=1 0;\0"
 #endif	
 			
 #define SECURE_FIT_BOOT \
@@ -145,9 +149,10 @@
 			"done;\0" \
 	"scan_secure_fit=" \
 		"run init_secure_fit_scan;" \
+		"usb start;"\
 		"for retry in 1 2 3 4 5 6 7 8 9 10; do " \
-			"for devtype in mmc usb; do " \
-				"for devnum in 1 0; do " \
+			"for devtype in ${devtypes}; do " \
+				"for devnum in ${devnums}; do " \
 					"if ${devtype} dev ${devnum}; then " \
 						"for part in 1 2 3 4; do " \
 							"if test -e ${devtype} ${devnum}:${part} ${bootdir}/${secure_fit_filename}; then " \
@@ -169,6 +174,8 @@
 						"done;" \
 					"fi;" \
 				"done;" \
+				"mmc rescan;" \
+				"usb reset;" \
 			"done;" \
 			"if test \"$retry\" = 2; then " \
 				"if test \"$secure_fit_filename\" = \"SanCloud-SecureBOOT-image.fit\"; then " \
