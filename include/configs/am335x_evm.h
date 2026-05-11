@@ -103,19 +103,17 @@
 #if CONFIG_SPI_FALLBACK
 #define INIT_SECURE_FIT_SCAN "init_secure_fit_scan=" \
 		"setenv addr_fit 0x90000000;" \
-		"run switch_recovery;\0"\
-		"devtypes=usb mmc \0"\
-		"devnums=0 1 \0"
+		"run switch_recovery;\0"
 #else
 #define INIT_SECURE_FIT_SCAN "init_secure_fit_scan=" \
 		"setenv addr_fit 0x90000000;"\
-		"setenv secure_fit_filename SanCloud-SecureBOOT-image.fit;\0"\
-		"devtypes=mmc usb \0"\
-		"devnums=1 0 \0"
+		"setenv secure_fit_filename SanCloud-SecureBOOT-image.fit;\0"
 #endif	
 			
 #define SECURE_FIT_BOOT \
 	INIT_SECURE_FIT_SCAN \
+	"devtypes=mmc usb ;\0"\
+	"devnums=1 0 ;\0"\
 	"secure_fit_filename=SanCloud-SecureBOOT-image.fit;\0" \
 	"halt=sleep 100; run halt;\0" \
 	"FIT_recovery="\
@@ -130,6 +128,8 @@
 	"switch_recovery=" \
 		"usb start;"\
 		"setenv secure_fit_filename SanCloud-SecureFALLBACK-image.fit;" \
+		"setenv devtypes usb mmc ;"\
+		"setenv devnums 0 1 ;"\
 		"setenv bootargs console=ttyS0,115200n8 rootwait coherent_pool=1M net.ifnames=0 lpj=1990656 rng_core.default_quality=100 init=/init FALLBACK=TRUE quiet;\0" \
     "boot_secureFIT=" \
 		"if test \"$secure_fit_filename\" = \"SanCloud-SecureBOOT-image.fit\"; then " \
