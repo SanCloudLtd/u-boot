@@ -3,7 +3,7 @@
  * termios fuctions to support arbitrary baudrates (on Linux)
  *
  * Copyright (c) 2021 Pali Rohár <pali@kernel.org>
- * Copyright (c) 2021 Marek Behún <marek.behun@nic.cz>
+ * Copyright (c) 2021 Marek Behún <kabel@kernel.org>
  */
 
 #ifndef _TERMIOS_LINUX_H_
@@ -29,15 +29,16 @@
 #include <errno.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
+#include <asm/ioctls.h>
 #include <asm/termbits.h>
 
-#if defined(BOTHER) && defined(TCGETS2)
+#if defined(BOTHER) && defined(TCGETS2) && !defined(__powerpc64__)
 #define termios termios2
 #endif
 
 static inline int tcgetattr(int fd, struct termios *t)
 {
-#if defined(BOTHER) && defined(TCGETS2)
+#if defined(BOTHER) && defined(TCGETS2) && !defined(__powerpc64__)
 	return ioctl(fd, TCGETS2, t);
 #else
 	return ioctl(fd, TCGETS, t);
@@ -49,7 +50,7 @@ static inline int tcsetattr(int fd, int a, const struct termios *t)
 	int cmd;
 
 	switch (a) {
-#if defined(BOTHER) && defined(TCGETS2)
+#if defined(BOTHER) && defined(TCGETS2) && !defined(__powerpc64__)
 	case TCSANOW:
 		cmd = TCSETS2;
 		break;

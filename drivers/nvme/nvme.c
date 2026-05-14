@@ -4,8 +4,8 @@
  * Copyright (C) 2017 Bin Meng <bmeng.cn@gmail.com>
  */
 
-#include <common.h>
 #include <blk.h>
+#include <bootdev.h>
 #include <cpu_func.h>
 #include <dm.h>
 #include <errno.h>
@@ -27,9 +27,8 @@
 #define IO_TIMEOUT		30
 #define MAX_PRP_POOL		512
 
-static int nvme_wait_ready(struct nvme_dev *dev, bool enabled)
+static int nvme_wait_csts(struct nvme_dev *dev, u32 mask, u32 val)
 {
-	u32 bit = enabled ? NVME_CSTS_RDY : 0;
 	int timeout;
 	ulong start;
 
@@ -38,7 +37,7 @@ static int nvme_wait_ready(struct nvme_dev *dev, bool enabled)
 
 	start = get_timer(0);
 	while (get_timer(start) < timeout) {
-		if ((readl(&dev->bar->csts) & NVME_CSTS_RDY) == bit)
+		if ((readl(&dev->bar->csts) & mask) == val)
 			return 0;
 	}
 
@@ -72,7 +71,7 @@ static int nvme_setup_prps(struct nvme_dev *dev, u64 *prp2,
 	}
 
 	nprps = DIV_ROUND_UP(length, page_size);
-	num_pages = DIV_ROUND_UP(nprps, prps_per_page);
+	num_pages = DIV_ROUND_UP(nprps - 1, prps_per_page - 1);
 
 	if (nprps > dev->prp_entry_num) {
 		free(dev->prp_pool);
@@ -85,13 +84,13 @@ static int nvme_setup_prps(struct nvme_dev *dev, u64 *prp2,
 			printf("Error: malloc prp_pool fail\n");
 			return -ENOMEM;
 		}
-		dev->prp_entry_num = prps_per_page * num_pages;
+		dev->prp_entry_num = num_pages * (prps_per_page - 1) + 1;
 	}
 
 	prp_pool = dev->prp_pool;
 	i = 0;
 	while (nprps) {
-		if (i == ((page_size >> 3) - 1)) {
+		if ((i == (prps_per_page - 1)) && nprps > 1) {
 			*(prp_pool + i) = cpu_to_le64((ulong)prp_pool +
 					page_size);
 			i = 0;
@@ -104,7 +103,7 @@ static int nvme_setup_prps(struct nvme_dev *dev, u64 *prp2,
 	*prp2 = (ulong)dev->prp_pool;
 
 	flush_dcache_range((ulong)dev->prp_pool, (ulong)dev->prp_pool +
-			   dev->prp_entry_num * sizeof(u64));
+			   num_pages * page_size);
 
 	return 0;
 }
@@ -295,7 +294,7 @@ static int nvme_enable_ctrl(struct nvme_dev *dev)
 	dev->ctrl_config |= NVME_CC_ENABLE;
 	writel(dev->ctrl_config, &dev->bar->cc);
 
-	return nvme_wait_ready(dev, true);
+	return nvme_wait_csts(dev, NVME_CSTS_RDY, NVME_CSTS_RDY);
 }
 
 static int nvme_disable_ctrl(struct nvme_dev *dev)
@@ -304,7 +303,16 @@ static int nvme_disable_ctrl(struct nvme_dev *dev)
 	dev->ctrl_config &= ~NVME_CC_ENABLE;
 	writel(dev->ctrl_config, &dev->bar->cc);
 
-	return nvme_wait_ready(dev, false);
+	return nvme_wait_csts(dev, NVME_CSTS_RDY, 0);
+}
+
+static int nvme_shutdown_ctrl(struct nvme_dev *dev)
+{
+	dev->ctrl_config &= ~NVME_CC_SHN_MASK;
+	dev->ctrl_config |= NVME_CC_SHN_NORMAL;
+	writel(dev->ctrl_config, &dev->bar->cc);
+
+	return nvme_wait_csts(dev, NVME_CSTS_SHST_MASK, NVME_CSTS_SHST_CMPLT);
 }
 
 static void nvme_free_queue(struct nvme_queue *nvmeq)
@@ -569,17 +577,22 @@ static int nvme_set_queue_count(struct nvme_dev *dev, int count)
 	return min(result & 0xffff, result >> 16) + 1;
 }
 
-static void nvme_create_io_queues(struct nvme_dev *dev)
+static int nvme_create_io_queues(struct nvme_dev *dev)
 {
 	unsigned int i;
+	int ret;
 
 	for (i = dev->queue_count; i <= dev->max_qid; i++)
 		if (!nvme_alloc_queue(dev, i, dev->q_depth))
-			break;
+			return log_msg_ret("all", -ENOMEM);
 
-	for (i = dev->online_queues; i <= dev->queue_count - 1; i++)
-		if (nvme_create_queue(dev->queues[i], i))
-			break;
+	for (i = dev->online_queues; i <= dev->queue_count - 1; i++) {
+		ret = nvme_create_queue(dev->queues[i], i);
+		if (ret)
+			return log_msg_ret("cre", ret);
+	}
+
+	return 0;
 }
 
 static int nvme_setup_io_queues(struct nvme_dev *dev)
@@ -589,14 +602,18 @@ static int nvme_setup_io_queues(struct nvme_dev *dev)
 
 	nr_io_queues = 1;
 	result = nvme_set_queue_count(dev, nr_io_queues);
-	if (result <= 0)
+	if (result <= 0) {
+		log_debug("Cannot set queue count (err=%dE)\n", result);
 		return result;
+	}
 
 	dev->max_qid = nr_io_queues;
 
 	/* Free previously allocated queues */
 	nvme_free_queues(dev, nr_io_queues + 1);
-	nvme_create_io_queues(dev);
+	result = nvme_create_io_queues(dev);
+	if (result)
+		return result;
 
 	return 0;
 }
@@ -674,8 +691,13 @@ int nvme_scan_namespace(void)
 
 	uclass_foreach_dev(dev, uc) {
 		ret = device_probe(dev);
-		if (ret)
-			return ret;
+		if (ret) {
+			log_err("Failed to probe '%s': err=%dE\n", dev->name,
+				ret);
+			/* Bail if we ran out of memory, else keep trying */
+			if (ret != -EBUSY)
+				return ret;
+		}
 	}
 
 	return 0;
@@ -814,8 +836,8 @@ int nvme_init(struct udevice *udev)
 	ndev->udev = udev;
 	INIT_LIST_HEAD(&ndev->namespaces);
 	if (readl(&ndev->bar->csts) == -1) {
-		ret = -ENODEV;
-		printf("Error: %s: Out of memory!\n", udev->name);
+		ret = -EBUSY;
+		printf("Error: %s: Controller not ready!\n", udev->name);
 		goto free_nvme;
 	}
 
@@ -833,8 +855,10 @@ int nvme_init(struct udevice *udev)
 	ndev->dbs = ((void __iomem *)ndev->bar) + 4096;
 
 	ret = nvme_configure_admin_queue(ndev);
-	if (ret)
+	if (ret) {
+		log_debug("Unable to configure admin queue (err=%dE)\n", ret);
 		goto free_queue;
+	}
 
 	/* Allocate after the page size is known */
 	ndev->prp_pool = memalign(ndev->page_size, MAX_PRP_POOL);
@@ -846,8 +870,10 @@ int nvme_init(struct udevice *udev)
 	ndev->prp_entry_num = MAX_PRP_POOL >> 3;
 
 	ret = nvme_setup_io_queues(ndev);
-	if (ret)
+	if (ret) {
+		log_debug("Unable to setup I/O queues(err=%dE)\n", ret);
 		goto free_queue;
+	}
 
 	nvme_get_info_from_identify(ndev);
 
@@ -880,8 +906,18 @@ int nvme_init(struct udevice *udev)
 		sprintf(name, "blk#%d", i);
 
 		/* The real blksz and size will be set by nvme_blk_probe() */
-		ret = blk_create_devicef(udev, "nvme-blk", name, IF_TYPE_NVME,
-					 -1, 512, 0, &ns_udev);
+		ret = blk_create_devicef(udev, "nvme-blk", name, UCLASS_NVME,
+					 -1, DEFAULT_BLKSZ, 0, &ns_udev);
+		if (ret)
+			goto free_id;
+
+		ret = bootdev_setup_for_sibling_blk(ns_udev, "nvme_bootdev");
+		if (ret) {
+			log_err("bootdev: returning err=%d\n", ret);
+			goto free_id;
+		}
+
+		ret = blk_probe_or_unbind(ns_udev);
 		if (ret)
 			goto free_id;
 	}
@@ -900,6 +936,13 @@ free_nvme:
 int nvme_shutdown(struct udevice *udev)
 {
 	struct nvme_dev *ndev = dev_get_priv(udev);
+	int ret;
+
+	ret = nvme_shutdown_ctrl(ndev);
+	if (ret < 0) {
+		printf("Error: %s: Shutdown timed out!\n", udev->name);
+		return ret;
+	}
 
 	return nvme_disable_ctrl(ndev);
 }

@@ -4,16 +4,17 @@
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
  */
 
-#include <common.h>
 #include <cpu_func.h>
+#include <stdio.h>
 #include <asm/cache.h>
 #include <watchdog.h>
+#include <linux/errno.h>
 
 static ulong maybe_watchdog_reset(ulong flushed)
 {
 	flushed += CONFIG_SYS_CACHELINE_SIZE;
 	if (flushed >= CONFIG_CACHE_FLUSH_WATCHDOG_THRESHOLD) {
-		WATCHDOG_RESET();
+		schedule();
 		flushed = 0;
 	}
 	return flushed;
@@ -43,4 +44,23 @@ void flush_cache(ulong start_addr, ulong size)
 	asm volatile("sync" : : : "memory");
 	/* flush prefetch queue */
 	asm volatile("isync" : : : "memory");
+}
+
+/*
+ * Default implementation:
+ * do a range flush for the entire range
+ */
+void flush_dcache_all(void)
+{
+	flush_dcache_range(0, ~0);
+}
+
+void invalidate_icache_all(void)
+{
+	puts("No arch specific invalidate_icache_all available!\n");
+}
+
+int __weak pgprot_set_attrs(phys_addr_t addr, size_t size, enum pgprot_attrs perm)
+{
+	return -ENOSYS;
 }

@@ -6,7 +6,6 @@
 
 #include <config.h>
 #include <fdt_support.h>
-#include <ide.h>
 #include <init.h>
 #include <net.h>
 #include <netdev.h>
@@ -94,7 +93,7 @@ static enum sys_con malta_sys_con(void)
 
 int dram_init(void)
 {
-	gd->ram_size = CONFIG_SYS_MEM_SIZE;
+	gd->ram_size = CFG_SYS_SDRAM_SIZE;
 
 	return 0;
 }

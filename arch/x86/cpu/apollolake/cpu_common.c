@@ -3,7 +3,6 @@
  * Copyright 2019 Google LLC
  */
 
-#include <common.h>
 #include <dm.h>
 #include <log.h>
 #include <asm/cpu_common.h>
@@ -72,7 +71,7 @@ static void pch_uart_init(void)
 	}
 
 #ifdef CONFIG_DEBUG_UART
-	apl_uart_init(PCH_DEV_UART, CONFIG_DEBUG_UART_BASE);
+	apl_uart_init(PCH_DEV_UART, CONFIG_VAL(DEBUG_UART_BASE));
 #endif
 }
 

@@ -6,7 +6,7 @@
  * The system works in a message response protocol
  * See: http://processors.wiki.ti.com/index.php/TISCI for details
  *
- * Copyright (C)  2018 Texas Instruments Incorporated - http://www.ti.com/
+ * Copyright (C)  2018 Texas Instruments Incorporated - https://www.ti.com/
  * Based on drivers/firmware/ti_sci.h from Linux.
  *
  */
@@ -26,7 +26,9 @@
 #define TI_SCI_MSG_BOARD_CONFIG_RM	0x000c
 #define TI_SCI_MSG_BOARD_CONFIG_SECURITY  0x000d
 #define TI_SCI_MSG_BOARD_CONFIG_PM	0x000e
+#define TI_SCI_MSG_DM_VERSION		0x000f
 #define TISCI_MSG_QUERY_MSMC		0x0020
+#define TI_SCI_MSG_QUERY_FW_CAPS	0x0022
 
 /* Device requests */
 #define TI_SCI_MSG_SET_DEVICE_STATE	0x0200
@@ -49,7 +51,7 @@
 #define TISCI_MSG_PROC_HANDOVER		0xc005
 #define TISCI_MSG_SET_PROC_BOOT_CONFIG	0xc100
 #define TISCI_MSG_SET_PROC_BOOT_CTRL	0xc101
-#define TISCI_MSG_PROC_AUTH_BOOT_IMIAGE	0xc120
+#define TISCI_MSG_PROC_AUTH_BOOT_IMAGE	0xc120
 #define TISCI_MSG_GET_PROC_BOOT_STATUS	0xc400
 #define TISCI_MSG_WAIT_PROC_BOOT_STATUS	0xc401
 
@@ -132,6 +134,46 @@ struct ti_sci_msg_resp_version {
 	u16 firmware_revision;
 	u8 abi_major;
 	u8 abi_minor;
+} __packed;
+
+/**
+ * struct ti_sci_msg_dm_resp_version - Response for a message
+ * @hdr:		Generic header
+ * @version:		Version number of the firmware
+ * @sub_version:	Sub-version number of the firmware
+ * @patch_version:	Patch version number of the firmware
+ * @abi_major:		Major version of the ABI that firmware supports
+ * @abi_minor:		Minor version of the ABI that firmware supports
+ * @sci_server_version: String describing the SCI server version
+ * @rm_pm_hal_version:  String describing the RM PM HAL version
+ *
+ * In general, ABI version changes follow the rule that minor version increments
+ * are backward compatible. Major revision changes in ABI may not be
+ * backward compatible.
+ *
+ * Response to a message with message type TI_SCI_MSG_DM_VERSION
+ */
+struct ti_sci_msg_dm_resp_version {
+	struct ti_sci_msg_hdr hdr;
+	u16	version;
+	u8	sub_version;
+	u8	patch_version;
+	u8	abi_major;
+	u8	abi_minor;
+	char rm_pm_hal_version[12];
+	char sci_server_version[26];
+} __packed;
+
+/**
+ * struct ti_sci_query_fw_caps_resp - Response for a message
+ * @hdr:	Generic header
+ * @fw_caps:	64-bit value representing the FW/SOC capabilities.
+ *
+ * Response to a message with message type TI_SCI_MSG_QUERY_FW_CAPS
+ */
+struct ti_sci_query_fw_caps_resp {
+	struct ti_sci_msg_hdr hdr;
+	u64    fw_caps;
 } __packed;
 
 /**

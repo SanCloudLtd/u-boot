@@ -4,7 +4,6 @@
  * Author: Jagan Teki <jagan@amarulasolutions.com>
  */
 
-#include <common.h>
 #include <clk-uclass.h>
 #include <dm.h>
 #include <errno.h>
@@ -17,11 +16,14 @@ static struct ccu_clk_gate a23_gates[] = {
 	[CLK_BUS_MMC0]		= GATE(0x060, BIT(8)),
 	[CLK_BUS_MMC1]		= GATE(0x060, BIT(9)),
 	[CLK_BUS_MMC2]		= GATE(0x060, BIT(10)),
+	[CLK_BUS_NAND]		= GATE(0x060, BIT(13)),
 	[CLK_BUS_SPI0]		= GATE(0x060, BIT(20)),
 	[CLK_BUS_SPI1]		= GATE(0x060, BIT(21)),
 	[CLK_BUS_OTG]		= GATE(0x060, BIT(24)),
 	[CLK_BUS_EHCI]		= GATE(0x060, BIT(26)),
 	[CLK_BUS_OHCI]		= GATE(0x060, BIT(29)),
+
+	[CLK_BUS_PIO]		= GATE(0x068, BIT(5)),
 
 	[CLK_BUS_I2C0]		= GATE(0x06c, BIT(0)),
 	[CLK_BUS_I2C1]		= GATE(0x06c, BIT(1)),
@@ -32,6 +34,7 @@ static struct ccu_clk_gate a23_gates[] = {
 	[CLK_BUS_UART3]		= GATE(0x06c, BIT(19)),
 	[CLK_BUS_UART4]		= GATE(0x06c, BIT(20)),
 
+	[CLK_NAND]		= GATE(0x080, BIT(31)),
 	[CLK_SPI0]		= GATE(0x0a0, BIT(31)),
 	[CLK_SPI1]		= GATE(0x0a4, BIT(31)),
 
@@ -50,6 +53,7 @@ static struct ccu_reset a23_resets[] = {
 	[RST_BUS_MMC0]		= RESET(0x2c0, BIT(8)),
 	[RST_BUS_MMC1]		= RESET(0x2c0, BIT(9)),
 	[RST_BUS_MMC2]		= RESET(0x2c0, BIT(10)),
+	[RST_BUS_NAND]		= RESET(0x2c0, BIT(13)),
 	[RST_BUS_SPI0]		= RESET(0x2c0, BIT(20)),
 	[RST_BUS_SPI1]		= RESET(0x2c0, BIT(21)),
 	[RST_BUS_OTG]		= RESET(0x2c0, BIT(24)),
@@ -66,30 +70,9 @@ static struct ccu_reset a23_resets[] = {
 	[RST_BUS_UART4]		= RESET(0x2d8, BIT(20)),
 };
 
-static const struct ccu_desc a23_ccu_desc = {
+const struct ccu_desc a23_ccu_desc = {
 	.gates = a23_gates,
 	.resets = a23_resets,
-};
-
-static int a23_clk_bind(struct udevice *dev)
-{
-	return sunxi_reset_bind(dev, ARRAY_SIZE(a23_resets));
-}
-
-static const struct udevice_id a23_clk_ids[] = {
-	{ .compatible = "allwinner,sun8i-a23-ccu",
-	  .data = (ulong)&a23_ccu_desc },
-	{ .compatible = "allwinner,sun8i-a33-ccu",
-	  .data = (ulong)&a23_ccu_desc },
-	{ }
-};
-
-U_BOOT_DRIVER(clk_sun8i_a23) = {
-	.name		= "sun8i_a23_ccu",
-	.id		= UCLASS_CLK,
-	.of_match	= a23_clk_ids,
-	.priv_auto	= sizeof(struct ccu_priv),
-	.ops		= &sunxi_clk_ops,
-	.probe		= sunxi_clk_probe,
-	.bind		= a23_clk_bind,
+	.num_gates = ARRAY_SIZE(a23_gates),
+	.num_resets = ARRAY_SIZE(a23_resets),
 };

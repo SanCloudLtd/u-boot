@@ -1,10 +1,9 @@
-// SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
 /*
- * Copyright (C) 2020-2021 Intel Corporation <www.intel.com>
+ * Copyright (C) 2020-2022 Intel Corporation <www.intel.com>
  *
  */
 
-#include <common.h>
 #include <clk.h>
 #include <div64.h>
 #include <dm.h>
@@ -23,6 +22,7 @@
 #include <asm/io.h>
 #include <linux/err.h>
 #include <linux/sizes.h>
+#include <u-boot/schedule.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -346,25 +346,25 @@ struct ddr_handoff {
 	phys_addr_t cntlr_base;
 	size_t cntlr_total_length;
 	enum ddr_type cntlr_t;
-	size_t cntlr_handoff_length;
+	int cntlr_handoff_length;
 
 	/* Second controller attributes*/
 	phys_addr_t cntlr2_handoff_base;
 	phys_addr_t cntlr2_base;
 	size_t cntlr2_total_length;
 	enum ddr_type cntlr2_t;
-	size_t cntlr2_handoff_length;
+	int cntlr2_handoff_length;
 
 	/* PHY attributes */
 	phys_addr_t phy_handoff_base;
 	phys_addr_t phy_base;
 	size_t phy_total_length;
-	size_t phy_handoff_length;
+	int phy_handoff_length;
 
 	/* PHY engine attributes */
 	phys_addr_t phy_engine_handoff_base;
 	size_t phy_engine_total_length;
-	size_t phy_engine_handoff_length;
+	int phy_engine_handoff_length;
 
 	/* Calibration attributes */
 	phys_addr_t train_imem_base;
@@ -517,7 +517,7 @@ static int ensure_retry_procedure_complete(phys_addr_t umctl2_base)
 			      DDR4_CRCPARSTAT_CMD_IN_ERR_WINDOW;
 
 		udelay(1);
-		WATCHDOG_RESET();
+		schedule();
 	}
 
 	return 0;
@@ -1349,7 +1349,7 @@ static int ddr_post_handoff_config(phys_addr_t umctl2_base,
 		}
 
 		udelay(1);
-		WATCHDOG_RESET();
+		schedule();
 
 		/* Polling until SDRAM entered normal operating mode */
 		value = readl(umctl2_base + DDR4_STAT_OFFSET) &

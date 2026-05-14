@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0+
 
 #include "pitx_misc.h"
-#include <common.h>
+#include <efi.h>
+#include <efi_loader.h>
 #include <init.h>
 #include <mmc.h>
 #include <miiphy.h>
@@ -12,7 +13,7 @@
 #include <asm/mach-imx/gpio.h>
 #include <asm/mach-imx/iomux-v3.h>
 #include <linux/delay.h>
-
+#include <linux/kernel.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -29,6 +30,23 @@ static iomux_v3_cfg_t const uart_pads[] = {
 	IMX8MQ_PAD_ECSPI1_SS0__UART3_RTS_B | MUX_PAD_CTRL(UART_PAD_CTRL),
 	IMX8MQ_PAD_ECSPI1_MISO__UART3_CTS_B | MUX_PAD_CTRL(UART_PAD_CTRL),
 };
+
+#if IS_ENABLED(CONFIG_EFI_HAVE_CAPSULE_SUPPORT)
+struct efi_fw_image fw_images[] = {
+	{
+		.image_type_id = KONTRON_PITX_IMX8M_FIT_IMAGE_GUID,
+		.fw_name = u"KONTRON-PITX-IMX8M-UBOOT",
+		.image_index = 1,
+	},
+};
+
+struct efi_capsule_update_info update_info = {
+	.dfu_string = "mmc 0=flash-bin raw 0x42 0x1000 mmcpart 1",
+	.num_images = ARRAY_SIZE(fw_images),
+	.images = fw_images,
+};
+
+#endif /* EFI_HAVE_CAPSULE_SUPPORT */
 
 int board_early_init_f(void)
 {
@@ -66,29 +84,16 @@ int board_phys_sdram_size(phys_size_t *memsize)
 	return 0;
 }
 
-
 #ifdef CONFIG_FEC_MXC
 #define FEC_RST_PAD IMX_GPIO_NR(1, 11)
 static iomux_v3_cfg_t const fec1_rst_pads[] = {
 	IMX8MQ_PAD_GPIO1_IO11__GPIO1_IO11 | MUX_PAD_CTRL(NO_PAD_CTRL),
 };
 
-static void setup_iomux_fec(void)
+static void setup_fec(void)
 {
 	imx_iomux_v3_setup_multiple_pads(fec1_rst_pads,
 					 ARRAY_SIZE(fec1_rst_pads));
-}
-
-static int setup_fec(void)
-{
-	struct iomuxc_gpr_base_regs *gpr =
-		(struct iomuxc_gpr_base_regs *)IOMUXC_GPR_BASE_ADDR;
-
-	setup_iomux_fec();
-
-	/* Use 125M anatop REF_CLK1 for ENET1, not from external */
-	clrsetbits_le32(&gpr->gpr[1], BIT(13) | BIT(17), 0);
-	return set_clk_enet(ENET_125MHZ);
 }
 
 int board_phy_config(struct phy_device *phydev)

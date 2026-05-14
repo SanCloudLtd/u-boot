@@ -7,10 +7,11 @@
 /*
  * FLASH support
  */
-#include <common.h>
 #include <command.h>
 #include <log.h>
-#include <uuid.h>
+#include <vsprintf.h>
+#include <linux/string.h>
+#include <u-boot/uuid.h>
 
 #if defined(CONFIG_CMD_MTDPARTS)
 #include <jffs2/jffs2.h>
@@ -25,7 +26,6 @@ int find_dev_and_part(const char *id, struct mtd_device **dev,
 #ifdef CONFIG_MTD_NOR_FLASH
 #include <flash.h>
 #include <mtd/cfi_flash.h>
-extern flash_info_t flash_info[];	/* info for FLASH chips */
 
 /*
  * The user interface starts numbering for Flash banks with 1

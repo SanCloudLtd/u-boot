@@ -3,7 +3,6 @@
  * Copyright (C) 2011-2015 by Vladimir Zapolskiy <vz@mleia.com>
  */
 
-#include <common.h>
 #include <cpu_func.h>
 #include <init.h>
 #include <net.h>
@@ -56,14 +55,6 @@ int print_cpuinfo(void)
 	printf("AHB bus clock:    %uMHz\n", get_hclk_clk_rate() / 1000000);
 	printf("Peripheral clock: %uMHz\n", get_periph_clk_rate() / 1000000);
 
-	return 0;
-}
-#endif
-
-#ifdef CONFIG_LPC32XX_ETH
-int cpu_eth_init(struct bd_info *bis)
-{
-	lpc32xx_eth_initialize(bis);
 	return 0;
 }
 #endif

@@ -3,7 +3,6 @@
  * Copyright 2020 NXP
  */
 
-#include <common.h>
 #include <command.h>
 #include <div64.h>
 #include <asm/arch/imx-regs.h>
@@ -101,8 +100,8 @@ void init_clk_ddr(void)
 	writel(0xc0000000, PCC5_LPDDR4_ADDR);
 
 	/* enable pll4 and ddrclk*/
-	cgc2_pll4_init();
-	cgc2_ddrclk_config(1, 1);
+	cgc2_pll4_init(true);
+	cgc2_ddrclk_config(4, 1);
 
 	/* enable ddr pcc */
 	writel(0xd0000000, PCC5_LPDDR4_ADDR);
@@ -153,30 +152,52 @@ int set_ddr_clk(u32 phy_freq_mhz)
 	return 0;
 }
 
-void clock_init(void)
+void clock_init_early(void)
 {
 	cgc1_soscdiv_init();
-	cgc1_init_core_clk();
 
 	init_clk_lpuart();
 
+	/* Enable upower mu1 clk */
+	pcc_clock_enable(3, UPOWER_PCC3_SLOT, true);
+}
+
+/* This will be invoked after pmic voltage setting */
+void clock_init_late(void)
+{
+
+	if (IS_ENABLED(CONFIG_IMX8ULP_LD_MODE))
+		cgc1_init_core_clk(MHZ(500));
+	else if (IS_ENABLED(CONFIG_IMX8ULP_ND_MODE))
+		cgc1_init_core_clk(MHZ(750));
+	else
+		cgc1_init_core_clk(MHZ(960));
+
+	/*
+	 * Audio use this frequency in kernel dts,
+	 * however nic use pll3 pfd0, we have to
+	 * make the freqency same as kernel to make nic
+	 * not being disabled
+	 */
+	cgc1_pll3_init(540672000);
+
 	pcc_clock_enable(4, SDHC0_PCC4_SLOT, false);
-	pcc_clock_sel(4, SDHC0_PCC4_SLOT, PLL3_PFD1_DIV2);
+	pcc_clock_sel(4, SDHC0_PCC4_SLOT, PLL3_PFD3_DIV1); /* 389M for OD, 194M for LD/ND*/
 	pcc_clock_enable(4, SDHC0_PCC4_SLOT, true);
 	pcc_reset_peripheral(4, SDHC0_PCC4_SLOT, false);
 
 	pcc_clock_enable(4, SDHC1_PCC4_SLOT, false);
-	pcc_clock_sel(4, SDHC1_PCC4_SLOT, PLL3_PFD2_DIV1);
+	pcc_clock_sel(4, SDHC1_PCC4_SLOT, PLL3_PFD3_DIV2); /* 194M for OD, 97M for LD/ND */
 	pcc_clock_enable(4, SDHC1_PCC4_SLOT, true);
 	pcc_reset_peripheral(4, SDHC1_PCC4_SLOT, false);
 
 	pcc_clock_enable(4, SDHC2_PCC4_SLOT, false);
-	pcc_clock_sel(4, SDHC2_PCC4_SLOT, PLL3_PFD2_DIV1);
+	pcc_clock_sel(4, SDHC2_PCC4_SLOT, PLL3_PFD3_DIV2); /* 194M for OD, 97M for LD/ND*/
 	pcc_clock_enable(4, SDHC2_PCC4_SLOT, true);
 	pcc_reset_peripheral(4, SDHC2_PCC4_SLOT, false);
 
-	/* Enable upower mu1 clk */
-	pcc_clock_enable(3, UPOWER_PCC3_SLOT, true);
+	/* enable MU0_MUB clock before access the register of MU0_MUB */
+	pcc_clock_enable(3, MU0_B_PCC3_SLOT, true);
 
 	/*
 	 * Enable clock division
@@ -234,6 +255,26 @@ u32 imx_get_i2cclk(u32 i2c_num)
 
 	return pcc_clock_get_rate(lpi2c_pcc_clks[i2c_num - 4] & 0xff,
 				  lpi2c_pcc_clks[i2c_num - 4] >> 8);
+}
+#endif
+
+#if IS_ENABLED(CONFIG_SYS_I2C_IMX_I3C)
+int enable_i3c_clk(unsigned char enable, u32 i3c_num)
+{
+	if (enable) {
+		pcc_clock_enable(3, I3C2_PCC3_SLOT, false);
+		pcc_clock_sel(3, I3C2_PCC3_SLOT, SOSC_DIV2);
+		pcc_clock_enable(3, I3C2_PCC3_SLOT, true);
+		pcc_reset_peripheral(3, I3C2_PCC3_SLOT, false);
+	} else {
+		pcc_clock_enable(3, I3C2_PCC3_SLOT, false);
+	}
+	return 0;
+}
+
+u32 imx_get_i3cclk(u32 i3c_num)
+{
+	return pcc_clock_get_rate(3, I3C2_PCC3_SLOT);
 }
 #endif
 
@@ -366,6 +407,8 @@ void reset_lcdclk(void)
 	pcc_reset_peripheral(5, DCNANO_PCC5_SLOT, true);
 }
 
+/* PLL4 PFD0 max frequency */
+#define PLL4_PFD0_MAX_RATE 600000 /*khz*/
 void mxs_set_lcdclk(u32 base_addr, u32 freq_in_khz)
 {
 	u8 pcd, best_pcd = 0;
@@ -381,10 +424,12 @@ void mxs_set_lcdclk(u32 base_addr, u32 freq_in_khz)
 	debug("PLL4 rate %ukhz\n", pll4_rate);
 
 	for (pfd = 12; pfd <= 35; pfd++) {
-		parent_rate = pll4_rate;
-		parent_rate = parent_rate * 18 / pfd;
-
 		for (div = 1; div <= 64; div++) {
+			parent_rate = pll4_rate;
+			parent_rate = parent_rate * 18 / pfd;
+			if (parent_rate > PLL4_PFD0_MAX_RATE)
+				continue;
+
 			parent_rate = parent_rate / div;
 
 			for (pcd = 0; pcd < 8; pcd++) {
@@ -474,7 +519,7 @@ u32 get_lpuart_clk(void)
 	return pcc_clock_get_rate(lpuart_pcc[index], lpuart_pcc_slots[index]);
 }
 
-#ifndef CONFIG_SPL_BUILD
+#ifndef CONFIG_XPL_BUILD
 /*
  * Dump some core clockes.
  */

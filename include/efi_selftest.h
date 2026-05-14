@@ -8,7 +8,6 @@
 #ifndef _EFI_SELFTEST_H
 #define _EFI_SELFTEST_H
 
-#include <common.h>
 #include <efi.h>
 #include <efi_api.h>
 #include <efi_loader.h>
@@ -17,6 +16,9 @@
 #define EFI_ST_SUCCESS 0
 #define EFI_ST_FAILURE 1
 #define EFI_ST_SUCCESS_STR u"SUCCESS"
+
+extern const struct efi_system_table *st_systable;
+extern const struct efi_boot_services *st_boottime;
 
 /**
  * efi_st_printf() - print a message
@@ -128,7 +130,15 @@ u16 *efi_st_translate_code(u16 code);
  * @buf2:	char string
  * Return:	0 if both buffers contain equivalent strings
  */
-int efi_st_strcmp_16_8(const u16 *buf1, const char *buf2);
+int efi_st_strcmp_16_8(const u16 *buf1, const unsigned char *buf2);
+
+/**
+ * efi_st_get_config_table() - get configuration table
+ *
+ * @guid:	GUID of the configuration table
+ * Return:	pointer to configuration table or NULL
+ */
+void *efi_st_get_config_table(const efi_guid_t *guid);
 
 /**
  * efi_st_get_key() - reads an Unicode character from the input device
@@ -136,6 +146,17 @@ int efi_st_strcmp_16_8(const u16 *buf1, const char *buf2);
  * Return:	Unicode character
  */
 u16 efi_st_get_key(void);
+
+/**
+ * efi_st_query_variable_common - Common variable tests for boottime/runtime
+ *
+ * @runtime:	Pointer to services table
+ * @attributes: Attributes used
+ *
+ * Return:	EFI_ST_SUCCESS/FAILURE
+ */
+int efi_st_query_variable_common(struct efi_runtime_services *runtime,
+				 u32 attributes);
 
 /**
  * struct efi_unit_test - EFI unit test

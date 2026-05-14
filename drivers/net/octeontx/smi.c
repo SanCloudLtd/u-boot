@@ -322,7 +322,7 @@ int octeontx_smi_probe(struct udevice *dev)
 	u64 baseaddr;
 
 	debug("SMI PCI device: %x\n", bdf);
-	if (!dm_pci_map_bar(dev, PCI_BASE_ADDRESS_0, PCI_REGION_MEM)) {
+	if (!dm_pci_map_bar(dev, PCI_BASE_ADDRESS_0, 0, 0, PCI_REGION_TYPE, PCI_REGION_MEM)) {
 		printf("Failed to map PCI region for bdf %x\n", bdf);
 		return -1;
 	}
@@ -338,7 +338,8 @@ int octeontx_smi_probe(struct udevice *dev)
 		if (!bus || !priv) {
 			printf("Failed to allocate OcteonTX MDIO bus # %u\n",
 			       dev_seq(dev));
-			return -1;
+			ret = -ENOMEM;
+			goto error_ret;
 		}
 
 		bus->read = octeontx_phy_read;
@@ -355,9 +356,16 @@ int octeontx_smi_probe(struct udevice *dev)
 
 		ret = mdio_register(bus);
 		if (ret)
-			return ret;
+			goto error_ret;
 	}
 	return 0;
+
+error_ret:
+	if (bus)
+		free(bus);
+	if (priv)
+		free(priv);
+	return ret;
 }
 
 static const struct udevice_id octeontx_smi_ids[] = {

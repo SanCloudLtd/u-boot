@@ -4,13 +4,14 @@
  * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
  */
 
-#include <common.h>
+#include <config.h>
 #include <autoboot.h>
 #include <bootretry.h>
 #include <cli.h>
 #include <command.h>
 #include <console.h>
 #include <env.h>
+#include <errno.h>
 #include <fdtdec.h>
 #include <hash.h>
 #include <log.h>
@@ -40,11 +41,15 @@ DECLARE_GLOBAL_DATA_PTR;
 static int stored_bootdelay;
 static int menukey;
 
-#if !defined(CONFIG_AUTOBOOT_STOP_STR_CRYPT)
-#define CONFIG_AUTOBOOT_STOP_STR_CRYPT ""
+#if defined(CONFIG_AUTOBOOT_STOP_STR_CRYPT)
+#define AUTOBOOT_STOP_STR_CRYPT	CONFIG_AUTOBOOT_STOP_STR_CRYPT
+#else
+#define AUTOBOOT_STOP_STR_CRYPT	""
 #endif
-#if !defined(CONFIG_AUTOBOOT_STOP_STR_SHA256)
-#define CONFIG_AUTOBOOT_STOP_STR_SHA256 ""
+#if defined(CONFIG_AUTOBOOT_STOP_STR_SHA256)
+#define AUTOBOOT_STOP_STR_SHA256	CONFIG_AUTOBOOT_STOP_STR_SHA256
+#else
+#define AUTOBOOT_STOP_STR_SHA256	""
 #endif
 
 #ifdef CONFIG_AUTOBOOT_USE_MENUKEY
@@ -81,7 +86,7 @@ static int passwd_abort_crypt(uint64_t etime)
 	int err;
 
 	if (IS_ENABLED(CONFIG_AUTOBOOT_STOP_STR_ENABLE) && !crypt_env_str)
-		crypt_env_str = CONFIG_AUTOBOOT_STOP_STR_CRYPT;
+		crypt_env_str = AUTOBOOT_STOP_STR_CRYPT;
 
 	if (!crypt_env_str)
 		return 0;
@@ -115,6 +120,7 @@ static int passwd_abort_crypt(uint64_t etime)
 				presskey_len++;
 			}
 		}
+		udelay(10000);
 	} while (never_timeout || get_ticks() <= etime);
 
 	return abort;
@@ -159,9 +165,12 @@ static int passwd_abort_sha256(uint64_t etime)
 	int ret;
 
 	if (sha_env_str == NULL)
-		sha_env_str = CONFIG_AUTOBOOT_STOP_STR_SHA256;
+		sha_env_str = AUTOBOOT_STOP_STR_SHA256;
 
 	presskey = malloc_cache_aligned(DELAY_STOP_STR_MAX_LENGTH);
+	if (!presskey)
+		return -ENOMEM;
+
 	c = strstr(sha_env_str, ":");
 	if (c && (c - sha_env_str < DELAY_STOP_STR_MAX_LENGTH)) {
 		/* preload presskey with salt */
@@ -177,10 +186,15 @@ static int passwd_abort_sha256(uint64_t etime)
 	ret = hash_parse_string(algo_name, sha_env_str, sha_env);
 	if (ret) {
 		printf("Hash %s not supported!\n", algo_name);
+		free(presskey);
 		return 0;
 	}
 
 	sha = malloc_cache_aligned(SHA256_SUM_LEN);
+	if (!sha) {
+		free(presskey);
+		return -ENOMEM;
+	}
 	size = SHA256_SUM_LEN;
 	/*
 	 * We don't know how long the stop-string is, so we need to
@@ -206,6 +220,7 @@ static int passwd_abort_sha256(uint64_t etime)
 			if (slow_equals(sha, sha_env, SHA256_SUM_LEN))
 				abort = 1;
 		}
+		udelay(10000);
 	} while (!abort && get_ticks() <= etime);
 
 	free(presskey);
@@ -293,6 +308,7 @@ static int passwd_abort_key(uint64_t etime)
 				abort = 1;
 			}
 		}
+		udelay(10000);
 	} while (!abort && get_ticks() <= etime);
 
 	return abort;
@@ -394,7 +410,7 @@ static int abortboot_single_key(int bootdelay)
 			udelay(10000);
 		} while (!abort && get_timer(ts) < 1000);
 
-		printf("\b\b\b%2d ", bootdelay);
+		printf("\rHit any key to stop autoboot: %1d\033[K", bootdelay);
 	}
 
 	putc('\n');
@@ -419,21 +435,21 @@ static int abortboot(int bootdelay)
 	return abort;
 }
 
-static void process_fdt_options(const void *blob)
+static void process_fdt_options(void)
 {
-#ifdef CONFIG_SYS_TEXT_BASE
+#ifdef CONFIG_TEXT_BASE
 	ulong addr;
 
 	/* Add an env variable to point to a kernel payload, if available */
 	addr = ofnode_conf_read_int("kernel-offset", 0);
 	if (addr)
-		env_set_addr("kernaddr", (void *)(CONFIG_SYS_TEXT_BASE + addr));
+		env_set_addr("kernaddr", (void *)(CONFIG_TEXT_BASE + addr));
 
 	/* Add an env variable to point to a root disk, if available */
 	addr = ofnode_conf_read_int("rootdisk-offset", 0);
 	if (addr)
-		env_set_addr("rootaddr", (void *)(CONFIG_SYS_TEXT_BASE + addr));
-#endif /* CONFIG_SYS_TEXT_BASE */
+		env_set_addr("rootaddr", (void *)(CONFIG_TEXT_BASE + addr));
+#endif /* CONFIG_TEXT_BASE */
 }
 
 const char *bootdelay_process(void)
@@ -446,6 +462,11 @@ const char *bootdelay_process(void)
 	s = env_get("bootdelay");
 	bootdelay = s ? (int)simple_strtol(s, NULL, 10) : CONFIG_BOOTDELAY;
 
+	/*
+	 * Does it really make sense that the devicetree overrides the user
+	 * setting? It is possibly helpful for security since the device tree
+	 * may be signed whereas the environment is often loaded from storage.
+	 */
 	if (IS_ENABLED(CONFIG_OF_CONTROL))
 		bootdelay = ofnode_conf_read_int("bootdelay", bootdelay);
 
@@ -466,7 +487,7 @@ const char *bootdelay_process(void)
 		s = env_get("bootcmd");
 
 	if (IS_ENABLED(CONFIG_OF_CONTROL))
-		process_fdt_options(gd->fdt_blob);
+		process_fdt_options();
 	stored_bootdelay = bootdelay;
 
 	return s;

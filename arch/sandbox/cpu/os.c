@@ -8,9 +8,11 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <getopt.h>
 #include <setjmp.h>
 #include <signal.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -26,7 +28,9 @@
 #include <linux/compiler_attributes.h>
 #include <linux/types.h>
 
+#include <asm/fuzzing_engine.h>
 #include <asm/getopt.h>
+#include <asm/main.h>
 #include <asm/sections.h>
 #include <asm/state.h>
 #include <os.h>
@@ -43,16 +47,42 @@ struct os_mem_hdr {
 
 ssize_t os_read(int fd, void *buf, size_t count)
 {
-	return read(fd, buf, count);
+	ssize_t ret;
+
+	ret = read(fd, buf, count);
+	if (ret == -1)
+		return -errno;
+
+	return ret;
 }
 
 ssize_t os_write(int fd, const void *buf, size_t count)
 {
-	return write(fd, buf, count);
+	ssize_t ret;
+
+	ret = write(fd, buf, count);
+	if (ret == -1)
+		return -errno;
+
+	return ret;
+}
+
+int os_printf(const char *fmt, ...)
+{
+	va_list args;
+	int i;
+
+	va_start(args, fmt);
+	i = vfprintf(stdout, fmt, args);
+	va_end(args);
+
+	return i;
 }
 
 off_t os_lseek(int fd, off_t offset, int whence)
 {
+	off_t ret;
+
 	if (whence == OS_SEEK_SET)
 		whence = SEEK_SET;
 	else if (whence == OS_SEEK_CUR)
@@ -61,7 +91,11 @@ off_t os_lseek(int fd, off_t offset, int whence)
 		whence = SEEK_END;
 	else
 		os_exit(1);
-	return lseek(fd, offset, whence);
+	ret = lseek(fd, offset, whence);
+	if (ret == -1)
+		return -errno;
+
+	return ret;
 }
 
 int os_open(const char *pathname, int os_flags)
@@ -93,7 +127,7 @@ int os_open(const char *pathname, int os_flags)
 	 */
 	flags |= O_CLOEXEC;
 
-	return open(pathname, flags, 0777);
+	return open(pathname, flags, 0644);
 }
 
 int os_close(int fd)
@@ -112,6 +146,23 @@ int os_unlink(const char *pathname)
 void os_exit(int exit_code)
 {
 	exit(exit_code);
+}
+
+unsigned int os_alarm(unsigned int seconds)
+{
+	return alarm(seconds);
+}
+
+void os_set_alarm_handler(void (*handler)(int))
+{
+	if (!handler)
+		handler = SIG_DFL;
+	signal(SIGALRM, handler);
+}
+
+void os_raise_sigalrm(void)
+{
+	raise(SIGALRM);
 }
 
 int os_write_file(const char *fname, const void *buf, int size)
@@ -133,7 +184,7 @@ int os_write_file(const char *fname, const void *buf, int size)
 	return 0;
 }
 
-int os_filesize(int fd)
+off_t os_filesize(int fd)
 {
 	off_t size;
 
@@ -155,7 +206,7 @@ int os_read_file(const char *fname, void **bufp, int *sizep)
 	fd = os_open(fname, OS_O_RDONLY);
 	if (fd < 0) {
 		printf("Cannot open file '%s'\n", fname);
-		goto err;
+		return -EIO;
 	}
 	size = os_filesize(fd);
 	if (size < 0) {
@@ -185,8 +236,8 @@ err:
 int os_map_file(const char *pathname, int os_flags, void **bufp, int *sizep)
 {
 	void *ptr;
-	int size;
-	int ifd;
+	off_t size;
+	int ifd, ret = 0;
 
 	ifd = os_open(pathname, os_flags);
 	if (ifd < 0) {
@@ -196,19 +247,28 @@ int os_map_file(const char *pathname, int os_flags, void **bufp, int *sizep)
 	size = os_filesize(ifd);
 	if (size < 0) {
 		printf("Cannot get file size of '%s'\n", pathname);
-		return -EIO;
+		ret = -EIO;
+		goto out;
+	}
+	if ((unsigned long long)size > (unsigned long long)SIZE_MAX) {
+		printf("File '%s' too large to map\n", pathname);
+		ret = -EIO;
+		goto out;
 	}
 
 	ptr = mmap(0, size, PROT_READ | PROT_WRITE, MAP_SHARED, ifd, 0);
 	if (ptr == MAP_FAILED) {
 		printf("Can't map file '%s': %s\n", pathname, strerror(errno));
-		return -EPERM;
+		ret = -EPERM;
+		goto out;
 	}
 
 	*bufp = ptr;
 	*sizep = size;
 
-	return 0;
+out:
+	os_close(ifd);
+	return ret;
 }
 
 int os_unmap(void *buf, int size)
@@ -219,6 +279,47 @@ int os_unmap(void *buf, int size)
 	}
 
 	return 0;
+}
+
+int os_persistent_file(char *buf, int maxsize, const char *fname)
+{
+	const char *dirname = getenv("U_BOOT_PERSISTENT_DATA_DIR");
+	char *ptr;
+	int len;
+
+	len = strlen(fname) + (dirname ? strlen(dirname) + 1 : 0) + 1;
+	if (len > maxsize)
+		return -ENOSPC;
+
+	ptr = buf;
+	if (dirname) {
+		strcpy(ptr, dirname);
+		ptr += strlen(dirname);
+		*ptr++ = '/';
+	}
+	strcpy(ptr, fname);
+
+	if (access(buf, F_OK) == -1)
+		return -ENOENT;
+
+	return 0;
+}
+
+int os_mktemp(char *fname, off_t size)
+{
+	int fd;
+
+	fd = mkostemp(fname, O_CLOEXEC);
+	if (fd < 0)
+		return -errno;
+
+	if (unlink(fname) < 0)
+		return -errno;
+
+	if (ftruncate(fd, size))
+		return -errno;
+
+	return fd;
 }
 
 /* Restore tty state when we exit */
@@ -644,7 +745,7 @@ int os_get_filesize(const char *fname, long long *size)
 
 void os_putc(int ch)
 {
-	fputc(ch, stdout);
+	os_write(1, &ch, 1);
 }
 
 void os_puts(const char *str)
@@ -653,12 +754,17 @@ void os_puts(const char *str)
 		os_putc(*str++);
 }
 
+void os_flush(void)
+{
+	fflush(stdout);
+}
+
 int os_write_ram_buf(const char *fname)
 {
 	struct sandbox_state *state = state_get_current();
 	int fd, ret;
 
-	fd = open(fname, O_CREAT | O_WRONLY, 0777);
+	fd = open(fname, O_CREAT | O_WRONLY, 0644);
 	if (fd < 0)
 		return -ENOENT;
 	ret = write(fd, state->ram_buf, state->ram_size);
@@ -703,7 +809,7 @@ static int make_exec(char *fname, const void *data, int size)
 	if (write(fd, data, size) < 0)
 		return -EIO;
 	close(fd);
-	if (chmod(fname, 0777))
+	if (chmod(fname, 0755))
 		return -ENOEXEC;
 
 	return 0;
@@ -720,7 +826,7 @@ static int make_exec(char *fname, const void *data, int size)
  * @count: Number of arguments in @add_args
  * Return: 0 if OK, -ENOMEM if out of memory
  */
-static int add_args(char ***argvp, char *add_args[], int count)
+static int add_args(char ***argvp, const char *add_args[], int count)
 {
 	char **argv, **ap;
 	int argc;
@@ -771,7 +877,7 @@ static int os_jump_to_file(const char *fname, bool delete_it)
 	struct sandbox_state *state = state_get_current();
 	char mem_fname[30];
 	int fd, err;
-	char *extra_args[5];
+	const char *extra_args[5];
 	char **argv = state->argv;
 	int argc;
 #ifdef DEBUG
@@ -876,7 +982,7 @@ int os_find_u_boot(char *fname, int maxlen, bool use_img,
 	p = strstr(fname, subdir);
 	if (p) {
 		if (*next_prefix)
-			/* e.g. ".../tpl/u-boot-spl"  to "../spl/u-boot-spl" */
+			/* e.g. ".../tpl/u-boot-spl"  to ".../spl/u-boot-spl" */
 			memcpy(p + 1, next_prefix, strlen(next_prefix));
 		else
 			/* e.g. ".../spl/u-boot" to ".../u-boot" */
@@ -996,8 +1102,96 @@ void *os_find_text_base(void)
 	return base;
 }
 
+/**
+ * os_unblock_signals() - unblock all signals
+ *
+ * If we are relaunching the sandbox in a signal handler, we have to unblock
+ * the respective signal before calling execv(). See signal(7) man-page.
+ */
+static void os_unblock_signals(void)
+{
+	sigset_t sigs;
+
+	sigfillset(&sigs);
+	sigprocmask(SIG_UNBLOCK, &sigs, NULL);
+}
+
 void os_relaunch(char *argv[])
 {
+	os_unblock_signals();
+
 	execv(argv[0], argv);
 	os_exit(1);
 }
+
+#ifdef CONFIG_FUZZ
+static void *fuzzer_thread(void * ptr)
+{
+	char cmd[64];
+	char *argv[5] = {"./u-boot", "-T", "-c", cmd, NULL};
+	const char *fuzz_test;
+
+	/* Find which test to run from an environment variable. */
+	fuzz_test = getenv("UBOOT_SB_FUZZ_TEST");
+	if (!fuzz_test)
+		os_abort();
+
+	snprintf(cmd, sizeof(cmd), "fuzz %s", fuzz_test);
+
+	sandbox_main(4, argv);
+	os_abort();
+	return NULL;
+}
+
+static bool fuzzer_initialized = false;
+static pthread_mutex_t fuzzer_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t fuzzer_cond = PTHREAD_COND_INITIALIZER;
+static const uint8_t *fuzzer_data;
+static size_t fuzzer_size;
+
+int sandbox_fuzzing_engine_get_input(const uint8_t **data, size_t *size)
+{
+	if (!fuzzer_initialized)
+		return -ENOSYS;
+
+	/* Tell the main thread we need new inputs then wait for them. */
+	pthread_mutex_lock(&fuzzer_mutex);
+	pthread_cond_signal(&fuzzer_cond);
+	pthread_cond_wait(&fuzzer_cond, &fuzzer_mutex);
+	*data = fuzzer_data;
+	*size = fuzzer_size;
+	pthread_mutex_unlock(&fuzzer_mutex);
+	return 0;
+}
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size)
+{
+	static pthread_t tid;
+
+	pthread_mutex_lock(&fuzzer_mutex);
+
+	/* Initialize the sandbox on another thread. */
+	if (!fuzzer_initialized) {
+		fuzzer_initialized = true;
+		if (pthread_create(&tid, NULL, fuzzer_thread, NULL))
+			os_abort();
+		pthread_cond_wait(&fuzzer_cond, &fuzzer_mutex);
+	}
+
+	/* Hand over the input. */
+	fuzzer_data = data;
+	fuzzer_size = size;
+	pthread_cond_signal(&fuzzer_cond);
+
+	/* Wait for the inputs to be finished with. */
+	pthread_cond_wait(&fuzzer_cond, &fuzzer_mutex);
+	pthread_mutex_unlock(&fuzzer_mutex);
+
+	return 0;
+}
+#else
+int main(int argc, char *argv[])
+{
+	return sandbox_main(argc, argv);
+}
+#endif

@@ -11,7 +11,7 @@
  * Copyright (C) 2001  Erik Mouw (J.A.K.Mouw@its.tudelft.nl)
  */
 
-#include <common.h>
+#include <bootm.h>
 #include <bootstage.h>
 #include <command.h>
 #include <cpu_func.h>
@@ -61,10 +61,6 @@ static void announce_and_cleanup(int fake)
 	bootstage_report();
 #endif
 
-#ifdef CONFIG_USB_DEVICE
-	udc_disconnect();
-#endif
-
 	board_quiesce_devices();
 
 	printf("\nStarting kernel ...%s\n\n", fake ?
@@ -73,11 +69,10 @@ static void announce_and_cleanup(int fake)
 	 * Call remove function of all devices with a removal flag set.
 	 * This may be useful for last-stage operations, like cancelling
 	 * of DMA operation or releasing device internal buffers.
+	 * dm_remove_devices_active() ensures that vital devices are removed in
+	 * a second round.
 	 */
-	dm_remove_devices_flags(DM_REMOVE_ACTIVE_ALL | DM_REMOVE_NON_VITAL);
-
-	/* Remove all active vital devices next */
-	dm_remove_devices_flags(DM_REMOVE_ACTIVE_ALL);
+	dm_remove_devices_active();
 
 	cleanup_before_linux();
 }
@@ -188,24 +183,22 @@ __weak void setup_board_tags(struct tag **in_params) {}
 static void do_nonsec_virt_switch(void)
 {
 	smp_kick_all_cpus();
-	dcache_disable();	/* flush cache before swtiching to EL2 */
+	dcache_disable();	/* flush cache before switching to EL2 */
 }
 #endif
 
-__weak void board_prep_linux(bootm_headers_t *images) { }
+__weak void board_prep_linux(struct bootm_headers *images) { }
 
 /* Subcommand: PREP */
-static void boot_prep_linux(bootm_headers_t *images)
+static void boot_prep_linux(struct bootm_headers *images)
 {
 	char *commandline = env_get("bootargs");
 
-	if (CONFIG_IS_ENABLED(OF_LIBFDT) && images->ft_len) {
-#ifdef CONFIG_OF_LIBFDT
+	if (CONFIG_IS_ENABLED(OF_LIBFDT) && IS_ENABLED(CONFIG_LMB) && images->ft_len) {
 		debug("using: FDT\n");
 		if (image_setup_linux(images)) {
 			panic("FDT creation failed!");
 		}
-#endif
 	} else if (BOOTM_ENABLE_TAGS) {
 		debug("using: ATAGS\n");
 		setup_start_tag(gd->bd);
@@ -290,7 +283,7 @@ static void switch_to_el1(void)
 #endif
 
 /* Subcommand: GO */
-static void boot_jump_linux(bootm_headers_t *images, int flag)
+static void boot_jump_linux(struct bootm_headers *images, int flag)
 {
 #ifdef CONFIG_ARM64
 	void (*kernel_entry)(void *fdt_addr, void *res0, void *res1,
@@ -380,9 +373,10 @@ static void boot_jump_linux(bootm_headers_t *images, int flag)
  * DIFFERENCE: Instead of calling prep and go at the end
  * they are called if subcommand is equal 0.
  */
-int do_bootm_linux(int flag, int argc, char *const argv[],
-		   bootm_headers_t *images)
+int do_bootm_linux(int flag, struct bootm_info *bmi)
 {
+	struct bootm_headers *images = bmi->images;
+
 	/* No need for those on ARM */
 	if (flag & BOOTM_STATE_OS_BD_T || flag & BOOTM_STATE_OS_CMDLINE)
 		return -1;
@@ -403,7 +397,7 @@ int do_bootm_linux(int flag, int argc, char *const argv[],
 }
 
 #if defined(CONFIG_BOOTM_VXWORKS)
-void boot_prep_vxworks(bootm_headers_t *images)
+void boot_prep_vxworks(struct bootm_headers *images)
 {
 #if defined(CONFIG_OF_LIBFDT)
 	int off;
@@ -418,7 +412,8 @@ void boot_prep_vxworks(bootm_headers_t *images)
 #endif
 	cleanup_before_linux();
 }
-void boot_jump_vxworks(bootm_headers_t *images)
+
+void boot_jump_vxworks(struct bootm_headers *images)
 {
 #if defined(CONFIG_ARM64) && defined(CONFIG_ARMV8_PSCI)
 	armv8_setup_psci();

@@ -3,8 +3,8 @@
  * Copyright 2017 Google, Inc
  */
 
-#include <common.h>
 #include <dm.h>
+#include <time.h>
 #include <wdt.h>
 #include <asm/gpio.h>
 #include <asm/state.h>
@@ -13,6 +13,7 @@
 #include <test/test.h>
 #include <test/ut.h>
 #include <linux/delay.h>
+#include <u-boot/schedule.h>
 #include <watchdog.h>
 
 /* Test that watchdog driver functions are called */
@@ -42,22 +43,22 @@ static int dm_test_wdt_base(struct unit_test_state *uts)
 
 	return 0;
 }
-DM_TEST(dm_test_wdt_base, UT_TESTF_SCAN_PDATA | UT_TESTF_SCAN_FDT);
+DM_TEST(dm_test_wdt_base, UTF_SCAN_PDATA | UTF_SCAN_FDT);
 
-static int dm_test_wdt_gpio(struct unit_test_state *uts)
+static int dm_test_wdt_gpio_toggle(struct unit_test_state *uts)
 {
 	/*
 	 * The sandbox wdt gpio is "connected" to gpio bank a, offset
 	 * 7. Use the sandbox back door to verify that the gpio-wdt
-	 * driver behaves as expected.
+	 * driver behaves as expected when using the 'toggle' algorithm.
 	 */
 	struct udevice *wdt, *gpio;
 	const u64 timeout = 42;
-	const int offset = 7;
+	const int offset = 8;
 	int val;
 
-	ut_assertok(uclass_get_device_by_driver(UCLASS_WDT,
-						DM_DRIVER_GET(wdt_gpio), &wdt));
+	ut_assertok(uclass_get_device_by_name(UCLASS_WDT,
+					      "wdt-gpio-toggle", &wdt));
 	ut_assertnonnull(wdt);
 
 	ut_assertok(uclass_get_device_by_name(UCLASS_GPIO, "base-gpios", &gpio));
@@ -70,11 +71,43 @@ static int dm_test_wdt_gpio(struct unit_test_state *uts)
 	ut_assertok(wdt_reset(wdt));
 	ut_asserteq(val, sandbox_gpio_get_value(gpio, offset));
 
-	ut_asserteq(-ENOSYS, wdt_stop(wdt));
+	ut_asserteq(-EOPNOTSUPP, wdt_stop(wdt));
 
 	return 0;
 }
-DM_TEST(dm_test_wdt_gpio, UT_TESTF_SCAN_FDT);
+DM_TEST(dm_test_wdt_gpio_toggle, UTF_SCAN_FDT);
+
+static int dm_test_wdt_gpio_level(struct unit_test_state *uts)
+{
+	/*
+	 * The sandbox wdt gpio is "connected" to gpio bank a, offset
+	 * 7. Use the sandbox back door to verify that the gpio-wdt
+	 * driver behaves as expected when using the 'level' algorithm.
+	 */
+	struct udevice *wdt, *gpio;
+	const u64 timeout = 42;
+	const int offset = 7;
+	int val;
+
+	ut_assertok(uclass_get_device_by_name(UCLASS_WDT,
+					      "wdt-gpio-level", &wdt));
+	ut_assertnonnull(wdt);
+
+	ut_assertok(uclass_get_device_by_name(UCLASS_GPIO, "base-gpios", &gpio));
+	ut_assertnonnull(gpio);
+	ut_assertok(wdt_start(wdt, timeout, 0));
+
+	val = sandbox_gpio_get_value(gpio, offset);
+	ut_assertok(wdt_reset(wdt));
+	ut_asserteq(val, sandbox_gpio_get_value(gpio, offset));
+	ut_assertok(wdt_reset(wdt));
+	ut_asserteq(val, sandbox_gpio_get_value(gpio, offset));
+
+	ut_asserteq(-EOPNOTSUPP, wdt_stop(wdt));
+
+	return 0;
+}
+DM_TEST(dm_test_wdt_gpio_level, UTF_SCAN_FDT);
 
 static int dm_test_wdt_watchdog_reset(struct unit_test_state *uts)
 {
@@ -82,12 +115,12 @@ static int dm_test_wdt_watchdog_reset(struct unit_test_state *uts)
 	struct udevice *gpio_wdt, *sandbox_wdt;
 	struct udevice *gpio;
 	const u64 timeout = 42;
-	const int offset = 7;
+	const int offset = 8;
 	uint reset_count;
 	int val;
 
-	ut_assertok(uclass_get_device_by_driver(UCLASS_WDT,
-						DM_DRIVER_GET(wdt_gpio), &gpio_wdt));
+	ut_assertok(uclass_get_device_by_name(UCLASS_WDT,
+					      "wdt-gpio-toggle", &gpio_wdt));
 	ut_assertnonnull(gpio_wdt);
 	ut_assertok(uclass_get_device_by_driver(UCLASS_WDT,
 						DM_DRIVER_GET(wdt_sandbox), &sandbox_wdt));
@@ -98,7 +131,7 @@ static int dm_test_wdt_watchdog_reset(struct unit_test_state *uts)
 	/* Neither device should be "started", so watchdog_reset() should be a no-op. */
 	reset_count = state->wdt.reset_count;
 	val = sandbox_gpio_get_value(gpio, offset);
-	watchdog_reset();
+	schedule();
 	ut_asserteq(reset_count, state->wdt.reset_count);
 	ut_asserteq(val, sandbox_gpio_get_value(gpio, offset));
 
@@ -108,22 +141,22 @@ static int dm_test_wdt_watchdog_reset(struct unit_test_state *uts)
 
 	/* Make sure both devices have just been pinged. */
 	timer_test_add_offset(100);
-	watchdog_reset();
+	schedule();
 	reset_count = state->wdt.reset_count;
 	val = sandbox_gpio_get_value(gpio, offset);
 
 	/* The gpio watchdog should be pinged, the sandbox one not. */
 	timer_test_add_offset(30);
-	watchdog_reset();
+	schedule();
 	ut_asserteq(reset_count, state->wdt.reset_count);
 	ut_asserteq(!val, sandbox_gpio_get_value(gpio, offset));
 
 	/* After another ~30ms, both devices should get pinged. */
 	timer_test_add_offset(30);
-	watchdog_reset();
+	schedule();
 	ut_asserteq(reset_count + 1, state->wdt.reset_count);
 	ut_asserteq(val, sandbox_gpio_get_value(gpio, offset));
 
 	return 0;
 }
-DM_TEST(dm_test_wdt_watchdog_reset, UT_TESTF_SCAN_FDT);
+DM_TEST(dm_test_wdt_watchdog_reset, UTF_SCAN_FDT);

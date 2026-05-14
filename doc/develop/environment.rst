@@ -19,7 +19,7 @@ U_BOOT_ENV_CALLBACK macro in your board or driver code.
 
 These callbacks are associated with variables in one of two ways.  The
 static list can be added to by defining CONFIG_ENV_CALLBACK_LIST_STATIC
-in the board configuration to a string that defines a list of
+in the board defconfig via menuconfig to a string that defines a list of
 associations.  The list must be in the following format::
 
     entry = variable_name[:callback_name]

@@ -6,7 +6,7 @@
  * Author: Tim Harvey <tharvey@gateworks.com>
  */
 
-#include <common.h>
+#include <config.h>
 #include <hang.h>
 #include <init.h>
 #include <log.h>
@@ -20,12 +20,49 @@
 #include <asm/mach-imx/boot_mode.h>
 #include <g_dnl.h>
 #include <linux/libfdt.h>
+#include <memalign.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
 __weak int spl_board_boot_device(enum boot_device boot_dev_spl)
 {
-	return 0;
+	switch (boot_dev_spl) {
+#if defined(CONFIG_MX7)
+	case SD1_BOOT:
+	case MMC1_BOOT:
+	case SD2_BOOT:
+	case MMC2_BOOT:
+	case SD3_BOOT:
+	case MMC3_BOOT:
+		return BOOT_DEVICE_MMC1;
+#elif defined(CONFIG_IMX8)
+	case MMC1_BOOT:
+		return BOOT_DEVICE_MMC1;
+	case SD2_BOOT:
+		return BOOT_DEVICE_MMC2_2;
+	case SD3_BOOT:
+		return BOOT_DEVICE_MMC1;
+	case FLEXSPI_BOOT:
+		return BOOT_DEVICE_SPI;
+#elif defined(CONFIG_IMX8M)
+	case SD1_BOOT:
+	case MMC1_BOOT:
+		return BOOT_DEVICE_MMC1;
+	case SD2_BOOT:
+	case MMC2_BOOT:
+		return BOOT_DEVICE_MMC2;
+#endif
+	case NAND_BOOT:
+		return BOOT_DEVICE_NAND;
+	case SPI_NOR_BOOT:
+		return BOOT_DEVICE_SPI;
+	case QSPI_BOOT:
+		return BOOT_DEVICE_NOR;
+	case USB_BOOT:
+		return BOOT_DEVICE_BOARD;
+	default:
+		return BOOT_DEVICE_NONE;
+	}
 }
 
 #if defined(CONFIG_MX6)
@@ -111,7 +148,7 @@ u32 spl_boot_device(void)
 	return BOOT_DEVICE_NONE;
 }
 
-#elif defined(CONFIG_MX7) || defined(CONFIG_IMX8M) || defined(CONFIG_IMX8)
+#elif defined(CONFIG_MX7) || defined(CONFIG_IMX8M) || defined(CONFIG_IMX8) || defined(CONFIG_IMX9)
 /* Translate iMX7/i.MX8M boot device to the SPL boot device enumeration */
 u32 spl_boot_device(void)
 {
@@ -140,47 +177,7 @@ u32 spl_boot_device(void)
 
 	enum boot_device boot_device_spl = get_boot_device();
 
-	if (IS_ENABLED(CONFIG_IMX8MM) || IS_ENABLED(CONFIG_IMX8MN) ||
-	    IS_ENABLED(CONFIG_IMX8MP))
-		return spl_board_boot_device(boot_device_spl);
-
-	switch (boot_device_spl) {
-#if defined(CONFIG_MX7)
-	case SD1_BOOT:
-	case MMC1_BOOT:
-	case SD2_BOOT:
-	case MMC2_BOOT:
-	case SD3_BOOT:
-	case MMC3_BOOT:
-		return BOOT_DEVICE_MMC1;
-#elif defined(CONFIG_IMX8)
-	case MMC1_BOOT:
-		return BOOT_DEVICE_MMC1;
-	case SD2_BOOT:
-		return BOOT_DEVICE_MMC2_2;
-	case SD3_BOOT:
-		return BOOT_DEVICE_MMC1;
-	case FLEXSPI_BOOT:
-		return BOOT_DEVICE_SPI;
-#elif defined(CONFIG_IMX8M)
-	case SD1_BOOT:
-	case MMC1_BOOT:
-		return BOOT_DEVICE_MMC1;
-	case SD2_BOOT:
-	case MMC2_BOOT:
-		return BOOT_DEVICE_MMC2;
-#endif
-	case NAND_BOOT:
-		return BOOT_DEVICE_NAND;
-	case SPI_NOR_BOOT:
-		return BOOT_DEVICE_SPI;
-	case QSPI_BOOT:
-		return BOOT_DEVICE_NOR;
-	case USB_BOOT:
-		return BOOT_DEVICE_USB;
-	default:
-		return BOOT_DEVICE_NONE;
-	}
+	return spl_board_boot_device(boot_device_spl);
 }
 #endif /* CONFIG_MX7 || CONFIG_IMX8M || CONFIG_IMX8 */
 
@@ -201,7 +198,7 @@ int g_dnl_get_board_bcd_device_number(int gcnum)
 
 #if defined(CONFIG_SPL_MMC)
 /* called from spl_mmc to see type of boot mode for storage (RAW or FAT) */
-u32 spl_mmc_boot_mode(const u32 boot_device)
+u32 spl_mmc_boot_mode(struct mmc *mmc, const u32 boot_device)
 {
 #if defined(CONFIG_MX7) || defined(CONFIG_IMX8M) || defined(CONFIG_IMX8)
 	switch (get_boot_device()) {
@@ -279,7 +276,7 @@ u32 spl_mmc_boot_mode(const u32 boot_device)
  * +------------+ + CSF_PAD_SIZE
  */
 
-__weak void __noreturn jump_to_image_no_args(struct spl_image_info *spl_image)
+__weak void __noreturn jump_to_image(struct spl_image_info *spl_image)
 {
 	typedef void __noreturn (*image_entry_noargs_t)(void);
 	uint32_t offset;
@@ -319,47 +316,21 @@ ulong board_spl_fit_size_align(ulong size)
 	size = ALIGN(size, 0x1000);
 	size += CONFIG_CSF_SIZE;
 
+	if (size > CONFIG_SYS_BOOTM_LEN)
+		panic("spl: ERROR: image too big\n");
+
 	return size;
-}
-
-void board_spl_fit_post_load(const void *fit)
-{
-	u32 offset = ALIGN(fdt_totalsize(fit), 0x1000);
-
-	if (imx_hab_authenticate_image((uintptr_t)fit,
-				       offset + IVT_SIZE + CSF_PAD_SIZE,
-				       offset)) {
-		panic("spl: ERROR:  image authentication unsuccessful\n");
-	}
 }
 #endif
 
 void *board_spl_fit_buffer_addr(ulong fit_size, int sectors, int bl_len)
 {
-	int align_len = ARCH_DMA_MINALIGN - 1;
-
-	/* Some devices like SDP, NOR, NAND, SPI are using bl_len =1, so their fit address
-	 * is different with SD/MMC, this cause mismatch with signed address. Thus, adjust
-	 * the bl_len to align with SD/MMC.
-	 */
-	if (bl_len < 512)
-		bl_len = 512;
-
-	return  (void *)((CONFIG_SYS_TEXT_BASE - fit_size - bl_len -
-			align_len) & ~align_len);
-}
+#if defined(CONFIG_SPL_LOAD_FIT_ADDRESS)
+	return (void *)CONFIG_SPL_LOAD_FIT_ADDRESS;
+#else
+	return (void *)(CONFIG_TEXT_BASE + CONFIG_SYS_BOOTM_LEN);
 #endif
-
-#if defined(CONFIG_MX6) && defined(CONFIG_SPL_OS_BOOT)
-int dram_init_banksize(void)
-{
-	gd->bd->bi_dram[0].start = CONFIG_SYS_SDRAM_BASE;
-	gd->bd->bi_dram[0].size = imx_ddr_size();
-
-	return 0;
 }
-#endif
-
 /*
  * read the address where the IVT header must sit
  * from IVT image header, loaded from SPL into
@@ -369,7 +340,6 @@ int dram_init_banksize(void)
 void *spl_load_simple_fit_fix_load(const void *fit)
 {
 	struct ivt *ivt;
-	unsigned long new;
 	unsigned long offset;
 	unsigned long size;
 	u8 *tmp = (u8 *)fit;
@@ -379,16 +349,23 @@ void *spl_load_simple_fit_fix_load(const void *fit)
 	size = board_spl_fit_size_align(size);
 	tmp += offset;
 	ivt = (struct ivt *)tmp;
-	if (ivt->hdr.magic != IVT_HEADER_MAGIC) {
-		debug("no IVT header found\n");
-		return (void *)fit;
-	}
+
 	debug("%s: ivt: %p offset: %lx size: %lx\n", __func__, ivt, offset, size);
 	debug("%s: ivt self: %x\n", __func__, ivt->self);
-	new = ivt->self;
-	new -= offset;
-	debug("%s: new %lx\n", __func__, new);
-	memcpy((void *)new, fit, size);
 
-	return (void *)new;
+	if (imx_hab_authenticate_image((uintptr_t)fit, (uintptr_t)size, offset))
+		panic("spl: ERROR: image authentication unsuccessful\n");
+
+	return (void *)fit;
 }
+#endif /* CONFIG_IMX_HAB */
+
+#if defined(CONFIG_MX6) && defined(CONFIG_SPL_OS_BOOT)
+int dram_init_banksize(void)
+{
+	gd->bd->bi_dram[0].start = CFG_SYS_SDRAM_BASE;
+	gd->bd->bi_dram[0].size = imx_ddr_size();
+
+	return 0;
+}
+#endif

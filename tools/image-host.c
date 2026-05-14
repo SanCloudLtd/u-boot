@@ -14,6 +14,16 @@
 #include <image.h>
 #include <version.h>
 
+#if CONFIG_IS_ENABLED(FIT_SIGNATURE)
+#include <openssl/pem.h>
+#include <openssl/evp.h>
+#endif
+
+#if CONFIG_IS_ENABLED(IMAGE_PRE_LOAD) && CONFIG_IS_ENABLED(LIBCRYPTO)
+#include <openssl/rsa.h>
+#include <openssl/err.h>
+#endif
+
 /**
  * fit_set_hash_value - set hash value in requested has node
  * @fit: pointer to the FIT format image header
@@ -35,9 +45,9 @@ static int fit_set_hash_value(void *fit, int noffset, uint8_t *value,
 
 	ret = fdt_setprop(fit, noffset, FIT_VALUE_PROP, value, value_len);
 	if (ret) {
-		printf("Can't set hash '%s' property for '%s' node(%s)\n",
-		       FIT_VALUE_PROP, fit_get_name(fit, noffset, NULL),
-		       fdt_strerror(ret));
+		fprintf(stderr, "Can't set hash '%s' property for '%s' node(%s)\n",
+			FIT_VALUE_PROP, fit_get_name(fit, noffset, NULL),
+			fdt_strerror(ret));
 		return ret == -FDT_ERR_NOSPACE ? -ENOSPC : -EIO;
 	}
 
@@ -69,21 +79,23 @@ static int fit_image_process_hash(void *fit, const char *image_name,
 	node_name = fit_get_name(fit, noffset, NULL);
 
 	if (fit_image_hash_get_algo(fit, noffset, &algo)) {
-		printf("Can't get hash algo property for '%s' hash node in '%s' image node\n",
-		       node_name, image_name);
+		fprintf(stderr,
+			"Can't get hash algo property for '%s' hash node in '%s' image node\n",
+			node_name, image_name);
 		return -ENOENT;
 	}
 
 	if (calculate_hash(data, size, algo, value, &value_len)) {
-		printf("Unsupported hash algorithm (%s) for '%s' hash node in '%s' image node\n",
-		       algo, node_name, image_name);
+		fprintf(stderr,
+			"Unsupported hash algorithm (%s) for '%s' hash node in '%s' image node\n",
+			algo, node_name, image_name);
 		return -EPROTONOSUPPORT;
 	}
 
 	ret = fit_set_hash_value(fit, noffset, value, value_len);
 	if (ret) {
-		printf("Can't set hash value for '%s' hash node in '%s' image node\n",
-		       node_name, image_name);
+		fprintf(stderr, "Can't set hash value for '%s' hash node in '%s' image node\n",
+			node_name, image_name);
 		return ret;
 	}
 
@@ -167,8 +179,9 @@ static int fit_image_setup_sig(struct image_sign_info *info,
 	node_name = fit_get_name(fit, noffset, NULL);
 	if (!algo_name) {
 		if (fit_image_hash_get_algo(fit, noffset, &algo_name)) {
-			printf("Can't get algo property for '%s' signature node in '%s' image node\n",
-			       node_name, image_name);
+			fprintf(stderr,
+				"Can't get algo property for '%s' signature node in '%s' image node\n",
+				node_name, image_name);
 			return -1;
 		}
 	}
@@ -188,8 +201,9 @@ static int fit_image_setup_sig(struct image_sign_info *info,
 	info->require_keys = require_keys;
 	info->engine_id = engine_id;
 	if (!info->checksum || !info->crypto) {
-		printf("Unsupported signature algorithm (%s) for '%s' signature node in '%s' image node\n",
-		       algo_name, node_name, image_name);
+		fprintf(stderr,
+			"Unsupported signature algorithm (%s) for '%s' signature node in '%s' image node\n",
+			algo_name, node_name, image_name);
 		return -1;
 	}
 
@@ -238,8 +252,8 @@ static int fit_image_process_sig(const char *keydir, const char *keyfile,
 	region.size = size;
 	ret = info.crypto->sign(&info, &region, 1, &value, &value_len);
 	if (ret) {
-		printf("Failed to sign '%s' signature node in '%s' image node: %d\n",
-		       node_name, image_name, ret);
+		fprintf(stderr, "Failed to sign '%s' signature node in '%s' image node: %d\n",
+			node_name, image_name, ret);
 
 		/* We allow keys to be missing */
 		if (ret == -ENOENT)
@@ -252,8 +266,9 @@ static int fit_image_process_sig(const char *keydir, const char *keyfile,
 	if (ret) {
 		if (ret == -FDT_ERR_NOSPACE)
 			return -ENOSPC;
-		printf("Can't write signature for '%s' signature node in '%s' conf node: %s\n",
-		       node_name, image_name, fdt_strerror(ret));
+		fprintf(stderr,
+			"Can't write signature for '%s' signature node in '%s' conf node: %s\n",
+			node_name, image_name, fdt_strerror(ret));
 		return -1;
 	}
 	free(value);
@@ -269,8 +284,9 @@ static int fit_image_process_sig(const char *keydir, const char *keyfile,
 	if (keydest) {
 		ret = info.crypto->add_verify_data(&info, keydest);
 		if (ret < 0) {
-			printf("Failed to add verification data for '%s' signature node in '%s' image node\n",
-			       node_name, image_name);
+			fprintf(stderr,
+				"Failed to add verification data for '%s' signature node in '%s' image node\n",
+				node_name, image_name);
 			return ret;
 		}
 		/* Return the node that was written to */
@@ -290,37 +306,37 @@ static int fit_image_read_data(char *filename, unsigned char *data,
 	/* Open file */
 	fd = open(filename, O_RDONLY | O_BINARY);
 	if (fd < 0) {
-		printf("Can't open file %s (err=%d => %s)\n",
-		       filename, errno, strerror(errno));
+		fprintf(stderr, "Can't open file %s (err=%d => %s)\n",
+			filename, errno, strerror(errno));
 		return -1;
 	}
 
 	/* Compute file size */
 	if (fstat(fd, &sbuf) < 0) {
-		printf("Can't fstat file %s (err=%d => %s)\n",
-		       filename, errno, strerror(errno));
+		fprintf(stderr, "Can't fstat file %s (err=%d => %s)\n",
+			filename, errno, strerror(errno));
 		goto err;
 	}
 
 	/* Check file size */
 	if (sbuf.st_size != expected_size) {
-		printf("File %s don't have the expected size (size=%lld, expected=%d)\n",
-		       filename, (long long)sbuf.st_size, expected_size);
+		fprintf(stderr, "File %s don't have the expected size (size=%lld, expected=%d)\n",
+			filename, (long long)sbuf.st_size, expected_size);
 		goto err;
 	}
 
 	/* Read data */
 	n = read(fd, data, sbuf.st_size);
 	if (n < 0) {
-		printf("Can't read file %s (err=%d => %s)\n",
-		       filename, errno, strerror(errno));
+		fprintf(stderr, "Can't read file %s (err=%d => %s)\n",
+			filename, errno, strerror(errno));
 		goto err;
 	}
 
 	/* Check that we have read all the file */
 	if (n != sbuf.st_size) {
-		printf("Can't read all file %s (read %zd bytes, expected %lld)\n",
-		       filename, n, (long long)sbuf.st_size);
+		fprintf(stderr, "Can't read all file %s (read %zd bytes, expected %lld)\n",
+			filename, n, (long long)sbuf.st_size);
 		goto err;
 	}
 
@@ -331,33 +347,68 @@ err:
 	return ret;
 }
 
-static int get_random_data(void *data, int size)
+static int fit_image_read_key_iv_data(const char *keydir, const char *key_iv_name,
+				      unsigned char *key_iv_data, int expected_size)
 {
-	unsigned char *tmp = data;
-	struct timespec date;
-	int i, ret;
+	char filename[PATH_MAX];
+	int ret;
 
-	if (!tmp) {
-		printf("%s: pointer data is NULL\n", __func__);
-		ret = -1;
-		goto out;
+	ret = snprintf(filename, sizeof(filename), "%s/%s%s",
+		       keydir, key_iv_name, ".bin");
+	if (ret >= sizeof(filename)) {
+		fprintf(stderr, "Can't format the key or IV filename when setting up the cipher: insufficient buffer space\n");
+		return -1;
+	}
+	if (ret < 0) {
+		fprintf(stderr, "Can't format the key or IV filename when setting up the cipher: snprintf error\n");
+		return -1;
 	}
 
-	ret = clock_gettime(CLOCK_MONOTONIC, &date);
-	if (ret) {
-		printf("%s: clock_gettime has failed (%s)\n", __func__,
-		       strerror(errno));
-		goto out;
+	ret = fit_image_read_data(filename, key_iv_data, expected_size);
+
+	return ret;
+}
+
+/**
+ * get_random_data() - fill buffer with random data
+ *
+ * There is no common cryptographically safe function in Linux and BSD.
+ * Hence directly access the /dev/urandom PRNG.
+ *
+ * @data:	buffer to fill
+ * @size:	buffer size
+ */
+static int get_random_data(void *data, size_t size)
+{
+	int fd;
+	int ret;
+
+	fd = open("/dev/urandom", O_RDONLY);
+	if (fd < 0) {
+		perror("Failed to open /dev/urandom");
+		return -1;
 	}
 
-	srandom(date.tv_nsec);
+	while (size) {
+		ssize_t count;
 
-	for (i = 0; i < size; i++) {
-		*tmp = random() & 0xff;
-		tmp++;
+		count = read(fd, data, size);
+		if (count < 0) {
+			if (errno == EINTR) {
+				continue;
+			} else {
+				perror("Failed to read from /dev/urandom");
+				ret = -1;
+				goto out;
+			}
+		}
+		data += count;
+		size -= count;
 	}
+	ret = 0;
+out:
+	close(fd);
 
- out:
 	return ret;
 }
 
@@ -367,12 +418,11 @@ static int fit_image_setup_cipher(struct image_cipher_info *info,
 				  int noffset)
 {
 	char *algo_name;
-	char filename[128];
 	int ret = -1;
 
 	if (fit_image_cipher_get_algo(fit, noffset, &algo_name)) {
-		printf("Can't get algo name for cipher in image '%s'\n",
-		       image_name);
+		fprintf(stderr, "Can't get algo name for cipher in image '%s'\n",
+			image_name);
 		goto out;
 	}
 
@@ -381,8 +431,8 @@ static int fit_image_setup_cipher(struct image_cipher_info *info,
 	/* Read the key name */
 	info->keyname = fdt_getprop(fit, noffset, FIT_KEY_HINT, NULL);
 	if (!info->keyname) {
-		printf("Can't get key name for cipher in image '%s'\n",
-		       image_name);
+		fprintf(stderr, "Can't get key name for cipher in image '%s'\n",
+			image_name);
 		goto out;
 	}
 
@@ -400,37 +450,38 @@ static int fit_image_setup_cipher(struct image_cipher_info *info,
 
 	info->cipher = image_get_cipher_algo(algo_name);
 	if (!info->cipher) {
-		printf("Can't get algo for cipher '%s'\n", image_name);
+		fprintf(stderr, "Can't get algo for cipher '%s'\n", image_name);
+		goto out;
+	}
+
+	info->key = malloc(info->cipher->key_len);
+	if (!info->key) {
+		fprintf(stderr, "Can't allocate memory for key\n");
+		ret = -1;
 		goto out;
 	}
 
 	/* Read the key in the file */
-	snprintf(filename, sizeof(filename), "%s/%s%s",
-		 info->keydir, info->keyname, ".bin");
-	info->key = malloc(info->cipher->key_len);
-	if (!info->key) {
-		printf("Can't allocate memory for key\n");
-		ret = -1;
-		goto out;
-	}
-	ret = fit_image_read_data(filename, (unsigned char *)info->key,
-				  info->cipher->key_len);
+	ret = fit_image_read_key_iv_data(info->keydir, info->keyname,
+					 (unsigned char *)info->key,
+					 info->cipher->key_len);
 	if (ret < 0)
 		goto out;
 
 	info->iv = malloc(info->cipher->iv_len);
 	if (!info->iv) {
-		printf("Can't allocate memory for iv\n");
+		fprintf(stderr, "Can't allocate memory for iv\n");
 		ret = -1;
 		goto out;
 	}
 
 	if (info->ivname) {
 		/* Read the IV in the file */
-		snprintf(filename, sizeof(filename), "%s/%s%s",
-			 info->keydir, info->ivname, ".bin");
-		ret = fit_image_read_data(filename, (unsigned char *)info->iv,
-					  info->cipher->iv_len);
+		ret = fit_image_read_key_iv_data(info->keydir, info->ivname,
+						 (unsigned char *)info->iv,
+						 info->cipher->iv_len);
+		if (ret < 0)
+			goto out;
 	} else {
 		/* Generate an ramdom IV */
 		ret = get_random_data((void *)info->iv, info->cipher->iv_len);
@@ -454,7 +505,7 @@ int fit_image_write_cipher(void *fit, int image_noffset, int noffset,
 		goto out;
 	}
 	if (ret) {
-		printf("Can't replace data with ciphered data (err = %d)\n", ret);
+		fprintf(stderr, "Can't replace data with ciphered data (err = %d)\n", ret);
 		goto out;
 	}
 
@@ -465,7 +516,7 @@ int fit_image_write_cipher(void *fit, int image_noffset, int noffset,
 		goto out;
 	}
 	if (ret) {
-		printf("Can't add unciphered data size (err = %d)\n", ret);
+		fprintf(stderr, "Can't add unciphered data size (err = %d)\n", ret);
 		goto out;
 	}
 
@@ -502,11 +553,12 @@ fit_image_process_cipher(const char *keydir, void *keydest, void *fit,
 	 * size values
 	 * And, if needed, write the iv in the FIT file
 	 */
-	if (keydest) {
+	if (keydest || (!keydest && !info.ivname)) {
 		ret = info.cipher->add_cipher_data(&info, keydest, fit, node_noffset);
 		if (ret) {
-			printf("Failed to add verification data for cipher '%s' in image '%s'\n",
-			       info.keyname, image_name);
+			fprintf(stderr,
+				"Failed to add verification data for cipher '%s' in image '%s'\n",
+				info.keyname, image_name);
 			goto out;
 		}
 	}
@@ -535,13 +587,13 @@ int fit_image_cipher_data(const char *keydir, void *keydest,
 	/* Get image name */
 	image_name = fit_get_name(fit, image_noffset, NULL);
 	if (!image_name) {
-		printf("Can't get image name\n");
+		fprintf(stderr, "Can't get image name\n");
 		return -1;
 	}
 
 	/* Get image data and data length */
-	if (fit_image_get_data(fit, image_noffset, &data, &size)) {
-		printf("Can't get image data/size\n");
+	if (fit_image_get_emb_data(fit, image_noffset, &data, &size)) {
+		fprintf(stderr, "Can't get image data/size\n");
 		return -1;
 	}
 
@@ -555,7 +607,7 @@ int fit_image_cipher_data(const char *keydir, void *keydest,
 	if (fdt_getprop(fit, image_noffset, "data-size-unciphered", &len))
 		return 0;
 	if (len != -FDT_ERR_NOTFOUND) {
-		printf("Failure testing for data-size-unciphered\n");
+		fprintf(stderr, "Failure testing for data-size-unciphered\n");
 		return -1;
 	}
 
@@ -565,7 +617,7 @@ int fit_image_cipher_data(const char *keydir, void *keydest,
 	if (cipher_node_offset == -FDT_ERR_NOTFOUND)
 		return 0;
 	if (cipher_node_offset < 0) {
-		printf("Failure getting cipher node\n");
+		fprintf(stderr, "Failure getting cipher node\n");
 		return -1;
 	}
 	if (!IMAGE_ENABLE_ENCRYPT || !keydir)
@@ -620,8 +672,8 @@ int fit_image_add_verification_data(const char *keydir, const char *keyfile,
 	int noffset;
 
 	/* Get image data and data length */
-	if (fit_image_get_data(fit, image_noffset, &data, &size)) {
-		printf("Can't get image data/size\n");
+	if (fit_image_get_emb_data(fit, image_noffset, &data, &size)) {
+		fprintf(stderr, "Can't get image data/size\n");
 		return -1;
 	}
 
@@ -682,11 +734,20 @@ static int strlist_add(struct strlist *list, const char *str)
 {
 	char *dup;
 
-	dup = strdup(str);
-	list->strings = realloc(list->strings,
-				(list->count + 1) * sizeof(char *));
 	if (!list || !str)
 		return -1;
+
+	dup = strdup(str);
+	if(!dup)
+		return -1;
+
+	list->strings = realloc(list->strings,
+				(list->count + 1) * sizeof(char *));
+	if (!list->strings) {
+		free(dup);
+		return -1;
+	}
+
 	list->strings[list->count++] = dup;
 
 	return 0;
@@ -696,7 +757,7 @@ static const char *fit_config_get_image_list(const void *fit, int noffset,
 					     int *lenp, int *allow_missingp)
 {
 	static const char default_list[] = FIT_KERNEL_PROP "\0"
-			FIT_FDT_PROP;
+			FIT_FDT_PROP "\0" FIT_SCRIPT_PROP;
 	const char *prop;
 
 	/* If there is an "sign-image" property, use that */
@@ -762,8 +823,9 @@ static int fit_config_add_hash(const void *fit, int image_noffset,
 	}
 
 	if (!hash_count) {
-		printf("Failed to find any hash nodes in configuration '%s/%s' image '%s' - without these it is not possible to verify this image\n",
-		       conf_name, sig_name, iname);
+		fprintf(stderr,
+			"Failed to find any hash nodes in configuration '%s/%s' image '%s' - without these it is not possible to verify this image\n",
+			conf_name, sig_name, iname);
 		return -ENOMSG;
 	}
 
@@ -772,9 +834,10 @@ static int fit_config_add_hash(const void *fit, int image_noffset,
 				     FIT_CIPHER_NODENAME);
 	if (noffset != -FDT_ERR_NOTFOUND) {
 		if (noffset < 0) {
-			printf("Failed to get cipher node in configuration '%s/%s' image '%s': %s\n",
-			       conf_name, sig_name, iname,
-			       fdt_strerror(noffset));
+			fprintf(stderr,
+				"Failed to get cipher node in configuration '%s/%s' image '%s': %s\n",
+				conf_name, sig_name, iname,
+				fdt_strerror(noffset));
 			return -EIO;
 		}
 		ret = fdt_get_path(fit, noffset, path, sizeof(path));
@@ -787,13 +850,13 @@ static int fit_config_add_hash(const void *fit, int image_noffset,
 	return 0;
 
 err_mem:
-	printf("Out of memory processing configuration '%s/%s'\n", conf_name,
-	       sig_name);
+	fprintf(stderr, "Out of memory processing configuration '%s/%s'\n", conf_name,
+		sig_name);
 	return -ENOMEM;
 
 err_path:
-	printf("Failed to get path for image '%s' in configuration '%s/%s': %s\n",
-	       iname, conf_name, sig_name, fdt_strerror(ret));
+	fprintf(stderr, "Failed to get path for image '%s' in configuration '%s/%s': %s\n",
+		iname, conf_name, sig_name, fdt_strerror(ret));
 	return -ENOENT;
 }
 
@@ -854,8 +917,9 @@ static int fit_config_get_hash_list(const void *fit, int conf_noffset,
 								     iname, index);
 
 			if (image_noffset < 0) {
-				printf("Failed to find image '%s' in  configuration '%s/%s'\n",
-				       iname, conf_name, sig_name);
+				fprintf(stderr,
+					"Failed to find image '%s' in  configuration '%s/%s'\n",
+					iname, conf_name, sig_name);
 				if (allow_missing)
 					continue;
 
@@ -872,16 +936,16 @@ static int fit_config_get_hash_list(const void *fit, int conf_noffset,
 	}
 
 	if (!image_count) {
-		printf("Failed to find any images for configuration '%s/%s'\n",
-		       conf_name, sig_name);
+		fprintf(stderr, "Failed to find any images for configuration '%s/%s'\n",
+			conf_name, sig_name);
 		return -ENOMSG;
 	}
 
 	return 0;
 
 err_mem:
-	printf("Out of memory processing configuration '%s/%s'\n", conf_name,
-	       sig_name);
+	fprintf(stderr, "Out of memory processing configuration '%s/%s'\n", conf_name,
+		sig_name);
 	return -ENOMEM;
 }
 
@@ -912,7 +976,12 @@ static int fit_config_get_regions(const void *fit, int conf_noffset,
 				  int *region_countp, char **region_propp,
 				  int *region_proplen)
 {
-	char * const exc_prop[] = {"data"};
+	char * const exc_prop[] = {
+		FIT_DATA_PROP,
+		FIT_DATA_SIZE_PROP,
+		FIT_DATA_POSITION_PROP,
+		FIT_DATA_OFFSET_PROP,
+	};
 	struct strlist node_inc;
 	struct image_region *region;
 	struct fdt_region fdt_regions[100];
@@ -938,21 +1007,21 @@ static int fit_config_get_regions(const void *fit, int conf_noffset,
 			fdt_regions, ARRAY_SIZE(fdt_regions),
 			path, sizeof(path), 1);
 	if (count < 0) {
-		printf("Failed to hash configuration '%s/%s': %s\n", conf_name,
-		       sig_name, fdt_strerror(ret));
+		fprintf(stderr, "Failed to hash configuration '%s/%s': %s\n", conf_name,
+			sig_name, fdt_strerror(ret));
 		return -EIO;
 	}
 	if (count == 0) {
-		printf("No data to hash for configuration '%s/%s': %s\n",
-		       conf_name, sig_name, fdt_strerror(ret));
+		fprintf(stderr, "No data to hash for configuration '%s/%s': %s\n",
+			conf_name, sig_name, fdt_strerror(ret));
 		return -EINVAL;
 	}
 
 	/* Build our list of data blocks */
 	region = fit_region_make_list(fit, fdt_regions, count, NULL);
 	if (!region) {
-		printf("Out of memory hashing configuration '%s/%s'\n",
-		       conf_name, sig_name);
+		fprintf(stderr, "Out of memory hashing configuration '%s/%s'\n",
+			conf_name, sig_name);
 		return -ENOMEM;
 	}
 
@@ -964,8 +1033,8 @@ static int fit_config_get_regions(const void *fit, int conf_noffset,
 	}
 	region_prop = malloc(len);
 	if (!region_prop) {
-		printf("Out of memory setting up regions for configuration '%s/%s'\n",
-		       conf_name, sig_name);
+		fprintf(stderr, "Out of memory setting up regions for configuration '%s/%s'\n",
+			conf_name, sig_name);
 		return -ENOMEM;
 	}
 	for (i = len = 0; i < node_inc.count;
@@ -1030,8 +1099,8 @@ static int fit_config_process_sig(const char *keydir, const char *keyfile,
 				&value_len);
 	free(region);
 	if (ret) {
-		printf("Failed to sign '%s' signature node in '%s' conf node\n",
-		       node_name, conf_name);
+		fprintf(stderr, "Failed to sign '%s' signature node in '%s' conf node\n",
+			node_name, conf_name);
 
 		/* We allow keys to be missing */
 		if (ret == -ENOENT)
@@ -1045,8 +1114,9 @@ static int fit_config_process_sig(const char *keydir, const char *keyfile,
 	if (ret) {
 		if (ret == -FDT_ERR_NOSPACE)
 			return -ENOSPC;
-		printf("Can't write signature for '%s' signature node in '%s' conf node: %s\n",
-		       node_name, conf_name, fdt_strerror(ret));
+		fprintf(stderr,
+			"Can't write signature for '%s' signature node in '%s' conf node: %s\n",
+			node_name, conf_name, fdt_strerror(ret));
 		return -1;
 	}
 	free(value);
@@ -1059,8 +1129,9 @@ static int fit_config_process_sig(const char *keydir, const char *keyfile,
 	if (keydest) {
 		ret = info.crypto->add_verify_data(&info, keydest);
 		if (ret < 0) {
-			printf("Failed to add verification data for '%s' signature node in '%s' configuration node\n",
-			       node_name, conf_name);
+			fprintf(stderr,
+				"Failed to add verification data for '%s' signature node in '%s' configuration node\n",
+				node_name, conf_name);
 		}
 		return ret;
 	}
@@ -1111,6 +1182,117 @@ static int fit_config_add_verification_data(const char *keydir,
 	return 0;
 }
 
+#if CONFIG_IS_ENABLED(FIT_SIGNATURE)
+/*
+ * 0) open file (open)
+ * 1) read certificate (PEM_read_X509)
+ * 2) get public key (X509_get_pubkey)
+ * 3) provide der format (d2i_RSAPublicKey)
+ */
+static int read_pub_key(const char *keydir, const void *name,
+			unsigned char **pubkey, int *pubkey_len)
+{
+	char path[1024];
+	EVP_PKEY *key = NULL;
+	X509 *cert;
+	FILE *f;
+	int ret;
+
+	memset(path, 0, 1024);
+	snprintf(path, sizeof(path), "%s/%s.crt", keydir, (char *)name);
+
+	/* Open certificate file */
+	f = fopen(path, "r");
+	if (!f) {
+		fprintf(stderr, "Couldn't open RSA certificate: '%s': %s\n",
+			path, strerror(errno));
+		return -EACCES;
+	}
+
+	/* Read the certificate */
+	cert = NULL;
+	if (!PEM_read_X509(f, &cert, NULL, NULL)) {
+		fprintf(stderr, "Couldn't read certificate");
+		ret = -EINVAL;
+		goto err_cert;
+	}
+
+	/* Get the public key from the certificate. */
+	key = X509_get_pubkey(cert);
+	if (!key) {
+		fprintf(stderr, "Couldn't read public key\n");
+		ret = -EINVAL;
+		goto err_pubkey;
+	}
+
+	/* Get DER form */
+	ret = i2d_PublicKey(key, pubkey);
+	if (ret < 0) {
+		fprintf(stderr, "Couldn't get DER form\n");
+		ret = -EINVAL;
+		goto err_pubkey;
+	}
+
+	*pubkey_len = ret;
+	ret = 0;
+
+err_pubkey:
+	X509_free(cert);
+err_cert:
+	fclose(f);
+	return ret;
+}
+
+int fit_pre_load_data(const char *keydir, void *keydest, void *fit)
+{
+	int pre_load_noffset;
+	const void *algo_name;
+	const void *key_name;
+	unsigned char *pubkey = NULL;
+	int ret, pubkey_len;
+
+	if (!keydir || !keydest || !fit)
+		return 0;
+
+	/* Search node pre-load sig */
+	pre_load_noffset = fdt_path_offset(keydest, IMAGE_PRE_LOAD_PATH);
+	if (pre_load_noffset < 0) {
+		ret = 0;
+		goto out;
+	}
+
+	algo_name = fdt_getprop(keydest, pre_load_noffset, "algo-name", NULL);
+	key_name  = fdt_getprop(keydest, pre_load_noffset, "key-name", NULL);
+
+	/* Check that all mandatory properties are present */
+	if (!algo_name || !key_name) {
+		if (!algo_name)
+			fprintf(stderr, "The property algo-name is missing in the node %s\n",
+				IMAGE_PRE_LOAD_PATH);
+		if (!key_name)
+			fprintf(stderr, "The property key-name is missing in the node %s\n",
+				IMAGE_PRE_LOAD_PATH);
+		ret = -EINVAL;
+		goto out;
+	}
+
+	/* Read public key */
+	ret = read_pub_key(keydir, key_name, &pubkey, &pubkey_len);
+	if (ret < 0)
+		goto out;
+
+	/* Add the public key to the device tree */
+	ret = fdt_setprop(keydest, pre_load_noffset, "public-key",
+			  pubkey, pubkey_len);
+	if (ret)
+		fprintf(stderr, "Can't set public-key in node %s (ret = %d)\n",
+			IMAGE_PRE_LOAD_PATH, ret);
+
+ out:
+	return ret;
+}
+#endif
+
 int fit_cipher_data(const char *keydir, void *keydest, void *fit,
 		    const char *comment, int require_keys,
 		    const char *engine_id, const char *cmdname)
@@ -1122,8 +1304,8 @@ int fit_cipher_data(const char *keydir, void *keydest, void *fit,
 	/* Find images parent node offset */
 	images_noffset = fdt_path_offset(fit, FIT_IMAGES_PATH);
 	if (images_noffset < 0) {
-		printf("Can't find images parent node '%s' (%s)\n",
-		       FIT_IMAGES_PATH, fdt_strerror(images_noffset));
+		fprintf(stderr, "Can't find images parent node '%s' (%s)\n",
+			FIT_IMAGES_PATH, fdt_strerror(images_noffset));
 		return images_noffset;
 	}
 
@@ -1159,8 +1341,8 @@ int fit_add_verification_data(const char *keydir, const char *keyfile,
 	/* Find images parent node offset */
 	images_noffset = fdt_path_offset(fit, FIT_IMAGES_PATH);
 	if (images_noffset < 0) {
-		printf("Can't find images parent node '%s' (%s)\n",
-		       FIT_IMAGES_PATH, fdt_strerror(images_noffset));
+		fprintf(stderr, "Can't find images parent node '%s' (%s)\n",
+			FIT_IMAGES_PATH, fdt_strerror(images_noffset));
 		return images_noffset;
 	}
 
@@ -1175,8 +1357,12 @@ int fit_add_verification_data(const char *keydir, const char *keyfile,
 		ret = fit_image_add_verification_data(keydir, keyfile, keydest,
 				fit, noffset, comment, require_keys, engine_id,
 				cmdname, algo_name);
-		if (ret)
+		if (ret) {
+			fprintf(stderr, "Can't add verification data for node '%s' (%s)\n",
+				fdt_get_name(fit, noffset, NULL),
+				strerror(-ret));
 			return ret;
+		}
 	}
 
 	/* If there are no keys, we can't sign configurations */
@@ -1186,8 +1372,8 @@ int fit_add_verification_data(const char *keydir, const char *keyfile,
 	/* Find configurations parent node offset */
 	confs_noffset = fdt_path_offset(fit, FIT_CONFS_PATH);
 	if (confs_noffset < 0) {
-		printf("Can't find images parent node '%s' (%s)\n",
-		       FIT_CONFS_PATH, fdt_strerror(confs_noffset));
+		fprintf(stderr, "Can't find images parent node '%s' (%s)\n",
+			FIT_CONFS_PATH, fdt_strerror(confs_noffset));
 		return -ENOENT;
 	}
 
@@ -1225,6 +1411,142 @@ int fit_check_sign(const void *fit, const void *key,
 		return ret;
 	printf("Verified OK, loading images\n");
 	ret = bootm_host_load_images(fit, cfg_noffset);
+
+	return ret;
+}
+#endif
+
+#if CONFIG_IS_ENABLED(IMAGE_PRE_LOAD) && CONFIG_IS_ENABLED(LIBCRYPTO)
+/**
+ * rsa_verify_openssl() - Verify a signature against some data with openssl API
+ *
+ * Verify a RSA PKCS1.5/PSS signature against an expected hash.
+ *
+ * @info:		Specifies the key and algorithms
+ * @region:		Pointer to the input data
+ * @region_count:	Number of region
+ * @sig:		Signature
+ * @sig_len:		Number of bytes in the signature
+ * Return: 0 if verified, -ve on error
+ */
+int rsa_verify_openssl(struct image_sign_info *info,
+		       const struct image_region region[], int region_count,
+		       uint8_t *sig, uint sig_len)
+{
+	EVP_PKEY *pkey = NULL;
+	EVP_PKEY_CTX *ckey = NULL;
+	EVP_MD_CTX *ctx = NULL;
+	int pad;
+	int size;
+	int i;
+	int ret = 0;
+
+	if (!info) {
+		fprintf(stderr, "No info provided\n");
+		ret = -EINVAL;
+		goto out;
+	}
+
+	if (!info->key) {
+		fprintf(stderr, "No key provided\n");
+		ret = -EINVAL;
+		goto out;
+	}
+
+	if (!info->checksum) {
+		fprintf(stderr, "No checksum information\n");
+		ret = -EINVAL;
+		goto out;
+	}
+
+	if (!info->padding) {
+		fprintf(stderr, "No padding information\n");
+		ret = -EINVAL;
+		goto out;
+	}
+
+	if (region_count < 1) {
+		fprintf(stderr, "Invalid value for region_count: %d\n", region_count);
+		ret = -EINVAL;
+		goto out;
+	}
+
+	pkey = (EVP_PKEY *)info->key;
+
+	ckey = EVP_PKEY_CTX_new(pkey, NULL);
+	if (!ckey) {
+		ret = -ENOMEM;
+		fprintf(stderr, "EVK key context setup failed: %s\n",
+			ERR_error_string(ERR_get_error(), NULL));
+		goto out;
+	}
+
+	size = EVP_PKEY_size(pkey);
+	if (size > sig_len) {
+		fprintf(stderr, "Invalid signature size (%d bytes)\n",
+			size);
+		ret = -EINVAL;
+		goto out;
+	}
+
+	ctx = EVP_MD_CTX_new();
+	if (!ctx) {
+		ret = -ENOMEM;
+		fprintf(stderr, "EVP context creation failed: %s\n",
+			ERR_error_string(ERR_get_error(), NULL));
+		goto out;
+	}
+	EVP_MD_CTX_init(ctx);
+
+	if (EVP_DigestVerifyInit(ctx, &ckey,
+				 EVP_get_digestbyname(info->checksum->name),
+				 NULL, pkey) <= 0) {
+		ret = -EINVAL;
+		fprintf(stderr, "Verifier setup failed: %s\n",
+			ERR_error_string(ERR_get_error(), NULL));
+		goto out;
+	}
+
+	if (!strcmp(info->padding->name, "pkcs-1.5")) {
+		pad = RSA_PKCS1_PADDING;
+	} else if (!strcmp(info->padding->name, "pss")) {
+		pad = RSA_PKCS1_PSS_PADDING;
+	} else {
+		ret = -ENOMSG;
+		fprintf(stderr, "Unsupported padding: %s\n",
+			info->padding->name);
+		goto out;
+	}
+
+	if (EVP_PKEY_CTX_set_rsa_padding(ckey, pad) <= 0) {
+		ret = -EINVAL;
+		fprintf(stderr, "padding setup has failed: %s\n",
+			ERR_error_string(ERR_get_error(), NULL));
+		goto out;
+	}
+
+	for (i=0 ; i < region_count ; ++i) {
+		if (EVP_DigestVerifyUpdate(ctx, region[i].data,
+					   region[i].size) <= 0) {
+			ret = -EINVAL;
+			fprintf(stderr, "Hashing data failed: %s\n",
+				ERR_error_string(ERR_get_error(), NULL));
+			goto out;
+		}
+	}
+
+	if (EVP_DigestVerifyFinal(ctx, sig, sig_len) <= 0) {
+		ret = -EINVAL;
+		fprintf(stderr, "Verifying digest failed: %s\n",
+			ERR_error_string(ERR_get_error(), NULL));
+		goto out;
+	}
+out:
+	if (ctx)
+		EVP_MD_CTX_free(ctx);
+
+	if (ret)
+		fprintf(stderr, "Failed to verify signature\n");
 
 	return ret;
 }

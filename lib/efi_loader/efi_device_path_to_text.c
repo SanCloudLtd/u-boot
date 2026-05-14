@@ -5,10 +5,12 @@
  *  Copyright (c) 2017 Heinrich Schuchardt
  */
 
-#include <common.h>
+#define LOG_CATEGORY LOGC_EFI
+
 #include <blk.h>
 #include <efi_loader.h>
 #include <malloc.h>
+#include <net.h>
 
 #define MAC_OUTPUT_LEN 22
 #define UNKNOWN_OUTPUT_LEN 23
@@ -32,11 +34,10 @@ static u16 *efi_str_to_u16(char *str)
 {
 	efi_uintn_t len;
 	u16 *out, *dst;
-	efi_status_t ret;
 
 	len = sizeof(u16) * (utf8_utf16_strlen(str) + 1);
-	ret = efi_allocate_pool(EFI_BOOT_SERVICES_DATA, len, (void **)&out);
-	if (ret != EFI_SUCCESS)
+	out = efi_alloc(len);
+	if (!out)
 		return NULL;
 	dst = out;
 	utf8_utf16_strcpy(&dst, str);
@@ -75,6 +76,13 @@ static char *dp_hardware(char *s, struct efi_device_path *dp)
 				s += sprintf(s, "%02x", vdp->vendor_data[i]);
 		}
 		s += sprintf(s, ")");
+		break;
+	}
+	case DEVICE_PATH_SUB_TYPE_CONTROLLER: {
+		struct efi_device_path_controller *cdp =
+			(struct efi_device_path_controller *)dp;
+
+		s += sprintf(s, "Ctrl(0x%0x)", cdp->controller_number);
 		break;
 	}
 	default:
@@ -165,6 +173,31 @@ static char *dp_msging(char *s, struct efi_device_path *dp)
 
 		break;
 	}
+	case DEVICE_PATH_SUB_TYPE_MSG_IPV4: {
+		struct efi_device_path_ipv4 *idp =
+			(struct efi_device_path_ipv4 *)dp;
+
+		s += sprintf(s, "IPv4(%pI4,", &idp->remote_ip_address);
+		switch (idp->protocol) {
+		case IPPROTO_TCP:
+			s += sprintf(s, "TCP,");
+			break;
+		case IPPROTO_UDP:
+			s += sprintf(s, "UDP,");
+			break;
+		default:
+			s += sprintf(s, "0x%x,", idp->protocol);
+			break;
+		}
+		s += sprintf(s, idp->static_ip_address ? "Static" : "DHCP");
+		s += sprintf(s, ",%pI4", &idp->local_ip_address);
+		if (idp->dp.length == sizeof(struct efi_device_path_ipv4))
+			s += sprintf(s, ",%pI4,%pI4", &idp->gateway_ip_address,
+				     &idp->subnet_mask);
+		s += sprintf(s, ")");
+
+		break;
+	}
 	case DEVICE_PATH_SUB_TYPE_MSG_USB_CLASS: {
 		struct efi_device_path_usb_class *ucdp =
 			(struct efi_device_path_usb_class *)dp;
@@ -190,13 +223,14 @@ static char *dp_msging(char *s, struct efi_device_path *dp)
 		struct efi_device_path_nvme *ndp =
 			(struct efi_device_path_nvme *)dp;
 		u32 ns_id;
-		int i;
 
 		memcpy(&ns_id, &ndp->ns_id, sizeof(ns_id));
 		s += sprintf(s, "NVMe(0x%x,", ns_id);
-		for (i = 0; i < sizeof(ndp->eui64); ++i)
+
+		/* Display byte 7 first, byte 0 last */
+		for (int i = 0; i < 8; ++i)
 			s += sprintf(s, "%s%02x", i ? "-" : "",
-				     ndp->eui64[i]);
+				     ndp->eui64[i ^ 7]);
 		s += sprintf(s, ")");
 
 		break;
@@ -432,6 +466,7 @@ static uint16_t EFIAPI *efi_convert_device_path_to_text(
 		*(u8 **)&device_path += device_path->length;
 	}
 
+	*str = 0;
 	text = efi_str_to_u16(buffer);
 
 out:

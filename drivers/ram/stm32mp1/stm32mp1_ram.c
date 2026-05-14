@@ -5,7 +5,6 @@
 
 #define LOG_CATEGORY UCLASS_RAM
 
-#include <common.h>
 #include <clk.h>
 #include <dm.h>
 #include <init.h>
@@ -15,6 +14,7 @@
 #include <syscon.h>
 #include <asm/io.h>
 #include <dm/device_compat.h>
+#include <linux/printk.h>
 #include "stm32mp1_ddr.h"
 #include "stm32mp1_ddr_regs.h"
 
@@ -33,6 +33,7 @@ static const char *const clkname[] = {
 
 int stm32mp1_ddr_clk_enable(struct ddr_info *priv, uint32_t mem_speed)
 {
+	bool is_mp13 = is_stm32mp13_ddrc(priv);
 	unsigned long ddrphy_clk;
 	unsigned long ddr_clk;
 	struct clk clk;
@@ -40,6 +41,10 @@ int stm32mp1_ddr_clk_enable(struct ddr_info *priv, uint32_t mem_speed)
 	unsigned int idx;
 
 	for (idx = 0; idx < ARRAY_SIZE(clkname); idx++) {
+		/* DDRC2 clock are available only on STM32MP15xx */
+		if (is_mp13 && !strcmp(clkname[idx], "ddrc2"))
+			continue;
+
 		ret = clk_get_by_name(priv->dev, clkname[idx], &clk);
 
 		if (!ret)
@@ -126,7 +131,8 @@ static int stm32mp1_ddr_setup(struct udevice *dev)
 		dev_dbg(dev, "no st,mem-name\n");
 		return -EINVAL;
 	}
-	printf("RAM: %s\n", config.info.name);
+	if (CONFIG_IS_ENABLED(DISPLAY_PRINT))
+		printf("RAM: %s\n", config.info.name);
 
 	for (idx = 0; idx < ARRAY_SIZE(param); idx++) {
 		ret = ofnode_read_u32_array(node, param[idx].name,
@@ -230,29 +236,29 @@ static u8 get_nb_col(struct stm32mp1_ddrctl *ctl, u8 data_bus_width)
 
 	reg = readl(&ctl->addrmap3);
 	/* addrmap3.addrmap_col_b6 */
-	val = (reg & GENMASK(3, 0)) >> 0;
+	val = (reg & GENMASK(4, 0)) >> 0;
 	if (val <= 7)
 		bits++;
 	/* addrmap3.addrmap_col_b7 */
-	val = (reg & GENMASK(11, 8)) >> 8;
+	val = (reg & GENMASK(12, 8)) >> 8;
 	if (val <= 7)
 		bits++;
 	/* addrmap3.addrmap_col_b8 */
-	val = (reg & GENMASK(19, 16)) >> 16;
+	val = (reg & GENMASK(20, 16)) >> 16;
 	if (val <= 7)
 		bits++;
 	/* addrmap3.addrmap_col_b9 */
-	val = (reg & GENMASK(27, 24)) >> 24;
+	val = (reg & GENMASK(28, 24)) >> 24;
 	if (val <= 7)
 		bits++;
 
 	reg = readl(&ctl->addrmap4);
 	/* addrmap4.addrmap_col_b10 */
-	val = (reg & GENMASK(3, 0)) >> 0;
+	val = (reg & GENMASK(4, 0)) >> 0;
 	if (val <= 7)
 		bits++;
 	/* addrmap4.addrmap_col_b11 */
-	val = (reg & GENMASK(11, 8)) >> 8;
+	val = (reg & GENMASK(12, 8)) >> 8;
 	if (val <= 7)
 		bits++;
 
@@ -296,20 +302,23 @@ static u8 get_nb_row(struct stm32mp1_ddrctl *ctl)
 	reg = readl(&ctl->addrmap6);
 	/* addrmap6.addrmap_row_b12 */
 	val = (reg & GENMASK(3, 0)) >> 0;
-	if (val <= 7)
+	if (val <= 11)
 		bits++;
 	/* addrmap6.addrmap_row_b13 */
 	val = (reg & GENMASK(11, 8)) >> 8;
-	if (val <= 7)
+	if (val <= 11)
 		bits++;
 	/* addrmap6.addrmap_row_b14 */
 	val = (reg & GENMASK(19, 16)) >> 16;
-	if (val <= 7)
+	if (val <= 11)
 		bits++;
 	/* addrmap6.addrmap_row_b15 */
 	val = (reg & GENMASK(27, 24)) >> 24;
-	if (val <= 7)
+	if (val <= 11)
 		bits++;
+
+	if (reg & BIT(31))
+		printf("warning: LPDDR3_6GB_12GB is not supported\n");
 
 	return bits;
 }
@@ -367,7 +376,7 @@ static int stm32mp1_ddr_probe(struct udevice *dev)
 
 	priv->info.base = STM32_DDR_BASE;
 
-	if (IS_ENABLED(CONFIG_SPL_BUILD)) {
+	if (IS_ENABLED(CONFIG_XPL_BUILD)) {
 		priv->info.size = 0;
 		ret = stm32mp1_ddr_setup(dev);
 
@@ -392,12 +401,17 @@ static struct ram_ops stm32mp1_ddr_ops = {
 	.get_info = stm32mp1_ddr_get_info,
 };
 
+static const struct stm32mp1_ddr_cfg stm32mp13x_ddr_cfg = {
+	.nb_bytes = 2,
+};
+
 static const struct stm32mp1_ddr_cfg stm32mp15x_ddr_cfg = {
 	.nb_bytes = 4,
 };
 
 static const struct udevice_id stm32mp1_ddr_ids[] = {
 	{ .compatible = "st,stm32mp1-ddr", .data = (ulong)&stm32mp15x_ddr_cfg},
+	{ .compatible = "st,stm32mp13-ddr", .data = (ulong)&stm32mp13x_ddr_cfg},
 	{ }
 };
 

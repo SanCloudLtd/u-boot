@@ -19,10 +19,10 @@ import unittest
 from binman import bintool
 from binman import cbfs_util
 from binman.cbfs_util import CbfsWriter
-from binman import comp_util
 from binman import elf
-from patman import test_util
-from patman import tools
+from u_boot_pylib import terminal
+from u_boot_pylib import test_util
+from u_boot_pylib import tools
 
 U_BOOT_DATA           = b'1234'
 U_BOOT_DTB_DATA       = b'udtb'
@@ -50,7 +50,8 @@ class TestCbfs(unittest.TestCase):
         cls.cbfstool = bintool.Bintool.create('cbfstool')
         cls.have_cbfstool = cls.cbfstool.is_present()
 
-        cls.have_lz4 = comp_util.HAVE_LZ4
+        lz4 = bintool.Bintool.create('lz4')
+        cls.have_lz4 = lz4.is_present()
 
     @classmethod
     def tearDownClass(cls):
@@ -96,7 +97,7 @@ class TestCbfs(unittest.TestCase):
         self.assertEqual(arch, cbfs.arch)
         return cbfs
 
-    def _check_uboot(self, cbfs, ftype=cbfs_util.TYPE_RAW, offset=0x38,
+    def _check_uboot(self, cbfs, ftype=cbfs_util.TYPE_RAW, offset=0x20,
                      data=U_BOOT_DATA, cbfs_offset=None):
         """Check that the U-Boot file is as expected
 
@@ -122,7 +123,7 @@ class TestCbfs(unittest.TestCase):
         self.assertEqual(len(data), cfile.memlen)
         return cfile
 
-    def _check_dtb(self, cbfs, offset=0x38, data=U_BOOT_DTB_DATA,
+    def _check_dtb(self, cbfs, offset=0x24, data=U_BOOT_DTB_DATA,
                    cbfs_offset=None):
         """Check that the U-Boot dtb file is as expected
 
@@ -314,7 +315,7 @@ class TestCbfs(unittest.TestCase):
         newdata = data[:-4] + struct.pack('<I', cbw._header_offset + 1)
 
         # We should still be able to find the master header by searching
-        with test_util.capture_sys_output() as (stdout, _stderr):
+        with terminal.capture() as (stdout, _stderr):
             cbfs = cbfs_util.CbfsReader(newdata)
         self.assertIn('Relative offset seems wrong', stdout.getvalue())
         self.assertIn('u-boot', cbfs.files)
@@ -330,7 +331,7 @@ class TestCbfs(unittest.TestCase):
         # Drop most of the header and try reading the modified CBFS
         newdata = data[:cbw._header_offset + 4]
 
-        with test_util.capture_sys_output() as (stdout, _stderr):
+        with terminal.capture() as (stdout, _stderr):
             with self.assertRaises(ValueError) as e:
                 cbfs_util.CbfsReader(newdata)
         self.assertIn('Relative offset seems wrong', stdout.getvalue())
@@ -351,7 +352,7 @@ class TestCbfs(unittest.TestCase):
 
         # Remove all but 4 bytes of the file headerm and try to read the file
         newdata = data[:pos + 4]
-        with test_util.capture_sys_output() as (stdout, _stderr):
+        with terminal.capture() as (stdout, _stderr):
             with io.BytesIO(newdata) as fd:
                 fd.seek(pos)
                 self.assertEqual(False, cbr._read_next_file(fd))
@@ -373,7 +374,7 @@ class TestCbfs(unittest.TestCase):
         # Create a new CBFS with only the first 16 bytes of the file name, then
         # try to read the file
         newdata = data[:pos + cbfs_util.FILE_HEADER_LEN + 16]
-        with test_util.capture_sys_output() as (stdout, _stderr):
+        with terminal.capture() as (stdout, _stderr):
             with io.BytesIO(newdata) as fd:
                 fd.seek(pos)
                 self.assertEqual(False, cbr._read_next_file(fd))
@@ -389,9 +390,9 @@ class TestCbfs(unittest.TestCase):
 
         try:
             cbfs_util.DEBUG = True
-            with test_util.capture_sys_output() as (stdout, _stderr):
+            with terminal.capture() as (stdout, _stderr):
                 cbfs_util.CbfsReader(data)
-            self.assertEqual('name u-boot\ndata %s\n' % U_BOOT_DATA,
+            self.assertEqual('name u-boot\nftype 50\ndata %s\n' % U_BOOT_DATA,
                              stdout.getvalue())
         finally:
             cbfs_util.DEBUG = False
@@ -416,7 +417,7 @@ class TestCbfs(unittest.TestCase):
 
         # Create a new CBFS with the tag changed to something invalid
         newdata = data[:pos] + struct.pack('>I', 0x123) + data[pos + 4:]
-        with test_util.capture_sys_output() as (stdout, _stderr):
+        with terminal.capture() as (stdout, _stderr):
             cbfs_util.CbfsReader(newdata)
         self.assertEqual('Unknown attribute tag 123\n', stdout.getvalue())
 
@@ -437,10 +438,11 @@ class TestCbfs(unittest.TestCase):
             pos = fd.tell()
 
         # Create a new CBFS with only the first 4 bytes of the compression tag,
-        # then try to read the file
-        tag_pos = pos + cbfs_util.FILE_HEADER_LEN + cbfs_util.FILENAME_ALIGN
+        # then try to read the file. Note that the tag gets pushed out 4 bytes
+        tag_pos = (4 + pos + cbfs_util.FILE_HEADER_LEN +
+                   cbfs_util.ATTRIBUTE_ALIGN)
         newdata = data[:tag_pos + 4]
-        with test_util.capture_sys_output() as (stdout, _stderr):
+        with terminal.capture() as (stdout, _stderr):
             with io.BytesIO(newdata) as fd:
                 fd.seek(pos)
                 self.assertEqual(False, cbr._read_next_file(fd))
@@ -474,7 +476,7 @@ class TestCbfs(unittest.TestCase):
         self._compare_expected_cbfs(data, cbfs_fname)
 
     def test_cbfs_stage(self):
-        """Tests handling of a Coreboot Filesystem (CBFS)"""
+        """Tests handling of a CBFS stage"""
         if not elf.ELF_TOOLS:
             self.skipTest('Python elftools not available')
         elf_fname = os.path.join(self._indir, 'cbfs-stage.elf')
@@ -489,7 +491,7 @@ class TestCbfs(unittest.TestCase):
         load = 0xfef20000
         entry = load + 2
 
-        cfile = self._check_uboot(cbfs, cbfs_util.TYPE_STAGE, offset=0x28,
+        cfile = self._check_uboot(cbfs, cbfs_util.TYPE_STAGE, offset=0x38,
                                   data=U_BOOT_DATA + U_BOOT_DTB_DATA)
 
         self.assertEqual(entry, cfile.entry)
@@ -520,7 +522,7 @@ class TestCbfs(unittest.TestCase):
         self.assertIn('u-boot', cbfs.files)
         cfile = cbfs.files['u-boot']
         self.assertEqual(cfile.name, 'u-boot')
-        self.assertEqual(cfile.offset, 56)
+        self.assertEqual(cfile.offset, 0x30)
         self.assertEqual(cfile.data, COMPRESS_DATA)
         self.assertEqual(cfile.ftype, cbfs_util.TYPE_RAW)
         self.assertEqual(cfile.compress, cbfs_util.COMPRESS_LZ4)
@@ -529,7 +531,7 @@ class TestCbfs(unittest.TestCase):
         self.assertIn('u-boot-dtb', cbfs.files)
         cfile = cbfs.files['u-boot-dtb']
         self.assertEqual(cfile.name, 'u-boot-dtb')
-        self.assertEqual(cfile.offset, 56)
+        self.assertEqual(cfile.offset, 0x34)
         self.assertEqual(cfile.data, COMPRESS_DATA)
         self.assertEqual(cfile.ftype, cbfs_util.TYPE_RAW)
         self.assertEqual(cfile.compress, cbfs_util.COMPRESS_LZMA)
@@ -598,8 +600,8 @@ class TestCbfs(unittest.TestCase):
         data = cbw.get_data()
 
         cbfs = cbfs_util.CbfsReader(data)
-        self.assertEqual(0x38, cbfs.files['u-boot'].cbfs_offset)
-        self.assertEqual(0x78, cbfs.files['u-boot-dtb'].cbfs_offset)
+        self.assertEqual(0x20, cbfs.files['u-boot'].cbfs_offset)
+        self.assertEqual(0x64, cbfs.files['u-boot-dtb'].cbfs_offset)
 
 
 if __name__ == '__main__':

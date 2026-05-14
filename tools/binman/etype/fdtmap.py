@@ -9,11 +9,16 @@ image.
 """
 
 from binman.entry import Entry
-from patman import tools
-from patman import tout
+from u_boot_pylib import tools
+from u_boot_pylib import tout
 
 FDTMAP_MAGIC   = b'_FDTMAP_'
 FDTMAP_HDR_LEN = 16
+
+# These is imported if needed
+Fdt = None
+libfdt = None
+state = None
 
 def LocateFdtmap(data):
     """Search an image for an fdt map
@@ -101,6 +106,9 @@ class Entry_fdtmap(Entry):
         Returns:
             FDT map binary data
         """
+        fsw = libfdt.FdtSw()
+        fsw.finish_reservemap()
+
         def _AddNode(node):
             """Add a node to the FDT map"""
             for pname, prop in node.props.items():
@@ -129,8 +137,6 @@ class Entry_fdtmap(Entry):
 
             # Build a new tree with all nodes and properties starting from that
             # node
-            fsw = libfdt.FdtSw()
-            fsw.finish_reservemap()
             with fsw.add_node(''):
                 fsw.property_string('image-node', node.name)
                 _AddNode(node)

@@ -10,7 +10,6 @@
  * Pali Rohár <pali@kernel.org>
  */
 
-#include <common.h>
 #include <dm.h>
 #include <log.h>
 #include <malloc.h>
@@ -22,11 +21,13 @@
 #include <asm/io.h>
 #include <asm/arch/cpu.h>
 #include <asm/arch/soc.h>
+#include <asm/gpio.h>
 #include <linux/bitops.h>
 #include <linux/delay.h>
 #include <linux/errno.h>
 #include <linux/ioport.h>
 #include <linux/mbus.h>
+#include <linux/printk.h>
 #include <linux/sizes.h>
 
 /* PCIe unit register offsets */
@@ -60,6 +61,7 @@ struct mvebu_pcie {
 	struct resource mem;
 	void __iomem *iobase;
 	struct resource io;
+	struct gpio_desc reset_gpio;
 	u32 intregs;
 	u32 port;
 	u32 lane;
@@ -416,6 +418,14 @@ static int mvebu_pcie_probe(struct udevice *dev)
 	struct udevice *ctlr = pci_get_controller(dev);
 	struct pci_controller *hose = dev_get_uclass_priv(ctlr);
 	u32 reg;
+	int ret;
+
+	/* Request for optional PERST# GPIO */
+	ret = gpio_request_by_name(dev, "reset-gpios", 0, &pcie->reset_gpio, GPIOD_IS_OUT);
+	if (ret && ret != -ENOENT) {
+		printf("%s: unable to request reset-gpios: %d\n", pcie->name, ret);
+		return ret;
+	}
 
 	/*
 	 * Change Class Code of PCI Bridge device to PCI Bridge (0x600400)
@@ -440,7 +450,7 @@ static int mvebu_pcie_probe(struct udevice *dev)
 	 */
 	reg = readl(pcie->base + MVPCIE_ROOT_PORT_PCI_CFG_OFF + PCI_CLASS_REVISION);
 	reg &= ~0xffffff00;
-	reg |= (PCI_CLASS_BRIDGE_PCI << 8) << 8;
+	reg |= PCI_CLASS_BRIDGE_PCI_NORMAL << 8;
 	writel(reg, pcie->base + MVPCIE_ROOT_PORT_PCI_CFG_OFF + PCI_CLASS_REVISION);
 
 	/*
@@ -537,6 +547,10 @@ static int mvebu_pcie_probe(struct udevice *dev)
 	pcie->cfgcache[(PCI_PREF_MEMORY_BASE - 0x10) / 4] =
 		PCI_PREF_RANGE_TYPE_64 | (PCI_PREF_RANGE_TYPE_64 << 16);
 
+	/* Release PERST# via GPIO when it was defined */
+	if (dm_gpio_is_valid(&pcie->reset_gpio))
+		dm_gpio_set_value(&pcie->reset_gpio, 0);
+
 	mvebu_pcie_wait_for_link(pcie);
 
 	return 0;
@@ -626,7 +640,8 @@ static int mvebu_pcie_port_parse_dt(ofnode node, ofnode parent, struct mvebu_pci
 		pcie->is_x4 = true;
 
 	/* devfn is in bits [15:8], see PCI_DEV usage */
-	ret = ofnode_read_pci_addr(node, FDT_PCI_SPACE_CONFIG, "reg", &pci_addr);
+	ret = ofnode_read_pci_addr(node, FDT_PCI_SPACE_CONFIG, "reg", &pci_addr,
+				   NULL);
 	if (ret < 0) {
 		printf("%s: property \"reg\" is invalid\n", pcie->name);
 		goto err;
@@ -726,7 +741,7 @@ static int mvebu_pcie_bind(struct udevice *parent)
 
 	/* First phase: Fill mvebu_pcie struct for each port */
 	ofnode_for_each_subnode(subnode, dev_ofnode(parent)) {
-		if (!ofnode_is_available(subnode))
+		if (!ofnode_is_enabled(subnode))
 			continue;
 
 		pcie = calloc(1, sizeof(*pcie));

@@ -22,7 +22,66 @@
 #include <version.h>
 #include <u-boot/crc.h>
 
-static image_header_t header;
+static struct legacy_img_hdr header;
+
+static int fit_estimate_hash_sig_size(struct image_tool_params *params, const char *fname)
+{
+	bool signing = IMAGE_ENABLE_SIGN && (params->keydir || params->keyfile);
+	struct stat sbuf;
+	void *fdt;
+	int fd;
+	int estimate = 0;
+	int depth, noffset;
+	const char *name;
+
+	fd = mmap_fdt(params->cmdname, fname, 0, &fdt, &sbuf, false, true);
+	if (fd < 0)
+		return -EIO;
+
+	/*
+	 * Walk the FIT image, looking for nodes named hash* and
+	 * signature*. Since the interesting nodes are subnodes of an
+	 * image or configuration node, we are only interested in
+	 * those at depth exactly 3.
+	 *
+	 * The estimate for a hash node is based on a sha512 digest
+	 * being 64 bytes, with another 64 bytes added to account for
+	 * fdt structure overhead (the tags and the name of the
+	 * "value" property).
+	 *
+	 * The estimate for a signature node is based on an rsa4096
+	 * signature being 512 bytes, with another 512 bytes to
+	 * account for fdt overhead and the various other properties
+	 * (hashed-nodes etc.) that will also be filled in.
+	 *
+	 * One could try to be more precise in the estimates by
+	 * looking at the "algo" property and, in the case of
+	 * configuration signatures, the sign-images property. Also,
+	 * when signing an already created FIT image, the hash nodes
+	 * already have properly sized value properties, so one could
+	 * also take pre-existence of "value" properties in hash nodes
+	 * into account. But this rather simple approach should work
+	 * well enough in practice.
+	 */
+	for (depth = 0, noffset = fdt_next_node(fdt, 0, &depth);
+	     noffset >= 0 && depth > 0;
+	     noffset = fdt_next_node(fdt, noffset, &depth)) {
+		if (depth != 3)
+			continue;
+
+		name = fdt_get_name(fdt, noffset, NULL);
+		if (!strncmp(name, FIT_HASH_NODENAME, strlen(FIT_HASH_NODENAME)))
+			estimate += 128;
+
+		if (signing && !strncmp(name, FIT_SIG_NODENAME, strlen(FIT_SIG_NODENAME)))
+			estimate += 1024;
+	}
+
+	munmap(fdt, sbuf.st_size);
+	close(fd);
+
+	return estimate;
+}
 
 static int fit_add_file_data(struct image_tool_params *params, size_t size_inc,
 			     const char *tmpfile)
@@ -36,8 +95,10 @@ static int fit_add_file_data(struct image_tool_params *params, size_t size_inc,
 
 	tfd = mmap_fdt(params->cmdname, tmpfile, size_inc, &ptr, &sbuf, true,
 		       false);
-	if (tfd < 0)
+	if (tfd < 0) {
+		fprintf(stderr, "Cannot map FDT file '%s'\n", tmpfile);
 		return -EIO;
+	}
 
 	if (params->keydest) {
 		struct stat dest_sbuf;
@@ -58,6 +119,9 @@ static int fit_add_file_data(struct image_tool_params *params, size_t size_inc,
 							sbuf.st_mtime);
 		ret = fit_set_timestamp(ptr, 0, time);
 	}
+
+	if (CONFIG_IS_ENABLED(FIT_SIGNATURE) && !ret)
+		ret = fit_pre_load_data(params->keydir, dest_blob, ptr);
 
 	if (!ret) {
 		ret = fit_cipher_data(params->keydir, dest_blob, ptr,
@@ -132,7 +196,7 @@ static int fdt_property_file(struct image_tool_params *params,
 	int ret;
 	int fd;
 
-	fd = open(fname, O_RDWR | O_BINARY);
+	fd = open(fname, O_RDONLY | O_BINARY);
 	if (fd < 0) {
 		fprintf(stderr, "%s: Can't open %s: %s\n",
 			params->cmdname, fname, strerror(errno));
@@ -196,15 +260,59 @@ static void get_basename(char *str, int size, const char *fname)
 }
 
 /**
- * add_crc_node() - Add a hash node to request a CRC checksum for an image
+ * fit_add_hash_or_sign() - Add a hash or signature node
  *
+ * @params: Image parameters
  * @fdt: Device tree to add to (in sequential-write mode)
+ * @is_images_subnode: true to add hash even if key name hint is provided
+ *
+ * If do_add_hash is false (default) and there is a key name hint, try to add
+ * a sign node to parent. Otherwise, just add a CRC. Rationale: if conf have
+ * to be signed, image/dt have to be hashed even if there is a key name hint.
  */
-static void add_crc_node(void *fdt)
+static void fit_add_hash_or_sign(struct image_tool_params *params, void *fdt,
+				 bool is_images_subnode)
 {
-	fdt_begin_node(fdt, "hash-1");
-	fdt_property_string(fdt, FIT_ALGO_PROP, "crc32");
-	fdt_end_node(fdt);
+	const char *hash_algo = "crc32";
+	bool do_hash = false;
+	bool do_sign = false;
+
+	switch (params->auto_fit) {
+	case AF_OFF:
+		break;
+	case AF_HASHED_IMG:
+		do_hash = is_images_subnode;
+		break;
+	case AF_SIGNED_IMG:
+		do_sign = is_images_subnode;
+		break;
+	case AF_SIGNED_CONF:
+		if (is_images_subnode) {
+			do_hash = true;
+			hash_algo = "sha1";
+		} else {
+			do_sign = true;
+		}
+		break;
+	default:
+		fprintf(stderr,
+			"%s: Unsupported auto FIT mode %u\n",
+			params->cmdname, params->auto_fit);
+		break;
+	}
+
+	if (do_hash) {
+		fdt_begin_node(fdt, FIT_HASH_NODENAME);
+		fdt_property_string(fdt, FIT_ALGO_PROP, hash_algo);
+		fdt_end_node(fdt);
+	}
+
+	if (do_sign) {
+		fdt_begin_node(fdt, FIT_SIG_NODENAME);
+		fdt_property_string(fdt, FIT_ALGO_PROP, params->algo_name);
+		fdt_property_string(fdt, FIT_KEY_HINT, params->keyname);
+		fdt_end_node(fdt);
+	}
 }
 
 /**
@@ -245,7 +353,7 @@ static int fit_write_images(struct image_tool_params *params, char *fdt)
 	ret = fdt_property_file(params, fdt, FIT_DATA_PROP, params->datafile);
 	if (ret)
 		return ret;
-	add_crc_node(fdt);
+	fit_add_hash_or_sign(params, fdt, true);
 	fdt_end_node(fdt);
 
 	/* Now the device tree files if available */
@@ -268,7 +376,9 @@ static int fit_write_images(struct image_tool_params *params, char *fdt)
 				    genimg_get_arch_short_name(params->arch));
 		fdt_property_string(fdt, FIT_COMP_PROP,
 				    genimg_get_comp_short_name(IH_COMP_NONE));
-		add_crc_node(fdt);
+		fit_add_hash_or_sign(params, fdt, true);
+		if (ret)
+			return ret;
 		fdt_end_node(fdt);
 	}
 
@@ -286,7 +396,9 @@ static int fit_write_images(struct image_tool_params *params, char *fdt)
 					params->fit_ramdisk);
 		if (ret)
 			return ret;
-		add_crc_node(fdt);
+		fit_add_hash_or_sign(params, fdt, true);
+		if (ret)
+			return ret;
 		fdt_end_node(fdt);
 	}
 
@@ -336,6 +448,7 @@ static void fit_write_configs(struct image_tool_params *params, char *fdt)
 
 		snprintf(str, sizeof(str), FIT_FDT_PROP "-%d", upto);
 		fdt_property_string(fdt, FIT_FDT_PROP, str);
+		fit_add_hash_or_sign(params, fdt, false);
 		fdt_end_node(fdt);
 	}
 
@@ -348,6 +461,7 @@ static void fit_write_configs(struct image_tool_params *params, char *fdt)
 		if (params->fit_ramdisk)
 			fdt_property_string(fdt, FIT_RAMDISK_PROP,
 					    FIT_RAMDISK_PROP "-1");
+		fit_add_hash_or_sign(params, fdt, false);
 
 		fdt_end_node(fdt);
 	}
@@ -442,7 +556,7 @@ static int fit_extract_data(struct image_tool_params *params, const char *fname)
 {
 	void *buf = NULL;
 	int buf_ptr;
-	int fit_size, new_size;
+	int fit_size, unpadded_size, new_size, pad_boundary;
 	int fd;
 	struct stat sbuf;
 	void *fdt;
@@ -509,9 +623,13 @@ static int fit_extract_data(struct image_tool_params *params, const char *fname)
 	/* Pack the FDT and place the data after it */
 	fdt_pack(fdt);
 
-	new_size = fdt_totalsize(fdt);
-	new_size = ALIGN(new_size, align_size);
+	unpadded_size = fdt_totalsize(fdt);
+	new_size = ALIGN(unpadded_size, align_size);
 	fdt_set_totalsize(fdt, new_size);
+	if (unpadded_size < fit_size) {
+		pad_boundary = new_size < fit_size ? new_size : fit_size;
+		memset(fdt + unpadded_size, 0, pad_boundary - unpadded_size);
+	}
 	debug("Size reduced from %x to %x\n", fit_size, fdt_totalsize(fdt));
 	debug("External data size %x\n", buf_ptr);
 	munmap(fdt, sbuf.st_size);
@@ -561,11 +679,14 @@ err:
 static int fit_import_data(struct image_tool_params *params, const char *fname)
 {
 	void *fdt, *old_fdt;
+	void *data = NULL;
+	const char *ext_data_prop = NULL;
 	int fit_size, new_size, size, data_base;
 	int fd;
 	struct stat sbuf;
 	int ret;
 	int images;
+	int confs;
 	int node;
 
 	fd = mmap_fdt(params->cmdname, fname, 0, &old_fdt, &sbuf, false, false);
@@ -604,19 +725,80 @@ static int fit_import_data(struct image_tool_params *params, const char *fname)
 		int buf_ptr;
 		int len;
 
-		buf_ptr = fdtdec_get_int(fdt, node, "data-offset", -1);
-		len = fdtdec_get_int(fdt, node, "data-size", -1);
-		if (buf_ptr == -1 || len == -1)
+		/*
+		 * FIT_DATA_OFFSET_PROP and FIT_DATA_POSITION_PROP are never both present,
+		 *  but if they are, prefer FIT_DATA_OFFSET_PROP as it was there first
+		 */
+		buf_ptr = fdtdec_get_int(fdt, node, FIT_DATA_POSITION_PROP, -1);
+		if (buf_ptr != -1) {
+			ext_data_prop = FIT_DATA_POSITION_PROP;
+			data = old_fdt + buf_ptr;
+		}
+		buf_ptr = fdtdec_get_int(fdt, node, FIT_DATA_OFFSET_PROP, -1);
+		if (buf_ptr != -1) {
+			ext_data_prop = FIT_DATA_OFFSET_PROP;
+			data = old_fdt + data_base + buf_ptr;
+		}
+		len = fdtdec_get_int(fdt, node, FIT_DATA_SIZE_PROP, -1);
+		if (!data || len == -1)
 			continue;
 		debug("Importing data size %x\n", len);
 
-		ret = fdt_setprop(fdt, node, "data",
-				  old_fdt + data_base + buf_ptr, len);
+		ret = fdt_setprop(fdt, node, FIT_DATA_PROP, data, len);
+		ret = fdt_delprop(fdt, node, ext_data_prop);
+
 		if (ret) {
 			debug("%s: Failed to write property: %s\n", __func__,
 			      fdt_strerror(ret));
 			ret = -EINVAL;
 			goto err_munmap;
+		}
+	}
+
+	confs = fdt_path_offset(fdt, FIT_CONFS_PATH);
+	const char *default_conf =
+		(char *)fdt_getprop(fdt, confs, FIT_DEFAULT_PROP, NULL);
+	static const char * const props[] = { FIT_KERNEL_PROP,
+					      FIT_RAMDISK_PROP,
+					      FIT_FDT_PROP,
+					      FIT_LOADABLE_PROP,
+					      FIT_FPGA_PROP,
+					      FIT_FIRMWARE_PROP,
+					      FIT_SCRIPT_PROP};
+
+	if (default_conf && fdt_subnode_offset(fdt, confs, default_conf) < 0) {
+		fprintf(stderr,
+			"Error: Default configuration '%s' not found under /configurations\n",
+			default_conf);
+		ret = FDT_ERR_NOTFOUND;
+		goto err_munmap;
+	}
+
+	fdt_for_each_subnode(node, fdt, confs) {
+		const char *conf_name = fdt_get_name(fdt, node, NULL);
+
+		for (int i = 0; i < ARRAY_SIZE(props); i++) {
+			int count = fdt_stringlist_count(fdt, node, props[i]);
+
+			if (count < 0)
+				continue;
+
+			for (int j = 0; j < count; j++) {
+				const char *img_name =
+					fdt_stringlist_get(fdt, node, props[i], j, NULL);
+				if (!img_name || !*img_name)
+					continue;
+
+				int img = fdt_subnode_offset(fdt, images, img_name);
+
+				if (img < 0) {
+					fprintf(stderr,
+						"Error: configuration '%s' references undefined image '%s' in property '%s'\n",
+						conf_name, img_name, props[i]);
+					ret = FDT_ERR_NOTFOUND;
+					goto err_munmap;
+				}
+			}
 		}
 	}
 
@@ -674,8 +856,8 @@ static int fit_handle_file(struct image_tool_params *params)
 	char tmpfile[MKIMAGE_MAX_TMPFILE_LEN];
 	char bakfile[MKIMAGE_MAX_TMPFILE_LEN + 4] = {0};
 	char cmd[MKIMAGE_MAX_DTC_CMDLINE_LEN];
-	size_t size_inc;
-	int ret;
+	int size_inc;
+	int ret = EXIT_FAILURE;
 
 	/* Flattened Image Tree (FIT) format  handling */
 	debug ("FIT format handling\n");
@@ -691,7 +873,7 @@ static int fit_handle_file(struct image_tool_params *params)
 	sprintf (tmpfile, "%s%s", params->imagefile, MKIMAGE_TMPFILE_SUFFIX);
 
 	/* We either compile the source file, or use the existing FIT image */
-	if (params->auto_its) {
+	if (params->auto_fit) {
 		if (fit_build(params, tmpfile)) {
 			fprintf(stderr, "%s: failed to build FIT\n",
 				params->cmdname);
@@ -731,16 +913,16 @@ static int fit_handle_file(struct image_tool_params *params)
 	rename(tmpfile, bakfile);
 
 	/*
-	 * Set hashes for images in the blob. Unfortunately we may need more
-	 * space in either FDT, so keep trying until we succeed.
-	 *
-	 * Note: this is pretty inefficient for signing, since we must
-	 * calculate the signature every time. It would be better to calculate
-	 * all the data and then store it in a separate step. However, this
-	 * would be considerably more complex to implement. Generally a few
-	 * steps of this loop is enough to sign with several keys.
+	 * Set hashes for images in the blob and compute
+	 * signatures. We do an attempt at estimating the expected
+	 * extra size, but just in case that is not sufficient, keep
+	 * trying adding 1K, with a reasonable upper bound of 64K
+	 * total, until we succeed.
 	 */
-	for (size_inc = 0; size_inc < 64 * 1024; size_inc += 1024) {
+	size_inc = fit_estimate_hash_sig_size(params, bakfile);
+	if (size_inc < 0)
+		goto err_system;
+	do {
 		if (copyfile(bakfile, tmpfile) < 0) {
 			printf("Can't copy %s to %s\n", bakfile, tmpfile);
 			ret = -EIO;
@@ -749,7 +931,8 @@ static int fit_handle_file(struct image_tool_params *params)
 		ret = fit_add_file_data(params, size_inc, tmpfile);
 		if (!ret || ret != -ENOSPC)
 			break;
-	}
+		size_inc += 1024;
+	} while (size_inc < 64 * 1024);
 
 	if (ret) {
 		fprintf(stderr, "%s Can't add hashes to FIT blob: %d\n",
@@ -779,7 +962,7 @@ static int fit_handle_file(struct image_tool_params *params)
 err_system:
 	unlink(tmpfile);
 	unlink(bakfile);
-	return -1;
+	return ret;
 }
 
 /**
@@ -801,7 +984,7 @@ static int fit_image_extract(
 	int ret;
 
 	/* get the data address and size of component at offset "image_noffset" */
-	ret = fit_image_get_data_and_size(fit, image_noffset, &file_data, &file_size);
+	ret = fit_image_get_data(fit, image_noffset, &file_data, &file_size);
 	if (ret) {
 		fprintf(stderr, "Could not get component information\n");
 		return ret;
@@ -875,7 +1058,7 @@ static int fit_extract_contents(void *ptr, struct image_tool_params *params)
 
 static int fit_check_params(struct image_tool_params *params)
 {
-	if (params->auto_its)
+	if (params->auto_fit)
 		return 0;
 	return	((params->dflag && params->fflag) ||
 		 (params->fflag && params->lflag) ||
@@ -885,11 +1068,11 @@ static int fit_check_params(struct image_tool_params *params)
 U_BOOT_IMAGE_TYPE(
 	fitimage,
 	"FIT Image support",
-	sizeof(image_header_t),
+	sizeof(struct legacy_img_hdr),
 	(void *)&header,
 	fit_check_params,
 	fit_verify_header,
-	fit_print_contents,
+	fit_print_header,
 	NULL,
 	fit_extract_contents,
 	fit_check_image_types,

@@ -3,7 +3,6 @@
  * Copyright (C) 2015 Thomas Chou <thomas@wytron.com.tw>
  */
 
-#include <common.h>
 #include <dm.h>
 #include <errno.h>
 #include <timer.h>
@@ -18,6 +17,11 @@ void timer_test_add_offset(unsigned long offset)
 {
 	sandbox_timer_offset += offset;
 }
+
+ulong timer_test_get_offset(void)
+{
+	return sandbox_timer_offset;
+};
 
 u64 notrace timer_early_get_count(void)
 {
@@ -66,6 +70,8 @@ U_BOOT_DRIVER(sandbox_timer) = {
 };
 
 /* This is here in case we don't have a device tree */
+#if !CONFIG_IS_ENABLED(OF_PLATDATA)
 U_BOOT_DRVINFO(sandbox_timer_non_fdt) = {
 	.name = "sandbox_timer",
 };
+#endif

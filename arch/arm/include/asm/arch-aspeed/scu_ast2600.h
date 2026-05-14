@@ -87,6 +87,9 @@
 #define SCU_HWSTRAP1_CPU_FREQ_SHIFT		8
 #define SCU_HWSTRAP1_MAC2_INTF			BIT(7)
 #define SCU_HWSTRAP1_MAC1_INTF			BIT(6)
+#define SCU_HWSTRAP1_BOOT_EMMC			BIT(2)
+
+#define SCU_HWSTRAP2_BOOT_UART			BIT(8)
 
 #define SCU_EFUSE_DIS_DP			BIT(17)
 #define SCU_EFUSE_DIS_VGA			BIT(14)
@@ -122,6 +125,8 @@
 #define SCU_MISC_CTRL1_UART5_DIV		BIT(12)
 
 #ifndef __ASSEMBLY__
+#include <linux/types.h>
+
 struct ast2600_scu {
 	uint32_t prot_key1;		/* 0x000 */
 	uint32_t chip_id1;		/* 0x004 */

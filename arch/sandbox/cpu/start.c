@@ -3,22 +3,24 @@
  * Copyright (c) 2011-2012 The Chromium OS Authors.
  */
 
-#include <common.h>
+#include <config.h>
+#include <cli.h>
 #include <command.h>
-#include <dm/root.h>
 #include <efi_loader.h>
 #include <errno.h>
+#include <event.h>
 #include <init.h>
 #include <log.h>
 #include <os.h>
-#include <cli.h>
 #include <sort.h>
+#include <spl.h>
 #include <asm/getopt.h>
 #include <asm/global_data.h>
 #include <asm/io.h>
 #include <asm/malloc.h>
 #include <asm/sections.h>
 #include <asm/state.h>
+#include <dm/root.h>
 #include <linux/ctype.h>
 
 DECLARE_GLOBAL_DATA_PTR;
@@ -118,11 +120,7 @@ int sandbox_early_getopt_check(void)
 
 	os_exit(0);
 }
-
-int misc_init_f(void)
-{
-	return sandbox_early_getopt_check();
-}
+EVENT_SPY_SIMPLE(EVT_MISC_INIT_F, sandbox_early_getopt_check);
 
 static int sandbox_cmdline_cb_help(struct sandbox_state *state, const char *arg)
 {
@@ -131,7 +129,7 @@ static int sandbox_cmdline_cb_help(struct sandbox_state *state, const char *arg)
 }
 SANDBOX_CMDLINE_OPT_SHORT(help, 'h', 0, "Display help");
 
-#ifndef CONFIG_SPL_BUILD
+#ifndef CONFIG_XPL_BUILD
 int sandbox_main_loop_init(void)
 {
 	struct sandbox_state *state = state_get_current();
@@ -203,21 +201,23 @@ SANDBOX_CMDLINE_OPT_SHORT(default_fdt, 'D', 0,
 static int sandbox_cmdline_cb_test_fdt(struct sandbox_state *state,
 				       const char *arg)
 {
-	const char *fmt = "/arch/sandbox/dts/test.dtb";
-	char *p;
+	char buf[256];
 	char *fname;
+	char *relname;
 	int len;
 
-	len = strlen(state->argv[0]) + strlen(fmt) + 1;
+	if (xpl_phase() <= PHASE_SPL)
+		relname = "../arch/sandbox/dts/test.dtb";
+	else
+		relname = "arch/sandbox/dts/test.dtb";
+	len = state_get_rel_filename(relname, buf, sizeof(buf));
+	if (len < 0)
+		return len;
+
 	fname = os_malloc(len);
 	if (!fname)
 		return -ENOMEM;
-	strcpy(fname, state->argv[0]);
-	p = strrchr(fname, '/');
-	if (!p)
-		p = fname + strlen(fname);
-	len -= p - fname;
-	snprintf(p, len, fmt);
+	strcpy(fname, buf);
 	state->fdt_fname = fname;
 
 	return 0;
@@ -244,20 +244,42 @@ static int sandbox_cmdline_cb_jump(struct sandbox_state *state,
 }
 SANDBOX_CMDLINE_OPT_SHORT(jump, 'j', 1, "Jumped from previous U-Boot");
 
+static int sandbox_cmdline_cb_program(struct sandbox_state *state,
+				      const char *arg)
+{
+	/*
+	 * Record the program name to use when jumping to future phases. This
+	 * is the original executable which holds all the phases. We need to
+	 * use this instead of argv[0] since each phase is started by
+	 * extracting a particular binary from the full program, then running
+	 * it. Therefore in that binary, argv[0] contains only the
+	 * current-phase executable.
+	 *
+	 * For example, sandbox TPL may be started using image file:
+	 *
+	 *     ./image.bin
+	 *
+	 * but then TPL needs to run VPL, which it does by extracting the VPL
+	 * image from the image.bin file.
+	 *
+	 *    ./temp-vpl
+	 *
+	 * When VPL runs it needs access to the original image.bin so it can
+	 * extract the next phase (SPL). This works if we use '-f image.bin'
+	 * when starting the original image.bin file.
+	 */
+	state->prog_fname = arg;
+
+	return 0;
+}
+SANDBOX_CMDLINE_OPT_SHORT(program, 'p', 1, "U-Boot program name");
+
 static int sandbox_cmdline_cb_memory(struct sandbox_state *state,
 				     const char *arg)
 {
-	int err;
-
 	/* For now assume we always want to write it */
 	state->write_ram_buf = true;
 	state->ram_buf_fname = arg;
-
-	err = os_read_ram_buf(arg);
-	if (err) {
-		printf("Failed to read RAM buffer '%s': %d\n", arg, err);
-		return err;
-	}
 	state->ram_buf_read = true;
 
 	return 0;
@@ -409,6 +431,14 @@ static int sandbox_cmdline_cb_autoboot_keyed(struct sandbox_state *state,
 }
 SANDBOX_CMDLINE_OPT(autoboot_keyed, 0, "Allow keyed autoboot");
 
+static int sandbox_cmdline_cb_upl(struct sandbox_state *state, const char *arg)
+{
+	state->upl = true;
+
+	return 0;
+}
+SANDBOX_CMDLINE_OPT(upl, 0, "Enable Universal Payload (UPL)");
+
 static void setup_ram_buf(struct sandbox_state *state)
 {
 	/* Zero the RAM buffer if we didn't read it, to keep valgrind happy */
@@ -418,6 +448,16 @@ static void setup_ram_buf(struct sandbox_state *state)
 	gd->arch.ram_buf = state->ram_buf;
 	gd->ram_size = state->ram_size;
 }
+
+static int sandbox_cmdline_cb_native(struct sandbox_state *state,
+				     const char *arg)
+{
+	state->native = true;
+
+	return 0;
+}
+SANDBOX_CMDLINE_OPT_SHORT(native, 'N', 0,
+			  "Use native mode (host-based EFI boot filename)");
 
 void state_show(struct sandbox_state *state)
 {
@@ -451,7 +491,7 @@ void sandbox_reset(void)
 	os_relaunch(os_argv);
 }
 
-int main(int argc, char *argv[])
+int sandbox_main(int argc, char *argv[])
 {
 	struct sandbox_state *state;
 	void * text_base;
@@ -460,6 +500,9 @@ int main(int argc, char *argv[])
 	int ret;
 
 	text_base = os_find_text_base();
+
+	memset(&data, '\0', sizeof(data));
+	gd = &data;
 
 	/*
 	 * This must be the first invocation of os_malloc() to have
@@ -479,13 +522,22 @@ int main(int argc, char *argv[])
 		os_exit(1);
 	memcpy(os_argv, argv, size);
 
-	memset(&data, '\0', sizeof(data));
-	gd = &data;
 	gd->arch.text_base = text_base;
 
 	state = state_get_current();
 	if (os_parse_args(state, argc, argv))
 		return 1;
+
+	if (state->ram_buf_fname) {
+		ret = os_read_ram_buf(state->ram_buf_fname);
+		if (ret) {
+			printf("Failed to read RAM buffer '%s': %d\n",
+			       state->ram_buf_fname, ret);
+		} else {
+			state->ram_buf_read = true;
+			log_debug("Read RAM buffer from '%s'\n", state->ram_buf_fname);
+		}
+	}
 
 	/* Remove old memory file if required */
 	if (state->ram_buf_rm && state->ram_buf_fname) {
@@ -494,9 +546,11 @@ int main(int argc, char *argv[])
 		state->ram_buf_fname = NULL;
 	}
 
-	ret = sandbox_read_state(state, state->state_fname);
-	if (ret)
-		goto err;
+	if (state->read_state && state->state_fname) {
+		ret = sandbox_read_state(state, state->state_fname);
+		if (ret)
+			goto err;
+	}
 
 	if (state->handle_signals) {
 		ret = os_setup_signal_handlers();
@@ -504,8 +558,11 @@ int main(int argc, char *argv[])
 			goto err;
 	}
 
-#if CONFIG_VAL(SYS_MALLOC_F_LEN)
-	gd->malloc_base = CONFIG_MALLOC_F_ADDR;
+	if (state->upl)
+		gd->flags |= GD_FLG_UPL;
+
+#if CONFIG_IS_ENABLED(SYS_MALLOC_F)
+	gd->malloc_base = CFG_MALLOC_F_ADDR;
 #endif
 #if CONFIG_IS_ENABLED(LOG)
 	gd->default_log_level = state->default_log_level;
@@ -522,7 +579,7 @@ int main(int argc, char *argv[])
 	log_debug("debug: %s\n", __func__);
 
 	/* Do pre- and post-relocation init */
-	board_init_f(0);
+	board_init_f(gd->flags);
 
 	board_init_r(gd->new_gd, 0);
 

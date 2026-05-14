@@ -14,16 +14,12 @@
 #include "mx7_common.h"
 
 /* MMC Config*/
-#define CONFIG_SYS_FSL_ESDHC_ADDR	0
+#define CFG_SYS_FSL_ESDHC_ADDR	0
 #ifdef CONFIG_TARGET_COLIBRI_IMX7_NAND
-#define CONFIG_SYS_FSL_USDHC_NUM	1
+#define CFG_SYS_FSL_USDHC_NUM	1
 #elif CONFIG_TARGET_COLIBRI_IMX7_EMMC
-#define CONFIG_SYS_FSL_USDHC_NUM	2
+#define CFG_SYS_FSL_USDHC_NUM	2
 #endif
-
-#define CONFIG_IPADDR			192.168.10.2
-#define CONFIG_NETMASK			255.255.255.0
-#define CONFIG_SERVERIP			192.168.10.1
 
 #if defined(CONFIG_TARGET_COLIBRI_IMX7_EMMC)
 #define UBOOT_UPDATE \
@@ -83,39 +79,28 @@
 
 #define MEM_LAYOUT_ENV_SETTINGS \
 	"bootm_size=0x10000000\0" \
-	"fdt_addr_r=0x82000000\0" \
-	"kernel_addr_r=0x81000000\0" \
-	"pxefile_addr_r=0x87100000\0" \
-	"ramdisk_addr_r=0x82100000\0" \
-	"scriptaddr=0x87000000\0"
-
-#define NFS_BOOTCMD \
-	"nfsargs=ip=:::::eth0: root=/dev/nfs\0" \
-	"nfsboot=run setup; " \
-		"setenv bootargs ${defargs} ${nfsargs} " \
-		"${setupargs} ${vidargs}; echo Booting from NFS...;" \
-		"dhcp ${kernel_addr_r} && " \
-		"tftp ${fdt_addr_r} ${soc}-colibri${variant}-${fdt_board}.dtb && " \
-		"run fdt_fixup && bootz ${kernel_addr_r} - ${fdt_addr_r}\0" \
+	"fdt_addr_r=0x88200000\0" \
+	"kernel_addr_r=" __stringify(CONFIG_SYS_LOAD_ADDR) "\0" \
+	"pxefile_addr_r=0x88300000\0" \
+	"ramdisk_addr_r=0x88400000\0" \
+	"scriptaddr=0x88280000\0"
 
 #define UBI_BOOTCMD	\
 	"ubiargs=ubi.mtd=ubi root=ubi0:rootfs rootfstype=ubifs " \
 		"ubi.fm_autoconvert=1\0" \
 	"ubiboot=run setup; " \
-		"setenv bootargs ${defargs} ${ubiargs} " \
-		"${setupargs} ${vidargs} ${tdxargs}; echo Booting from NAND...; " \
+		"setenv bootargs ${ubiargs} " \
+		"${setupargs} ${tdxargs}; echo Booting from NAND...; " \
 		"ubi part ubi && run m4boot && " \
 		"ubi read ${kernel_addr_r} kernel && " \
 		"ubi read ${fdt_addr_r} dtb && " \
-		"run fdt_fixup && bootz ${kernel_addr_r} - ${fdt_addr_r}\0" \
+		"bootz ${kernel_addr_r} - ${fdt_addr_r}\0" \
 
 #if defined(CONFIG_TARGET_COLIBRI_IMX7_NAND)
 #define MODULE_EXTRA_ENV_SETTINGS \
-	"mtdparts=" CONFIG_MTDPARTS_DEFAULT "\0" \
 	UBI_BOOTCMD
 #elif defined(CONFIG_TARGET_COLIBRI_IMX7_EMMC)
 #define MODULE_EXTRA_ENV_SETTINGS \
-	"variant=-emmc\0" \
 	EMMC_ANDROID_BOOTCMD
 #endif
 
@@ -133,21 +118,15 @@
 #endif
 #include <config_distro_bootcmd.h>
 
-#define CONFIG_EXTRA_ENV_SETTINGS \
+#define CFG_EXTRA_ENV_SETTINGS \
 	BOOTENV \
 	MEM_LAYOUT_ENV_SETTINGS \
-	NFS_BOOTCMD \
 	MODULE_EXTRA_ENV_SETTINGS \
 	UBOOT_UPDATE \
-	"boot_file=zImage\0" \
-	"bootubipart=ubi\0" \
+	"boot_script_dhcp=boot.scr\0" \
 	"console=ttymxc0\0" \
-	"defargs=\0" \
 	"fdt_board=eval-v3\0" \
-	"fdt_fixup=;\0" \
 	"m4boot=;\0" \
-	"ip_dyn=yes\0" \
-	"kernel_file=zImage\0" \
 	"setethupdate=if env exists ethaddr; then; else setenv ethaddr " \
 		"00:14:2d:00:00:00; fi; tftpboot ${loadaddr} " \
 		"${board}/flash_eth.img && source ${loadaddr}\0" \
@@ -156,7 +135,7 @@
 		"${board}/flash_blk.img && source ${loadaddr}\0" \
 	"setup=setenv setupargs " \
 		"console=tty1 console=${console}" \
-		",${baudrate}n8 ${memargs} consoleblank=0\0" \
+		",${baudrate}n8 ${memargs} ${mtdparts}\0" \
 	"setupdate=run setsdupdate || run setusbupdate || run setethupdate\0" \
 	"setusbupdate=usb start && setenv interface usb && " \
 		"fatload ${interface} 0:1 ${loadaddr} " \
@@ -171,38 +150,13 @@
 /* Physical Memory Map */
 #define PHYS_SDRAM			MMDC0_ARB_BASE_ADDR
 
-#define CONFIG_SYS_SDRAM_BASE		PHYS_SDRAM
-#define CONFIG_SYS_INIT_RAM_ADDR	IRAM_BASE_ADDR
-#define CONFIG_SYS_INIT_RAM_SIZE	IRAM_SIZE
-
-#define CONFIG_SYS_INIT_SP_OFFSET \
-	(CONFIG_SYS_INIT_RAM_SIZE - GENERATED_GBL_DATA_SIZE)
-#define CONFIG_SYS_INIT_SP_ADDR \
-	(CONFIG_SYS_INIT_RAM_ADDR + CONFIG_SYS_INIT_SP_OFFSET)
-
-/* environment organization */
-#if defined(CONFIG_ENV_IS_IN_NAND)
-#define CONFIG_ENV_RANGE	(4 * CONFIG_ENV_SIZE)
-#endif
+#define CFG_SYS_SDRAM_BASE		PHYS_SDRAM
+#define CFG_SYS_INIT_RAM_ADDR	IRAM_BASE_ADDR
+#define CFG_SYS_INIT_RAM_SIZE	IRAM_SIZE
 
 #ifdef CONFIG_TARGET_COLIBRI_IMX7_NAND
 /* NAND stuff */
-#define CONFIG_SYS_MAX_NAND_DEVICE	1
-#define CONFIG_SYS_NAND_BASE		0x40000000
-#define CONFIG_SYS_NAND_MX7_GPMI_62_ECC_BYTES
-#endif
-
-/* USB Configs */
-#define CONFIG_EHCI_HCD_INIT_AFTER_RESET
-
-#define CONFIG_MXC_USB_PORTSC		(PORT_PTS_UTMI | PORT_PTS_PTW)
-#define CONFIG_MXC_USB_FLAGS		0
-#define CONFIG_USB_MAX_CONTROLLER_COUNT 2
-
-#define CONFIG_USBD_HS
-
-#if defined(CONFIG_DM_VIDEO)
-#define CONFIG_VIDEO_BMP_LOGO
+#define CFG_SYS_NAND_BASE		0x40000000
 #endif
 
 #endif

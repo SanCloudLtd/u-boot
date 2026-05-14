@@ -5,7 +5,6 @@
 
 obj-$(CONFIG_AT91SAM9260)	+= at91sam9260_devices.o
 obj-$(CONFIG_AT91SAM9G20)	+= at91sam9260_devices.o
-obj-$(CONFIG_AT91SAM9XE)	+= at91sam9260_devices.o
 obj-$(CONFIG_AT91SAM9261)	+= at91sam9261_devices.o
 obj-$(CONFIG_AT91SAM9G10)	+= at91sam9261_devices.o
 obj-$(CONFIG_AT91SAM9263)	+= at91sam9263_devices.o
@@ -15,11 +14,12 @@ obj-$(CONFIG_AT91SAM9G45)	+= at91sam9m10g45_devices.o
 obj-$(CONFIG_AT91SAM9N12)	+= at91sam9n12_devices.o
 obj-$(CONFIG_AT91SAM9X5)	+= at91sam9x5_devices.o
 obj-$(CONFIG_SAM9X60)		+= sam9x60_devices.o
-obj-$(CONFIG_AT91_EFLASH)	+= eflash.o
-obj-$(CONFIG_AT91_LED)	+= led.o
+obj-$(CONFIG_SAM9X7)		+= sam9x7_devices.o
 obj-y += clock.o
 obj-y += cpu.o
+ifndef CONFIG_$(PHASE_)SYSRESET
 obj-y	+= reset.o
+endif
 ifneq ($(CONFIG_ATMEL_PIT_TIMER),y)
 ifneq ($(CONFIG_MCHP_PIT64B_TIMER),y)
 # old non-DM timer driver
@@ -33,7 +33,7 @@ obj-y	+= lowlevel_init.o
 endif
 endif
 
-ifdef CONFIG_$(SPL_)SYS_THUMB_BUILD
+ifdef CONFIG_$(PHASE_)SYS_THUMB_BUILD
 ifndef CONFIG_HAS_THUMB2
 
 CFLAGS_cache.o := -marm

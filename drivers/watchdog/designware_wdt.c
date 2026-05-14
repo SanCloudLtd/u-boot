@@ -4,7 +4,6 @@
  */
 
 #include <clk.h>
-#include <common.h>
 #include <dm.h>
 #include <reset.h>
 #include <wdt.h>
@@ -60,26 +59,6 @@ static void designware_wdt_reset_common(void __iomem *base)
 		writel(DW_WDT_CRR_RESTART_VAL, base + DW_WDT_CRR);
 }
 
-#if !CONFIG_IS_ENABLED(WDT)
-void hw_watchdog_reset(void)
-{
-	designware_wdt_reset_common((void __iomem *)CONFIG_DW_WDT_BASE);
-}
-
-void hw_watchdog_init(void)
-{
-	/* reset to disable the watchdog */
-	hw_watchdog_reset();
-	/* set timer in miliseconds */
-	designware_wdt_settimeout((void __iomem *)CONFIG_DW_WDT_BASE,
-				  CONFIG_DW_WDT_CLOCK_KHZ,
-				  CONFIG_WATCHDOG_TIMEOUT_MSECS);
-	/* enable the watchdog */
-	designware_wdt_enable((void __iomem *)CONFIG_DW_WDT_BASE);
-	/* reset the watchdog */
-	hw_watchdog_reset();
-}
-#else
 static int designware_wdt_reset(struct udevice *dev)
 {
 	struct designware_wdt_priv *priv = dev_get_priv(dev);
@@ -92,13 +71,13 @@ static int designware_wdt_reset(struct udevice *dev)
 static int designware_wdt_stop(struct udevice *dev)
 {
 	struct designware_wdt_priv *priv = dev_get_priv(dev);
+	__maybe_unused int ret;
 
 	designware_wdt_reset(dev);
 	writel(0, priv->base + DW_WDT_CR);
 
-        if (CONFIG_IS_ENABLED(DM_RESET)) {
-		int ret;
-
+	if (CONFIG_IS_ENABLED(DM_RESET) &&
+	    ofnode_read_prop(dev_ofnode(dev), "resets", &ret)) {
 		ret = reset_assert_bulk(&priv->resets);
 		if (ret)
 			return ret;
@@ -144,35 +123,28 @@ static int designware_wdt_probe(struct udevice *dev)
 
 	ret = clk_enable(&clk);
 	if (ret)
-		goto err;
+		return ret;
 
 	priv->clk_khz = clk_get_rate(&clk) / 1000;
-	if (!priv->clk_khz) {
-		ret = -EINVAL;
-		goto err;
-	}
+	if (!priv->clk_khz)
+		return -EINVAL;
 #else
-	priv->clk_khz = CONFIG_DW_WDT_CLOCK_KHZ;
+	priv->clk_khz = CFG_DW_WDT_CLOCK_KHZ;
 #endif
 
-	if (CONFIG_IS_ENABLED(DM_RESET)) {
+	if (CONFIG_IS_ENABLED(DM_RESET) &&
+	    ofnode_read_prop(dev_ofnode(dev), "resets", &ret)) {
 		ret = reset_get_bulk(dev, &priv->resets);
 		if (ret)
-			goto err;
+			return ret;
 
 		ret = reset_deassert_bulk(&priv->resets);
 		if (ret)
-			goto err;
+			return ret;
 	}
 
 	/* reset to disable the watchdog */
 	return designware_wdt_stop(dev);
-
-err:
-#if CONFIG_IS_ENABLED(CLK)
-	clk_free(&clk);
-#endif
-	return ret;
 }
 
 static const struct wdt_ops designware_wdt_ops = {
@@ -195,4 +167,3 @@ U_BOOT_DRIVER(designware_wdt) = {
 	.ops = &designware_wdt_ops,
 	.flags = DM_FLAG_PRE_RELOC,
 };
-#endif

@@ -18,7 +18,7 @@ be built with mingw to run on Windows.
 Each of the pipelines is written in such as way as to be a "world build" style
 test and as such we try and build all possible platforms.  In addition, for all
 platforms that support being run in QEMU we run them in QEMU and use our pytest
-suite.  See :doc:`py_testing` for more information about those tests.
+suite.  See :doc:`pytest/usage` for more information about those tests.
 
 Azure Pipelines
 ---------------
@@ -49,6 +49,12 @@ tree and should be able to be used on any GitLab instance, with whatever
 runners you are able to provide.  While it is intended to be able to run this
 pipeline on the free public instances provided at https://gitlab.com/ a problem
 with our squashfs tests currently prevents this.
+
+To push to Gitlab without triggering a pipeline use:
+
+.. code-block:: bash
+
+    git push -o ci.skip
 
 Docker container
 ----------------

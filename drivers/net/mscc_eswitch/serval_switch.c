@@ -3,7 +3,6 @@
  * Copyright (c) 2019 Microsemi Corporation
  */
 
-#include <common.h>
 #include <config.h>
 #include <dm.h>
 #include <log.h>
@@ -17,6 +16,7 @@
 #include <miiphy.h>
 #include <net.h>
 #include <wait_bit.h>
+#include <linux/printk.h>
 
 #include "mscc_xfer.h"
 #include "mscc_mac_table.h"
@@ -111,7 +111,6 @@
 #define CPU_PORT		11
 #define INTERNAL_PORT_MSK	0xFF
 #define IFH_LEN			4
-#define ETH_ALEN		6
 #define PGID_BROADCAST		13
 #define PGID_UNICAST		14
 
@@ -561,7 +560,7 @@ static int serval_probe(struct udevice *dev)
 
 		phy = phy_connect(priv->ports[i].bus,
 				  priv->ports[i].phy_addr, dev,
-				  PHY_INTERFACE_MODE_NONE);
+				  PHY_INTERFACE_MODE_NA);
 		if (phy)
 			board_phy_config(phy);
 	}

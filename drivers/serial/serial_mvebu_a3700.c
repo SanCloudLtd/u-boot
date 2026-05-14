@@ -4,7 +4,6 @@
  * Copyright (C) 2021 Pali Rohár <pali@kernel.org>
  */
 
-#include <common.h>
 #include <clk.h>
 #include <dm.h>
 #include <serial.h>
@@ -40,8 +39,8 @@ static int mvebu_serial_putc(struct udevice *dev, const char ch)
 	struct mvebu_plat *plat = dev_get_plat(dev);
 	void __iomem *base = plat->base;
 
-	while (readl(base + UART_STATUS_REG) & UART_STATUS_TXFIFO_FULL)
-		;
+	if (readl(base + UART_STATUS_REG) & UART_STATUS_TXFIFO_FULL)
+		return -EAGAIN;
 
 	writel(ch, base + UART_TX_REG);
 
@@ -53,8 +52,8 @@ static int mvebu_serial_getc(struct udevice *dev)
 	struct mvebu_plat *plat = dev_get_plat(dev);
 	void __iomem *base = plat->base;
 
-	while (!(readl(base + UART_STATUS_REG) & UART_STATUS_RX_RDY))
-		;
+	if (!(readl(base + UART_STATUS_REG) & UART_STATUS_RX_RDY))
+		return -EAGAIN;
 
 	return readl(base + UART_RX_REG) & 0xff;
 }
@@ -321,7 +320,7 @@ U_BOOT_DRIVER(serial_mvebu) = {
 
 static inline void _debug_uart_init(void)
 {
-	void __iomem *base = (void __iomem *)CONFIG_DEBUG_UART_BASE;
+	void __iomem *base = (void __iomem *)CONFIG_VAL(DEBUG_UART_BASE);
 	u32 parent_rate, divider;
 
 	/* reset FIFOs */
@@ -349,7 +348,7 @@ static inline void _debug_uart_init(void)
 
 static inline void _debug_uart_putc(int ch)
 {
-	void __iomem *base = (void __iomem *)CONFIG_DEBUG_UART_BASE;
+	void __iomem *base = (void __iomem *)CONFIG_VAL(DEBUG_UART_BASE);
 
 	while (readl(base + UART_STATUS_REG) & UART_STATUS_TXFIFO_FULL)
 		;

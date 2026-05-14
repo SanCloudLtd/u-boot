@@ -8,7 +8,7 @@
  * Copyright (c) 2021  Maciej W. Rozycki <macro@orcam.me.uk>
  */
 
-#include <common.h>
+#include <config.h>
 #include <dm.h>
 #include <errno.h>
 #include <log.h>
@@ -16,9 +16,9 @@
 #include <time.h>
 #include "pci_internal.h"
 
-/* the user can define CONFIG_SYS_PCI_CACHE_LINE_SIZE to avoid problems */
-#ifndef CONFIG_SYS_PCI_CACHE_LINE_SIZE
-#define CONFIG_SYS_PCI_CACHE_LINE_SIZE	8
+/* the user can define CFG_SYS_PCI_CACHE_LINE_SIZE to avoid problems */
+#ifndef CFG_SYS_PCI_CACHE_LINE_SIZE
+#define CFG_SYS_PCI_CACHE_LINE_SIZE	8
 #endif
 
 static void dm_pciauto_setup_device(struct udevice *dev,
@@ -107,7 +107,8 @@ static void dm_pciauto_setup_device(struct udevice *dev,
 			}
 
 			if (prefetch &&
-			    (bar_response & PCI_BASE_ADDRESS_MEM_PREFETCH))
+			    (bar_response & PCI_BASE_ADDRESS_MEM_PREFETCH) &&
+			    (found_mem64 || prefetch->bus_lower < 0x100000000ULL))
 				bar_res = prefetch;
 			else
 				bar_res = mem;
@@ -178,7 +179,7 @@ static void dm_pciauto_setup_device(struct udevice *dev,
 
 	dm_pci_write_config16(dev, PCI_COMMAND, cmdstat);
 	dm_pci_write_config8(dev, PCI_CACHE_LINE_SIZE,
-			     CONFIG_SYS_PCI_CACHE_LINE_SIZE);
+			     CFG_SYS_PCI_CACHE_LINE_SIZE);
 	dm_pci_write_config8(dev, PCI_LATENCY_TIMER, 0x80);
 }
 
@@ -372,8 +373,8 @@ void dm_pciauto_prescan_setup_bridge(struct udevice *dev, int sub_bus)
 	dm_pci_write_config8(dev, PCI_SUBORDINATE_BUS, 0xff);
 
 	if (pci_mem) {
-		/* Round memory allocator to 1MB boundary */
-		pciauto_region_align(pci_mem, 0x100000);
+		/* Round memory allocator */
+		pciauto_region_align(pci_mem, CONFIG_PCI_BRIDGE_MEM_ALIGNMENT);
 
 		/*
 		 * Set up memory and I/O filter limits, assume 32-bit
@@ -387,8 +388,8 @@ void dm_pciauto_prescan_setup_bridge(struct udevice *dev, int sub_bus)
 	}
 
 	if (pci_prefetch) {
-		/* Round memory allocator to 1MB boundary */
-		pciauto_region_align(pci_prefetch, 0x100000);
+		/* Round memory allocator */
+		pciauto_region_align(pci_prefetch, CONFIG_PCI_BRIDGE_MEM_ALIGNMENT);
 
 		/*
 		 * Set up memory and I/O filter limits, assume 32-bit
@@ -465,8 +466,8 @@ void dm_pciauto_postscan_setup_bridge(struct udevice *dev, int sub_bus)
 	dm_pci_write_config8(dev, PCI_SUBORDINATE_BUS, sub_bus - dev_seq(ctlr));
 
 	if (pci_mem) {
-		/* Round memory allocator to 1MB boundary */
-		pciauto_region_align(pci_mem, 0x100000);
+		/* Round memory allocator */
+		pciauto_region_align(pci_mem, CONFIG_PCI_BRIDGE_MEM_ALIGNMENT);
 
 		dm_pci_write_config16(dev, PCI_MEMORY_LIMIT,
 				      ((pci_mem->bus_lower - 1) >> 16) &
@@ -480,8 +481,8 @@ void dm_pciauto_postscan_setup_bridge(struct udevice *dev, int sub_bus)
 				     &prefechable_64);
 		prefechable_64 &= PCI_PREF_RANGE_TYPE_MASK;
 
-		/* Round memory allocator to 1MB boundary */
-		pciauto_region_align(pci_prefetch, 0x100000);
+		/* Round memory allocator */
+		pciauto_region_align(pci_prefetch, CONFIG_PCI_BRIDGE_MEM_ALIGNMENT);
 
 		dm_pci_write_config16(dev, PCI_PREF_MEMORY_LIMIT,
 				      (((pci_prefetch->bus_lower - 1) >> 16) &
@@ -579,10 +580,6 @@ int dm_pciauto_config_device(struct udevice *dev)
 					hose->pci_prefetch, hose->pci_io);
 		break;
 #endif
-
-	case PCI_CLASS_PROCESSOR_POWERPC: /* an agent or end-point */
-		debug("PCI AutoConfig: Found PowerPC device\n");
-		/* fall through */
 
 	default:
 		dm_pciauto_setup_device(dev, pci_mem, pci_prefetch, pci_io);

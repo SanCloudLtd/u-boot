@@ -7,7 +7,6 @@
 #include "mkimage.h"
 #include <time.h>
 #else
-#include <common.h>
 #include <log.h>
 #include <malloc.h>
 #include <asm/global_data.h>
@@ -49,7 +48,7 @@ struct image_region *fit_region_make_list(const void *fit,
 	 * Use malloc() except in SPL (to save code size). In SPL the caller
 	 * must allocate the array.
 	 */
-	if (!IS_ENABLED(CONFIG_SPL_BUILD) && !region)
+	if (!IS_ENABLED(CONFIG_XPL_BUILD) && !region)
 		region = calloc(sizeof(*region), count);
 	if (!region)
 		return NULL;
@@ -96,7 +95,7 @@ static int fit_image_setup_verify(struct image_sign_info *info,
 	info->required_keynode = required_keynode;
 	printf("%s:%s", algo_name, info->keyname);
 
-	if (!info->checksum || !info->crypto || !info->padding) {
+	if (!info->checksum || !info->crypto) {
 		*err_msgp = "Unknown signature algorithm";
 		return -1;
 	}
@@ -192,6 +191,11 @@ int fit_image_verify_required_sigs(const void *fit, int image_noffset,
 	int noffset;
 	int key_node;
 
+#ifdef USE_HOSTCC
+	if (!key_blob)
+		return 0;
+#endif
+
 	/* Work out what we need to verify */
 	*no_sigsp = 1;
 	key_node = fdt_subnode_offset(key_blob, 0, FIT_SIG_NODENAME);
@@ -260,10 +264,10 @@ static int fit_config_check_sig(const void *fit, int noffset, int conf_noffset,
 				char **err_msgp)
 {
 	static char * const exc_prop[] = {
-		"data",
-		"data-size",
-		"data-position",
-		"data-offset"
+		FIT_DATA_PROP,
+		FIT_DATA_SIZE_PROP,
+		FIT_DATA_POSITION_PROP,
+		FIT_DATA_OFFSET_PROP,
 	};
 
 	const char *prop, *end, *name;
@@ -477,6 +481,11 @@ static int fit_config_verify_required_keys(const void *fit, int conf_noffset,
 	int reqd_sigs = 0;
 	bool reqd_policy_all = true;
 	const char *reqd_mode;
+
+#ifdef USE_HOSTCC
+	if (!key_blob)
+		return 0;
+#endif
 
 	/*
 	 * We don't support this since libfdt considers names with the

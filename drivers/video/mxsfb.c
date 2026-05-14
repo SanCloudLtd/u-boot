@@ -4,7 +4,6 @@
  *
  * Copyright (C) 2011-2013 Marek Vasut <marex@denx.de>
  */
-#include <common.h>
 #include <clk.h>
 #include <dm.h>
 #include <env.h>
@@ -15,7 +14,6 @@
 #include <linux/errno.h>
 #include <malloc.h>
 #include <video.h>
-#include <video_fb.h>
 
 #include <asm/arch/clock.h>
 #include <asm/arch/imx-regs.h>
@@ -253,94 +251,6 @@ static int mxs_remove_common(u32 fb)
 	return 0;
 }
 
-#ifndef CONFIG_DM_VIDEO
-
-static GraphicDevice panel;
-
-void lcdif_power_down(void)
-{
-	mxs_remove_common(panel.frameAdrs);
-}
-
-void *video_hw_init(void)
-{
-	int bpp = -1;
-	int ret = 0;
-	char *penv;
-	void *fb = NULL;
-	struct ctfb_res_modes mode;
-	struct display_timing timings;
-
-	puts("Video: ");
-
-	/* Suck display configuration from "videomode" variable */
-	penv = env_get("videomode");
-	if (!penv) {
-		puts("MXSFB: 'videomode' variable not set!\n");
-		return NULL;
-	}
-
-	bpp = video_get_params(&mode, penv);
-
-	/* fill in Graphic device struct */
-	sprintf(panel.modeIdent, "%dx%dx%d", mode.xres, mode.yres, bpp);
-
-	panel.winSizeX = mode.xres;
-	panel.winSizeY = mode.yres;
-	panel.plnSizeX = mode.xres;
-	panel.plnSizeY = mode.yres;
-
-	switch (bpp) {
-	case 24:
-	case 18:
-		panel.gdfBytesPP = 4;
-		panel.gdfIndex = GDF_32BIT_X888RGB;
-		break;
-	case 16:
-		panel.gdfBytesPP = 2;
-		panel.gdfIndex = GDF_16BIT_565RGB;
-		break;
-	case 8:
-		panel.gdfBytesPP = 1;
-		panel.gdfIndex = GDF__8BIT_INDEX;
-		break;
-	default:
-		printf("MXSFB: Invalid BPP specified! (bpp = %i)\n", bpp);
-		return NULL;
-	}
-
-	panel.memSize = mode.xres * mode.yres * panel.gdfBytesPP;
-
-	/* Allocate framebuffer */
-	fb = memalign(ARCH_DMA_MINALIGN,
-		      roundup(panel.memSize, ARCH_DMA_MINALIGN));
-	if (!fb) {
-		printf("MXSFB: Error allocating framebuffer!\n");
-		return NULL;
-	}
-
-	/* Wipe framebuffer */
-	memset(fb, 0, panel.memSize);
-
-	panel.frameAdrs = (u32)fb;
-
-	printf("%s\n", panel.modeIdent);
-
-	video_ctfb_mode_to_display_timing(&mode, &timings);
-
-	ret = mxs_probe_common(NULL, &timings, bpp, (u32)fb);
-	if (ret)
-		goto dealloc_fb;
-
-	return (void *)&panel;
-
-dealloc_fb:
-	free(fb);
-
-	return NULL;
-}
-#else /* ifndef CONFIG_DM_VIDEO */
-
 static int mxs_of_get_timings(struct udevice *dev,
 			      struct display_timing *timings,
 			      u32 *bpp)
@@ -425,7 +335,6 @@ static int mxs_video_probe(struct udevice *dev)
 	mmu_set_region_dcache_behaviour(fb_start, fb_end - fb_start,
 					DCACHE_WRITEBACK);
 	video_set_flush_dcache(dev, true);
-	gd->fb_base = plat->base;
 
 	return ret;
 }
@@ -476,6 +385,7 @@ static int mxs_video_remove(struct udevice *dev)
 static const struct udevice_id mxs_video_ids[] = {
 	{ .compatible = "fsl,imx23-lcdif" },
 	{ .compatible = "fsl,imx28-lcdif" },
+	{ .compatible = "fsl,imx6sx-lcdif" },
 	{ .compatible = "fsl,imx7ulp-lcdif" },
 	{ .compatible = "fsl,imxrt-lcdif" },
 	{ /* sentinel */ }
@@ -490,4 +400,3 @@ U_BOOT_DRIVER(mxs_video) = {
 	.remove = mxs_video_remove,
 	.flags	= DM_FLAG_PRE_RELOC | DM_FLAG_OS_PREPARE,
 };
-#endif /* ifndef CONFIG_DM_VIDEO */

@@ -47,6 +47,27 @@ config SPL_DM_I2C
 	  device (bus child) info is kept as parent platdata. The interface
 	  is defined in include/i2c.h.
 
+config TPL_DM_I2C
+	bool "Enable Driver Model for I2C drivers in TPL"
+	depends on TPL_DM && DM_I2C
+	help
+	  Enable driver model for I2C. The I2C uclass interface: probe, read,
+	  write and speed, is implemented with the bus drivers operations,
+	  which provide methods for bus setting and data transfer. Each chip
+	  device (bus child) info is kept as parent platdata. The interface
+	  is defined in include/i2c.h.
+
+config VPL_DM_I2C
+	bool "Enable Driver Model for I2C drivers in VPL"
+	depends on VPL_DM && DM_I2C
+	default y
+	help
+	  Enable driver model for I2C. The I2C uclass interface: probe, read,
+	  write and speed, is implemented with the bus drivers operations,
+	  which provide methods for bus setting and data transfer. Each chip
+	  device (bus child) info is kept as parent platdata. The interface
+	  is defined in include/i2c.h.
+
 config SYS_I2C_LEGACY
 	bool "Enable legacy I2C subsystem and drivers"
 	depends on !DM_I2C
@@ -133,6 +154,13 @@ config SPL_DM_I2C_GPIO
 	  bindings are supported.
 	  Binding info: doc/device-tree-bindings/i2c/i2c-gpio.txt
 
+config SYS_I2C_ADI
+	bool "ADI I2C driver"
+	depends on DM_I2C && ARCH_SC5XX
+	help
+	  Add support for the ADI (Analog Devices) I2C driver as used
+	  in SC57X, SC58X, SC59X, SC59X_64.
+
 config SYS_I2C_AT91
 	bool "Atmel I2C driver"
 	depends on DM_I2C && ARCH_AT91
@@ -153,6 +181,7 @@ config SYS_I2C_IPROC
 
 config SYS_I2C_FSL
        bool "Freescale I2C bus driver"
+       depends on M68K || PPC
        help
 	  Add support for Freescale I2C busses as used on MPC8240, MPC8245, and
 	  MPC85xx processors.
@@ -210,6 +239,25 @@ config SYS_I2C_DW
 	  controller is used in various SoCs, e.g. the ST SPEAr, Altera
 	  SoCFPGA, Synopsys ARC700 and some Intel x86 SoCs.
 
+config SYS_I2C_DW_PCI
+	bool "Designware PCI I2C Controller"
+	depends on SYS_I2C_DW && PCI && ACPIGEN && X86
+	default y
+	help
+	  Say yes here to select the Designware PCI I2C Host Controller.
+	  This PCI I2C controller is the base on Desigware I2C host
+	  controller.
+
+config SYS_I2C_AST2600
+    bool "AST2600 I2C Controller"
+    depends on DM_I2C && ARCH_ASPEED
+    help
+      Say yes here to select AST2600 I2C Host Controller. The driver
+      support AST2600 I2C new mode register. This I2C controller supports:
+      _Standard-mode (up to 100 kHz)
+      _Fast-mode (up to 400 kHz)
+      _Fast-mode Plus (up to 1 MHz)
+
 config SYS_I2C_ASPEED
 	bool "Aspeed I2C Controller"
 	depends on DM_I2C && ARCH_ASPEED
@@ -230,6 +278,7 @@ config SYS_I2C_INTEL
 
 config SYS_I2C_IMX_LPI2C
 	bool "NXP i.MX LPI2C driver"
+	depends on MACH_IMX
 	help
 	  Add support for the NXP i.MX LPI2C driver.
 
@@ -250,6 +299,15 @@ config SYS_I2C_MESON
 	  internal buffer holding up to 8 bytes for transfers and supports
 	  both 7-bit and 10-bit addresses.
 
+config SYS_I2C_MTK
+	bool "MediaTek I2C driver"
+	help
+	  This selects the MediaTek Integrated Inter Circuit bus driver.
+	  The I2C bus adapter is the base for some other I2C client,
+	  eg: touch, sensors.
+	  If you want to use MediaTek I2C interface, say Y here.
+	  If unsure, say N.
+
 config SYS_I2C_MICROCHIP
 	bool "Microchip I2C driver"
 	help
@@ -258,6 +316,7 @@ config SYS_I2C_MICROCHIP
 
 config SYS_I2C_MXC
 	bool "NXP MXC I2C driver"
+	depends on ARCH_LS1021A || FSL_LSCH2 || FSL_LSCH3 || MACH_IMX
 	help
 	  Add support for the NXP I2C driver. This supports up to four bus
 	  channels and operating on standard mode up to 100 kbits/s and fast
@@ -323,7 +382,7 @@ config SYS_MXC_I2C1_SPEED
 
 config SYS_MXC_I2C1_SLAVE
 	hex "I2C1 Slave"
-	default 0
+	default 0x0
 	help
 	 MXC I2C1 Slave
 endif
@@ -338,7 +397,7 @@ config SYS_MXC_I2C2_SPEED
 
 config SYS_MXC_I2C2_SLAVE
 	hex "I2C2 Slave"
-	default 0
+	default 0x0
 	help
 	 MXC I2C2 Slave
 endif
@@ -352,7 +411,7 @@ config SYS_MXC_I2C3_SPEED
 
 config SYS_MXC_I2C3_SLAVE
 	hex "I2C3 Slave"
-	default 0
+	default 0x0
 	help
 	 MXC I2C3 Slave
 endif
@@ -366,7 +425,7 @@ config SYS_MXC_I2C4_SPEED
 
 config SYS_MXC_I2C4_SLAVE
 	hex "I2C4 Slave"
-	default 0
+	default 0x0
 	help
 	 MXC I2C4 Slave
 endif
@@ -380,7 +439,7 @@ config SYS_MXC_I2C5_SPEED
 
 config SYS_MXC_I2C5_SLAVE
 	hex "I2C5 Slave"
-	default 0
+	default 0x0
 	help
 	 MXC I2C5 Slave
 endif
@@ -394,7 +453,7 @@ config SYS_MXC_I2C6_SPEED
 
 config SYS_MXC_I2C6_SLAVE
 	hex "I2C6 Slave"
-	default 0
+	default 0x0
 	help
 	 MXC I2C6 Slave
 endif
@@ -408,7 +467,7 @@ config SYS_MXC_I2C7_SPEED
 
 config SYS_MXC_I2C7_SLAVE
 	hex "I2C7 Slave"
-	default 0
+	default 0x0
 	help
 	 MXC I2C7 Slave
 endif
@@ -422,19 +481,25 @@ config SYS_MXC_I2C8_SPEED
 
 config SYS_MXC_I2C8_SLAVE
 	hex "I2C8 Slave"
-	default 0
+	default 0x0
 	help
 	 MXC I2C8 Slave
 endif
 
 config SYS_I2C_NEXELL
 	bool "Nexell I2C driver"
-	depends on DM_I2C
+	depends on DM_I2C && ARCH_NEXELL
 	help
 	  Add support for the Nexell I2C driver. This is used with various
 	  Nexell parts such as S5Pxx18 series SoCs. All chips
 	  have several I2C ports and all are provided, controlled by the
 	  device tree.
+
+config SYS_I2C_NPCM
+	bool "Nuvoton NPCM I2C driver"
+	depends on ARCH_NPCM
+	help
+	  Support for Nuvoton I2C controller driver.
 
 config SYS_I2C_OCORES
 	bool "ocores I2C driver"
@@ -449,30 +514,56 @@ config SYS_I2C_OMAP24XX
 	help
 	  Add support for the OMAP2+ I2C driver.
 
-config SYS_I2C_RCAR_I2C
-	bool "Renesas RCar I2C driver"
-	depends on (RCAR_GEN3 || RCAR_GEN2) && DM_I2C
+config SYS_I2C_OMAP24XX_REPEATED_START
+	bool "Enable I2C repeated start"
+	depends on SYS_I2C_OMAP24XX
+	default y if ARCH_K3
 	help
-	  Support for Renesas RCar I2C controller.
+	  Enable support for repeated start. Updates driver defaults to not
+	  send a Stop condition and issue Repeated Start (Sr) for subsequent
+	  i2c msgs.
+
+config SYS_I2C_RCAR_I2C
+	bool "Renesas R-Car I2C driver"
+	depends on (RCAR_GEN2 || RCAR_64) && DM_I2C
+	help
+	  Support for Renesas R-Car I2C controller.
 
 config SYS_I2C_RCAR_IIC
-	bool "Renesas RCar Gen3 IIC driver"
-	depends on (RCAR_GEN3 || RCAR_GEN2) && DM_I2C
+	bool "Renesas R-Car Gen3 IIC driver"
+	depends on (RCAR_GEN2 || RCAR_GEN3) && DM_I2C
 	help
-	  Support for Renesas RCar Gen3 IIC controller.
+	  Support for Renesas R-Car Gen3 IIC controller.
 
 config SYS_I2C_ROCKCHIP
 	bool "Rockchip I2C driver"
-	depends on DM_I2C
+	depends on DM_I2C && ARCH_ROCKCHIP
 	help
 	  Add support for the Rockchip I2C driver. This is used with various
 	  Rockchip parts such as RK3126, RK3128, RK3036 and RK3288. All chips
 	  have several I2C ports and all are provided, controlled by the
 	  device tree.
 
+config SYS_I2C_RZ_RIIC
+	bool "Renesas RZ/G2L RIIC driver"
+	depends on RZG2L && DM_I2C
+	help
+	  Support for the I2C controller (RIIC) on the Renesas RZ/G2L SoC
+	  family.
+
 config SYS_I2C_SANDBOX
 	bool "Sandbox I2C driver"
 	depends on SANDBOX && DM_I2C
+	default y
+	help
+	  Enable I2C support for sandbox. This is an emulation of a real I2C
+	  bus. Devices can be attached to the bus using the device tree
+	  which specifies the driver to use.  See sandbox.dts as an example.
+
+config SPL_SYS_I2C_SANDBOX
+	bool "Sandbox I2C driver (SPL)"
+	depends on SPL && SANDBOX && DM_I2C
+	default y
 	help
 	  Enable I2C support for sandbox. This is an emulation of a real I2C
 	  bus. Devices can be attached to the bus using the device tree
@@ -480,7 +571,7 @@ config SYS_I2C_SANDBOX
 
 config SYS_I2C_SH
 	bool "Legacy SuperH I2C interface"
-	depends on ARCH_RMOBILE && SYS_I2C_LEGACY
+	depends on ARCH_RENESAS && SYS_I2C_LEGACY
 	help
 	  Enable the legacy SuperH I2C interface.
 
@@ -528,6 +619,7 @@ endif
 
 config SYS_I2C_SOFT
 	bool "Legacy software I2C interface"
+	depends on !COMPILE_TEST
 	help
 	  Enable the legacy software defined I2C interface
 
@@ -555,9 +647,31 @@ config SYS_I2C_OCTEON
 	  chips have several I2C ports and all are provided, controlled by
 	  the device tree.
 
+config SYS_I2C_QUP
+	bool "Qualcomm QUP I2C controller"
+	depends on ARCH_SNAPDRAGON
+	help
+	  Support for Qualcomm QUP I2C controller based on Qualcomm Universal
+	  Peripherals (QUP) engine. The QUP engine is an advanced high
+	  performance slave port that provides a common data path (an output
+	  FIFO and an input FIFO) for I2C and SPI interfaces. The I2C/SPI QUP
+	  controller is publicly documented in the Snapdragon 410E (APQ8016E)
+	  Technical Reference Manual, chapter "6.1 Qualcomm Universal
+	  Peripherals Engine (QUP)".
+
+config SYS_I2C_GENI
+	bool "Qualcomm Generic Interface (GENI) I2C controller"
+	depends on ARCH_SNAPDRAGON
+	help
+	  Support for the Qualcomm Generic Interface (GENI) I2C interface.
+	  The Generic Interface (GENI) is a firmware based Qualcomm Universal
+	  Peripherals (QUP) Serial Engine (SE) Wrapper which can support multiple
+	  bus protocols depending on the firmware type loaded at early boot time
+	  based on system configuration.
+
 config SYS_I2C_S3C24X0
 	bool "Samsung I2C driver"
-	depends on (ARCH_EXYNOS4 || ARCH_EXYNOS5) && DM_I2C
+	depends on DM_I2C
 	help
 	  Support for Samsung I2C controller as Samsung SoCs.
 
@@ -641,6 +755,7 @@ config SYS_I2C_MV
 
 config SYS_I2C_MVTWSI
 	bool "Marvell I2C driver"
+	depends on ARCH_KIRKWOOD || ARCH_MVEBU || ARCH_SUNXI
 	help
 	  Support for Marvell I2C controllers as used on the orion5x and
 	  kirkwood SoC families.
@@ -676,10 +791,9 @@ config SYS_I2C_SPEED
 
 config SYS_I2C_BUS_MAX
 	int "Max I2C busses"
-	depends on ARCH_KEYSTONE || ARCH_OMAP2PLUS || ARCH_SOCFPGA
-	default 2 if TI816X
-	default 3 if OMAP34XX || AM33XX || AM43XX || ARCH_KEYSTONE
-	default 4 if ARCH_SOCFPGA || OMAP44XX || TI814X
+	depends on ARCH_OMAP2PLUS || ARCH_SOCFPGA
+	default 3 if OMAP34XX || AM33XX || AM43XX
+	default 4 if ARCH_SOCFPGA
 	default 5 if OMAP54XX
 	help
 	  Define the maximum number of available I2C buses.

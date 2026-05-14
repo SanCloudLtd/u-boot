@@ -123,16 +123,21 @@ struct spl_info {
 static struct spl_info spl_infos[] = {
 	{ "px30", "RK33", 0x2800, false, RK_HEADER_V1 },
 	{ "rk3036", "RK30", 0x1000, false, RK_HEADER_V1 },
+	{ "rk3066", "RK30", 0x8000 - 0x800, true, RK_HEADER_V1 },
 	{ "rk3128", "RK31", 0x1800, false, RK_HEADER_V1 },
 	{ "rk3188", "RK31", 0x8000 - 0x800, true, RK_HEADER_V1 },
 	{ "rk322x", "RK32", 0x8000 - 0x1000, false, RK_HEADER_V1 },
 	{ "rk3288", "RK32", 0x8000, false, RK_HEADER_V1 },
 	{ "rk3308", "RK33", 0x40000 - 0x1000, false, RK_HEADER_V1 },
-	{ "rk3328", "RK32", 0x8000 - 0x1000, false, RK_HEADER_V1 },
+	{ "rk3328", "RK32", 0x8000 - 0x800, false, RK_HEADER_V1 },
 	{ "rk3368", "RK33", 0x8000 - 0x1000, false, RK_HEADER_V1 },
 	{ "rk3399", "RK33", 0x30000 - 0x2000, false, RK_HEADER_V1 },
 	{ "rv1108", "RK11", 0x1800, false, RK_HEADER_V1 },
-	{ "rk3568", "RK35", 0x14000 - 0x1000, false, RK_HEADER_V2 },
+	{ "rv1126", "110B", 0x10000 - 0x1000, false, RK_HEADER_V1 },
+	{ "rk3528", "RK35", 0x10000 - 0x1000, false, RK_HEADER_V2 },
+	{ "rk3568", "RK35", 0x10000 - 0x1000, false, RK_HEADER_V2 },
+	{ "rk3576", "RK35", 0x80000 - 0x1000, false, RK_HEADER_V2 },
+	{ "rk3588", "RK35", 0x100000 - 0x1000, false, RK_HEADER_V2 },
 };
 
 /**
@@ -153,7 +158,7 @@ struct spl_params {
 
 static struct spl_params spl_params = { 0 };
 
-static unsigned char rc4_key[16] = {
+static const unsigned char rc4_key[16] = {
 	124, 78, 3, 4, 85, 5, 9, 7,
 	45, 44, 123, 56, 23, 13, 23, 17
 };
@@ -450,6 +455,10 @@ int rkcommon_verify_header(unsigned char *buf, int size,
 	struct spl_info *img_spl_info, *spl_info;
 	int ret;
 
+	/* spl_hdr is abandon on header_v2 */
+	if ((*(uint32_t *)buf) == RK_MAGIC_V2)
+		return 0;
+
 	ret = rkcommon_parse_header(buf, &header0, &img_spl_info);
 
 	/* If this is the (unimplemented) RC4 case, then rewrite the result */
@@ -463,7 +472,7 @@ int rkcommon_verify_header(unsigned char *buf, int size,
 	 * If no 'imagename' is specified via the commandline (e.g. if this is
 	 * 'dumpimage -l' w/o any further constraints), we accept any spl_info.
 	 */
-	if (params->imagename == NULL)
+	if (params->imagename == NULL || !strlen(params->imagename))
 		return 0;
 
 	/* Match the 'imagename' against the 'spl_hdr' found */
@@ -474,7 +483,7 @@ int rkcommon_verify_header(unsigned char *buf, int size,
 	return -ENOENT;
 }
 
-void rkcommon_print_header(const void *buf)
+void rkcommon_print_header(const void *buf, struct image_tool_params *params)
 {
 	struct header0_info header0;
 	struct header0_info_v2 header0_v2;

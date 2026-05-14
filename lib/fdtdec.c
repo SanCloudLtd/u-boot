@@ -1,18 +1,25 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (c) 2011 The Chromium OS Authors.
+ *
+ * NOTE: Please do not add new devicetree-reading functionality into this file.
+ * Add it to the ofnode API instead, since that is compatible with livetree.
  */
 
 #ifndef USE_HOSTCC
-#include <common.h>
+
+#define LOG_CATEGORY	LOGC_DT
+
+#include <bloblist.h>
 #include <boot_fit.h>
+#include <display_options.h>
 #include <dm.h>
 #include <hang.h>
 #include <init.h>
 #include <log.h>
 #include <malloc.h>
 #include <net.h>
-#include <dm/of_extra.h>
+#include <spl.h>
 #include <env.h>
 #include <errno.h>
 #include <fdtdec.h>
@@ -23,6 +30,8 @@
 #include <serial.h>
 #include <asm/global_data.h>
 #include <asm/sections.h>
+#include <dm/ofnode.h>
+#include <dm/of_extra.h>
 #include <linux/ctype.h>
 #include <linux/lzo.h>
 #include <linux/ioport.h>
@@ -62,7 +71,6 @@ static const char * const compat_names[COMPAT_COUNT] = {
 	COMPAT(INTEL_BAYTRAIL_FSP, "intel,baytrail-fsp"),
 	COMPAT(INTEL_BAYTRAIL_FSP_MDP, "intel,baytrail-fsp-mdp"),
 	COMPAT(INTEL_IVYBRIDGE_FSP, "intel,ivybridge-fsp"),
-	COMPAT(COMPAT_SUNXI_NAND, "allwinner,sun4i-a10-nand"),
 	COMPAT(ALTERA_SOCFPGA_CLK, "altr,clk-mgr"),
 	COMPAT(ALTERA_SOCFPGA_PINCTRL_SINGLE, "pinctrl-single"),
 	COMPAT(ALTERA_SOCFPGA_H2F_BRG, "altr,socfpga-hps2fpga-bridge"),
@@ -82,7 +90,25 @@ static const char *const fdt_src_name[] = {
 	[FDTSRC_BOARD] = "board",
 	[FDTSRC_EMBED] = "embed",
 	[FDTSRC_ENV] = "env",
+	[FDTSRC_BLOBLIST] = "bloblist",
 };
+
+extern u8 __dtb_dt_begin[];	/* embedded device tree blob */
+extern u8 __dtb_dt_spl_begin[];	/* embedded device tree blob for SPL/TPL */
+
+/* Get a pointer to the embedded devicetree, if there is one, else NULL */
+static u8 *dtb_dt_embedded(void)
+{
+	u8 *addr = NULL;
+
+	if (IS_ENABLED(CONFIG_OF_EMBED)) {
+		addr = __dtb_dt_begin;
+
+		if (IS_ENABLED(CONFIG_XPL_BUILD))
+			addr = __dtb_dt_spl_begin;
+	}
+	return addr;
+}
 
 const char *fdtdec_get_srcname(void)
 {
@@ -251,14 +277,7 @@ int fdtdec_get_pci_bar32(const struct udevice *dev, struct fdt_pci_addr *addr,
 
 	barnum = (barnum - PCI_BASE_ADDRESS_0) / 4;
 
-	/*
-	 * There is a strange toolchain bug with nds32 which complains about
-	 * an undefined reference here, even if fdtdec_get_pci_bar32() is never
-	 * called. An #ifdef seems to be the only fix!
-	 */
-#if !IS_ENABLED(CONFIG_NDS32)
 	*bar = dm_pci_read_bar32(dev, barnum);
-#endif
 
 	return 0;
 }
@@ -594,6 +613,34 @@ int fdtdec_get_chosen_node(const void *blob, const char *name)
 	return fdt_path_offset(blob, prop);
 }
 
+/**
+ * fdtdec_prepare_fdt() - Check we have a valid fdt available to control U-Boot
+ *
+ * @blob: Blob to check
+ *
+ * If not, a message is printed to the console if the console is ready.
+ *
+ * Return: 0 if all ok, -ENOENT if not
+ */
+static int fdtdec_prepare_fdt(const void *blob)
+{
+	if (!blob || ((uintptr_t)blob & 3) || fdt_check_header(blob)) {
+		if (xpl_phase() <= PHASE_SPL) {
+			puts("Missing DTB\n");
+		} else {
+			printf("No valid device tree binary found at %p\n",
+			       blob);
+			if (_DEBUG && blob) {
+				printf("fdt_blob=%p\n", blob);
+				print_buffer((ulong)blob, blob, 4, 32, 0);
+			}
+		}
+		return -ENOENT;
+	}
+
+	return 0;
+}
+
 int fdtdec_check_fdt(void)
 {
 	/*
@@ -602,34 +649,7 @@ int fdtdec_check_fdt(void)
 	 * FDT (prior to console ready) will need to make their own
 	 * arrangements and do their own checks.
 	 */
-	assert(!fdtdec_prepare_fdt());
-	return 0;
-}
-
-/*
- * This function is a little odd in that it accesses global data. At some
- * point if the architecture board.c files merge this will make more sense.
- * Even now, it is common code.
- */
-int fdtdec_prepare_fdt(void)
-{
-	if (!gd->fdt_blob || ((uintptr_t)gd->fdt_blob & 3) ||
-	    fdt_check_header(gd->fdt_blob)) {
-#ifdef CONFIG_SPL_BUILD
-		puts("Missing DTB\n");
-#else
-		printf("No valid device tree binary found at %p\n",
-		       gd->fdt_blob);
-# ifdef DEBUG
-		if (gd->fdt_blob) {
-			printf("fdt_blob=%p\n", gd->fdt_blob);
-			print_buffer((ulong)gd->fdt_blob, gd->fdt_blob, 4,
-				     32, 0);
-		}
-# endif
-#endif
-		return -1;
-	}
+	assert(!fdtdec_prepare_fdt(gd->fdt_blob));
 	return 0;
 }
 
@@ -1067,7 +1087,7 @@ ofnode get_next_memory_node(ofnode mem)
 {
 	do {
 		mem = ofnode_by_prop_value(mem, "device_type", "memory", 7);
-	} while (!ofnode_is_available(mem));
+	} while (!ofnode_is_enabled(mem));
 
 	return mem;
 }
@@ -1169,16 +1189,15 @@ static int uncompress_blob(const void *src, ulong sz_src, void **dstp)
 	void *dst;
 	int rc;
 
-	if (CONFIG_IS_ENABLED(GZIP))
+	if (CONFIG_IS_ENABLED(GZIP) && CONFIG_IS_ENABLED(MULTI_DTB_FIT_GZIP))
 		if (gzip_parse_header(src, sz_in) >= 0)
 			gzip = 1;
-	if (CONFIG_IS_ENABLED(LZO))
+	if (CONFIG_IS_ENABLED(LZO) && CONFIG_IS_ENABLED(MULTI_DTB_FIT_LZO))
 		if (!gzip && lzop_is_valid_header(src))
 			lzo = 1;
 
 	if (!gzip && !lzo)
 		return -EBADMSG;
-
 
 	if (CONFIG_IS_ENABLED(MULTI_DTB_FIT_DYN_ALLOC)) {
 		dst = malloc(sz_out);
@@ -1225,15 +1244,41 @@ static void *fdt_find_separate(void)
 {
 	void *fdt_blob = NULL;
 
-#ifdef CONFIG_SPL_BUILD
+	if (IS_ENABLED(CONFIG_SANDBOX))
+		return NULL;
+
+#ifdef CONFIG_XPL_BUILD
 	/* FDT is at end of BSS unless it is in a different memory region */
-	if (IS_ENABLED(CONFIG_SPL_SEPARATE_BSS))
-		fdt_blob = (ulong *)&_image_binary_end;
+	if (CONFIG_IS_ENABLED(SEPARATE_BSS))
+		fdt_blob = (ulong *)_image_binary_end;
 	else
-		fdt_blob = (ulong *)&__bss_end;
+		fdt_blob = (ulong *)__bss_end;
 #else
 	/* FDT is at end of image */
-	fdt_blob = (ulong *)&_end;
+	fdt_blob = (ulong *)_end;
+
+	if (_DEBUG && !fdtdec_prepare_fdt(fdt_blob)) {
+		int stack_ptr;
+		const void *top = fdt_blob + fdt_totalsize(fdt_blob);
+
+		/*
+		 * Perform a sanity check on the memory layout. If this fails,
+		 * it indicates that the device tree is positioned above the
+		 * global data pointer or the stack pointer. This should not
+		 * happen.
+		 *
+		 * If this fails, check that SYS_INIT_SP_ADDR has enough space
+		 * below it for SYS_MALLOC_F_LEN and global_data, as well as the
+		 * stack, without overwriting the device tree or U-Boot itself.
+		 * Since the device tree is sitting at _end (the start of the
+		 * BSS region), we need the top of the device tree to be below
+		 * any memory allocated by board_init_f_alloc_reserve().
+		 */
+		if (top > (void *)gd || top > (void *)&stack_ptr) {
+			printf("FDT %p gd %p\n", fdt_blob, gd);
+			panic("FDT overlap");
+		}
+	}
 #endif
 
 	return fdt_blob;
@@ -1636,29 +1681,68 @@ static void setup_multi_dtb_fit(void)
 	}
 }
 
+void fdtdec_setup_embed(void)
+{
+	gd->fdt_blob = dtb_dt_embedded();
+	gd->fdt_src = FDTSRC_EMBED;
+}
+
 int fdtdec_setup(void)
 {
-	int ret;
+	int ret = -ENOENT;
 
-	/* The devicetree is typically appended to U-Boot */
-	if (IS_ENABLED(CONFIG_OF_SEPARATE)) {
-		gd->fdt_blob = fdt_find_separate();
-		gd->fdt_src = FDTSRC_SEPARATE;
-	} else { /* embed dtb in ELF file for testing / development */
-		gd->fdt_blob = dtb_dt_embedded();
-		gd->fdt_src = FDTSRC_EMBED;
+	/*
+	 * If allowing a bloblist, check that first. There was discussion about
+	 * adding an OF_BLOBLIST Kconfig, but this was rejected.
+	 *
+	 * The necessary test is whether the previous phase passed a bloblist,
+	 * not whether this phase creates one.
+	 */
+	if (CONFIG_IS_ENABLED(BLOBLIST) &&
+	    (xpl_prev_phase() != PHASE_TPL ||
+	     IS_ENABLED(CONFIG_TPL_BLOBLIST))) {
+		ret = bloblist_maybe_init();
+		if (!ret) {
+			gd->fdt_blob = bloblist_find(BLOBLISTT_CONTROL_FDT, 0);
+			if (gd->fdt_blob) {
+				gd->fdt_src = FDTSRC_BLOBLIST;
+				log_debug("Devicetree is in bloblist at %p\n",
+					  gd->fdt_blob);
+				goto setup_fdt;
+			} else {
+				log_debug("No FDT found in bloblist\n");
+				ret = -ENOENT;
+			}
+		}
+	}
+
+	/* Otherwise, the devicetree is typically appended to U-Boot */
+	if (ret) {
+		if (IS_ENABLED(CONFIG_OF_SEPARATE)) {
+			gd->fdt_blob = fdt_find_separate();
+			gd->fdt_src = FDTSRC_SEPARATE;
+		} else { /* embed dtb in ELF file for testing / development */
+			fdtdec_setup_embed();
+		}
 	}
 
 	/* Allow the board to override the fdt address. */
 	if (IS_ENABLED(CONFIG_OF_BOARD)) {
-		gd->fdt_blob = board_fdt_blob_setup(&ret);
-		if (ret)
-			return ret;
-		gd->fdt_src = FDTSRC_BOARD;
+		void *blob;
+
+		blob = (void *)gd->fdt_blob;
+		ret = board_fdt_blob_setup(&blob);
+		if (ret) {
+			if (ret != -EEXIST)
+				return ret;
+		} else {
+			gd->fdt_src = FDTSRC_BOARD;
+			gd->fdt_blob = blob;
+		}
 	}
 
 	/* Allow the early environment to override the fdt address */
-	if (!IS_ENABLED(CONFIG_SPL_BUILD)) {
+	if (!IS_ENABLED(CONFIG_XPL_BUILD)) {
 		ulong addr;
 
 		addr = env_get_hex("fdtcontroladdr", 0);
@@ -1668,12 +1752,15 @@ int fdtdec_setup(void)
 		}
 	}
 
+setup_fdt:
 	if (CONFIG_IS_ENABLED(MULTI_DTB_FIT))
 		setup_multi_dtb_fit();
 
-	ret = fdtdec_prepare_fdt();
+	ret = fdtdec_prepare_fdt(gd->fdt_blob);
 	if (!ret)
 		ret = fdtdec_board_setup(gd->fdt_blob);
+	oftree_reset();
+
 	return ret;
 }
 
@@ -1701,7 +1788,7 @@ int fdtdec_resetup(int *rescan)
 
 		*rescan = 1;
 		gd->fdt_blob = fdt_blob;
-		return fdtdec_prepare_fdt();
+		return fdtdec_prepare_fdt(fdt_blob);
 	}
 
 	/*

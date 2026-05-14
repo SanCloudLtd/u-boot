@@ -1,7 +1,5 @@
 config BLK
-	bool "Support block devices"
-	depends on DM
-	default y if DM_MMC || DM_USB
+	bool
 	help
 	  Enable support for block devices, such as SCSI, MMC and USB
 	  flash sticks. These provide a block-level interface which permits
@@ -10,10 +8,16 @@ config BLK
 	  be partitioned into several areas, called 'partitions' in U-Boot.
 	  A filesystem can be placed in each partition.
 
-config HAVE_BLOCK_DEVICE
-	bool "Enable Legacy Block Device"
+config SPL_LEGACY_BLOCK
+	bool # "Enable Legacy Block Device"
+	depends on SPL
+	default y if SPL_MMC || SPL_USB_STORAGE || SCSI || NVME || IDE
+	default y if SPL_AHCI_PCI
 	help
-	  Some devices require block support whether or not DM is enabled
+	  Some devices require block support whether or not DM is enabled. This
+	  is only supported in SPL. With this, the blk uclass is not used, but
+	  instead a legacy implementation of block devices is used, with all
+	  devices consisting of 'struct blk_desc' records.
 
 config SPL_BLK
 	bool "Support block devices in SPL"
@@ -30,6 +34,17 @@ config SPL_BLK
 config TPL_BLK
 	bool "Support block devices in TPL"
 	depends on TPL_DM && BLK
+	help
+	  Enable support for block devices, such as SCSI, MMC and USB
+	  flash sticks. These provide a block-level interface which permits
+	  reading, writing and (in some cases) erasing blocks. Block
+	  devices often have a partition table which allows the device to
+	  be partitioned into several areas, called 'partitions' in U-Boot.
+	  A filesystem can be placed in each partition.
+
+config VPL_BLK
+	bool "Support block devices in VPL"
+	depends on VPL_DM && BLK
 	default y
 	help
 	  Enable support for block devices, such as SCSI, MMC and USB
@@ -49,6 +64,24 @@ config BLOCK_CACHE
 	  it will prevent repeated reads from directory structures and other
 	  filesystem data structures.
 
+config BLKMAP
+	bool "Composable virtual block devices (blkmap)"
+	depends on BLK
+	help
+ 	  Create virtual block devices that are backed by various sources,
+ 	  e.g. RAM, or parts of an existing block device. Though much more
+ 	  rudimentary, it borrows a lot of ideas from Linux's device mapper
+ 	  subsystem.
+
+	  Example use-cases:
+	  - Treat a region of RAM as a block device, i.e. a RAM disk. This let's
+            you extract files from filesystem images stored in RAM (perhaps as a
+            result of a TFTP transfer).
+	  - Create a virtual partition on an existing device. This let's you
+            access filesystems that aren't stored at an exact partition
+            boundary. A common example is a filesystem image embedded in an FIT
+            image.
+
 config SPL_BLOCK_CACHE
 	bool "Use block device cache in SPL"
 	depends on SPL_BLK
@@ -63,13 +96,21 @@ config TPL_BLOCK_CACHE
 
 config EFI_MEDIA
 	bool "Support EFI media drivers"
-	default y if EFI || SANDBOX
+	default y if EFI_CLIENT || SANDBOX
+	select BLK
 	help
 	  Enable this to support media devices on top of UEFI. This enables
 	  just the uclass so you also need a specific driver to make this do
 	  anything.
 
 	  For sandbox there is a test driver.
+
+config SPL_BLK_FS
+	bool "Load images from filesystems on block devices"
+	depends on SPL_BLK && SPL_FS_LOADER
+	help
+	  Use generic support to load images from fat/ext filesystems on
+	  different types of block devices such as NVMe.
 
 if EFI_MEDIA
 
@@ -96,7 +137,7 @@ endif  # EFI_MEDIA
 
 config IDE
 	bool "Support IDE controllers"
-	select HAVE_BLOCK_DEVICE
+	select BLK
 	help
 	  Enables support for IDE (Integrated Drive Electronics) hard drives.
 	  This allows access to raw blocks and filesystems on an IDE drive
@@ -106,7 +147,7 @@ config IDE
 if IDE
 
 config SYS_IDE_MAXBUS
-	hex "Maximumm number of IDE buses"
+	hex "Maximum number of IDE buses"
 	default 2
 	help
 	  This is the number of IDE buses provided by the board. Each one
@@ -125,7 +166,7 @@ config SYS_IDE_MAXDEVICE
 
 config SYS_ATA_BASE_ADDR
 	hex "Base address of IDE controller"
-	default 0
+	default 0x0
 	help
 	  This is the address of the IDE controller, from which other addresses
 	  are calculated. Each bus is at a fixed offset from this address,
@@ -206,3 +247,25 @@ config IDE_RESET
 	  must be defined in a board-specific file.
 
 endif  # IDE
+
+config LBA48
+	bool "Enable LBA support for disks larger than 137GB"
+	help
+	  Set this to enable support for disks larger than 137GB.
+	  Also look at CONFIG_SYS_64BIT_LBA.  Without both of these, LBA48
+	  support uses 32bit variables and will 'only' support disks up to
+	  2.1TB.
+
+config SYS_64BIT_LBA
+	bool "Enable 64bit number of blocks on a block device"
+	help
+	  Make the block subsystem use 64bit sector addresses, rather than the
+	  default of 32bit.
+
+config RKMTD
+	bool "Rockchip rkmtd virtual block device"
+	select RANDOM_UUID
+	help
+	  Enable "rkmtd" class and driver to create a virtual block device
+	  to transfer Rockchip boot block data to and from NAND with block
+	  orientate tools like "ums" and "rockusb".

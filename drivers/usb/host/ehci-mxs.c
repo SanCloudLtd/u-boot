@@ -6,7 +6,6 @@
  * on behalf of DENX Software Engineering GmbH
  */
 
-#include <common.h>
 #include <asm/io.h>
 #include <asm/arch/imx-regs.h>
 #include <errno.h>
@@ -112,82 +111,6 @@ static int __ehci_hcd_stop(struct ehci_mxs_port *port)
 	return ehci_mxs_toggle_clock(port, 0);
 }
 
-#if !CONFIG_IS_ENABLED(DM_USB)
-static const struct ehci_mxs_port mxs_port[] = {
-#ifdef CONFIG_EHCI_MXS_PORT0
-	{
-		MXS_USBCTRL0_BASE,
-		(struct mxs_usbphy_regs *)MXS_USBPHY0_BASE,
-		(struct mxs_register_32 *)(MXS_CLKCTRL_BASE +
-			offsetof(struct mxs_clkctrl_regs,
-			hw_clkctrl_pll0ctrl0_reg)),
-		CLKCTRL_PLL0CTRL0_EN_USB_CLKS | CLKCTRL_PLL0CTRL0_POWER,
-		CLKCTRL_PLL0CTRL0_EN_USB_CLKS,
-		HW_DIGCTL_CTRL_USB0_CLKGATE,
-	},
-#endif
-#ifdef CONFIG_EHCI_MXS_PORT1
-	{
-		MXS_USBCTRL1_BASE,
-		(struct mxs_usbphy_regs *)MXS_USBPHY1_BASE,
-		(struct mxs_register_32 *)(MXS_CLKCTRL_BASE +
-			offsetof(struct mxs_clkctrl_regs,
-			hw_clkctrl_pll1ctrl0_reg)),
-		CLKCTRL_PLL1CTRL0_EN_USB_CLKS | CLKCTRL_PLL1CTRL0_POWER,
-		CLKCTRL_PLL1CTRL0_EN_USB_CLKS,
-		HW_DIGCTL_CTRL_USB1_CLKGATE,
-	},
-#endif
-};
-
-int __weak board_ehci_hcd_init(int port)
-{
-	return 0;
-}
-
-int __weak board_ehci_hcd_exit(int port)
-{
-	return 0;
-}
-
-int ehci_hcd_init(int index, enum usb_init_type init,
-		struct ehci_hccr **hccr, struct ehci_hcor **hcor)
-{
-
-	int ret;
-	const struct ehci_mxs_port *port;
-
-	if ((index < 0) || (index >= ARRAY_SIZE(mxs_port))) {
-		printf("Invalid port index (index = %d)!\n", index);
-		return -EINVAL;
-	}
-
-	ret = board_ehci_hcd_init(index);
-	if (ret)
-		return ret;
-
-	port = &mxs_port[index];
-	return __ehci_hcd_init(port, init, hccr, hcor);
-}
-
-int ehci_hcd_stop(int index)
-{
-	int ret;
-	const struct ehci_mxs_port *port;
-
-	if ((index < 0) || (index >= ARRAY_SIZE(mxs_port))) {
-		printf("Invalid port index (index = %d)!\n", index);
-		return -EINVAL;
-	}
-
-	port = &mxs_port[index];
-
-	ret = __ehci_hcd_stop(port);
-	board_ehci_hcd_exit(index);
-
-	return ret;
-}
-#else /* CONFIG_IS_ENABLED(DM_USB) */
 struct ehci_mxs_priv_data {
 	struct ehci_ctrl ctrl;
 	struct usb_ehci *ehci;
@@ -212,11 +135,12 @@ static int ehci_usb_ofdata_to_platdata(struct udevice *dev)
 	struct usb_plat *plat = dev_get_plat(dev);
 	struct ehci_mxs_port *port = &priv->port;
 	u32 phandle, phy_reg, clk_reg, clk_id;
+	ofnode np = dev_ofnode(dev);
 	ofnode phy_node, clk_node;
 	const char *mode;
 	int ret;
 
-	mode = ofnode_read_string(dev->node_, "dr_mode");
+	mode = ofnode_read_string(np, "dr_mode");
 	if (mode) {
 		if (strcmp(mode, "peripheral") == 0)
 			plat->init_type = USB_INIT_DEVICE;
@@ -227,12 +151,12 @@ static int ehci_usb_ofdata_to_platdata(struct udevice *dev)
 	}
 
 	/* Read base address of the USB IP block */
-	ret = ofnode_read_u32(dev->node_, "reg", &port->usb_regs);
+	ret = ofnode_read_u32(np, "reg", &port->usb_regs);
 	if (ret)
 		return ret;
 
 	/* Read base address of the USB PHY IP block */
-	ret = ofnode_read_u32(dev->node_, "fsl,usbphy", &phandle);
+	ret = ofnode_read_u32(np, "fsl,usbphy", &phandle);
 	if (ret)
 		return ret;
 
@@ -311,9 +235,9 @@ static int ehci_usb_probe(struct udevice *dev)
 		debug("%s: No vbus supply\n", dev->name);
 
 	if (!ret && priv->vbus_supply) {
-		ret = regulator_set_enable(priv->vbus_supply,
-					   (type == USB_INIT_DEVICE) ?
-					   false : true);
+		ret = regulator_set_enable_if_allowed(priv->vbus_supply,
+						      (type == USB_INIT_DEVICE) ?
+						      false : true);
 		if (ret) {
 			puts("Error enabling VBUS supply\n");
 			return ret;
@@ -340,7 +264,7 @@ static int ehci_usb_remove(struct udevice *dev)
 
 #if CONFIG_IS_ENABLED(DM_REGULATOR)
 	if (priv->vbus_supply) {
-		ret = regulator_set_enable(priv->vbus_supply, false);
+		ret = regulator_set_enable_if_allowed(priv->vbus_supply, false);
 		if (ret) {
 			puts("Error disabling VBUS supply\n");
 			return ret;
@@ -367,4 +291,3 @@ U_BOOT_DRIVER(usb_mxs) = {
 	.priv_auto = sizeof(struct ehci_mxs_priv_data),
 	.flags	= DM_FLAG_ALLOC_PRIV_DMA,
 };
-#endif /* !CONFIG_IS_ENABLED(DM_USB) */

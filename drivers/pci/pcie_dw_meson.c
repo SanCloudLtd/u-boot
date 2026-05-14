@@ -9,7 +9,6 @@
  * Copyright (c) 2021 Rockchip, Inc.
  */
 
-#include <common.h>
 #include <clk.h>
 #include <dm.h>
 #include <generic-phy.h>
@@ -116,13 +115,9 @@ static void meson_pcie_configure(struct meson_pcie *priv)
 	val &= ~PORT_LINK_FAST_LINK_MODE;
 	val |= PORT_LINK_DLL_LINK_EN;
 	val &= ~PORT_LINK_MODE_MASK;
-	val |= PORT_LINK_MODE_1_LANES;
 	writel(val, priv->dw.dbi_base + PCIE_PORT_LINK_CONTROL);
 
-	val = readl(priv->dw.dbi_base + PCIE_LINK_WIDTH_SPEED_CONTROL);
-	val &= ~PORT_LOGIC_LINK_WIDTH_MASK;
-	val |= PORT_LOGIC_LINK_WIDTH_1_LANES;
-	writel(val, priv->dw.dbi_base + PCIE_LINK_WIDTH_SPEED_CONTROL);
+	dw_pcie_link_set_max_link_width(&priv->dw, 1);
 
 	dw_pcie_dbi_write_enable(&priv->dw, false);
 }
@@ -337,15 +332,15 @@ static int meson_pcie_parse_dt(struct udevice *dev)
 	struct meson_pcie *priv = dev_get_priv(dev);
 	int ret;
 
-	priv->dw.dbi_base = (void *)dev_read_addr_index(dev, 0);
+	priv->dw.dbi_base = dev_read_addr_index_ptr(dev, 0);
 	if (!priv->dw.dbi_base)
-		return -ENODEV;
+		return -EINVAL;
 
 	dev_dbg(dev, "ELBI address is 0x%p\n", priv->dw.dbi_base);
 
-	priv->meson_cfg_base = (void *)dev_read_addr_index(dev, 1);
+	priv->meson_cfg_base = dev_read_addr_index_ptr(dev, 1);
 	if (!priv->meson_cfg_base)
-		return -ENODEV;
+		return -EINVAL;
 
 	dev_dbg(dev, "CFG address is 0x%p\n", priv->meson_cfg_base);
 

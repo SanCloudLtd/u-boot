@@ -9,12 +9,10 @@
 
 """See README for more information"""
 
-from distutils.sysconfig import get_python_lib
 import os
 import site
 import sys
 import traceback
-import unittest
 
 # Get the absolute path to this file at run-time
 our_path = os.path.dirname(os.path.realpath(__file__))
@@ -36,22 +34,17 @@ sys.pycache_prefix = os.path.relpath(our_path, srctree)
 sys.path.insert(2, our1_path)
 
 from binman import bintool
-from patman import test_util
+from u_boot_pylib import test_util
 
 # Bring in the libfdt module
 sys.path.insert(2, 'scripts/dtc/pylibfdt')
 sys.path.insert(2, os.path.join(srctree, 'scripts/dtc/pylibfdt'))
+sys.path.insert(2, os.path.join(srctree, 'build-sandbox/scripts/dtc/pylibfdt'))
 sys.path.insert(2, os.path.join(srctree, 'build-sandbox_spl/scripts/dtc/pylibfdt'))
-
-# When running under python-coverage on Ubuntu 16.04, the dist-packages
-# directories are dropped from the python path. Add them in so that we can find
-# the elffile module. We could use site.getsitepackages() here but unfortunately
-# that is not available in a virtualenv.
-sys.path.append(get_python_lib())
 
 from binman import cmdline
 from binman import control
-from patman import test_util
+from u_boot_pylib import test_util
 
 def RunTests(debug, verbosity, processes, test_preserve_dirs, args, toolpath):
     """Run the functional tests and any embedded doctests
@@ -79,21 +72,20 @@ def RunTests(debug, verbosity, processes, test_preserve_dirs, args, toolpath):
     from binman import image_test
     import doctest
 
-    result = unittest.TestResult()
     test_name = args and args[0] or None
 
     # Run the entry tests first ,since these need to be the first to import the
     # 'entry' module.
-    test_util.run_test_suites(
-        result, debug, verbosity, test_preserve_dirs, processes, test_name,
-        toolpath,
+    result = test_util.run_test_suites(
+        'binman', debug, verbosity, False, test_preserve_dirs, processes,
+        test_name, toolpath,
         [bintool_test.TestBintool, entry_test.TestEntry, ftest.TestFunctional,
          fdt_test.TestFdt, elf_test.TestElf, image_test.TestImage,
          cbfs_util_test.TestCbfs, fip_util_test.TestFip])
 
-    return test_util.report_result('binman', test_name, result)
+    return (0 if result.wasSuccessful() else 1)
 
-def RunTestCoverage(toolpath):
+def RunTestCoverage(toolpath, build_dir, args):
     """Run the tests and check that we get 100% coverage"""
     glob_list = control.GetEntryModules(False)
     all_set = set([os.path.splitext(os.path.basename(item))[0]
@@ -102,9 +94,16 @@ def RunTestCoverage(toolpath):
     if toolpath:
         for path in toolpath:
             extra_args += ' --toolpath %s' % path
+
+    # Some files unfortunately don't thave the required test coverage. This will
+    # eventually be fixed, but exclude them for now
     test_util.run_test_coverage('tools/binman/binman', None,
-            ['*test*', '*main.py', 'tools/patman/*', 'tools/dtoc/*'],
-            args.build_dir, all_set, extra_args or None)
+            ['*test*', '*main.py', 'tools/patman/*', 'tools/dtoc/*',
+             'tools/u_boot_pylib/*'],
+            build_dir, all_set, extra_args or None, args=args,
+            allow_failures=['tools/binman/btool/cst.py',
+                            'tools/binman/etype/nxp_imx8mcst.py',
+                            'tools/binman/etype/nxp_imx8mimage.py'])
 
 def RunBinman(args):
     """Main entry point to binman once arguments are parsed
@@ -124,11 +123,13 @@ def RunBinman(args):
 
     if args.cmd == 'test':
         if args.test_coverage:
-            RunTestCoverage(args.toolpath)
+            RunTestCoverage(args.toolpath, args.build_dir, args.tests)
         else:
             ret_code = RunTests(args.debug, args.verbosity, args.processes,
                                 args.test_preserve_dirs, args.tests,
                                 args.toolpath)
+            if args.debug and not test_util.use_concurrent:
+                print('Tests can run in parallel: pip install concurrencytest')
 
     elif args.cmd == 'bintool-docs':
         control.write_bintool_docs(bintool.Bintool.get_tool_list())
@@ -148,8 +149,12 @@ def RunBinman(args):
     return ret_code
 
 
-if __name__ == "__main__":
+def start_binman():
     args = cmdline.ParseArgs(sys.argv[1:])
 
     ret_code = RunBinman(args)
     sys.exit(ret_code)
+
+
+if __name__ == "__main__":
+    start_binman()

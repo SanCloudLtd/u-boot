@@ -7,7 +7,6 @@
  */
 
 #include <boot_fit.h>
-#include <common.h>
 #include <errno.h>
 #include <image.h>
 #include <log.h>
@@ -57,17 +56,17 @@ static int fdt_offset(const void *fit)
 
 void *locate_dtb_in_fit(const void *fit)
 {
-	struct image_header *header;
+	struct legacy_img_hdr *header;
 	int size;
 	int ret;
 
 	size = fdt_totalsize(fit);
 	size = (size + 3) & ~3;
 
-	header = (struct image_header *)fit;
+	header = (struct legacy_img_hdr *)fit;
 
 	if (image_get_magic(header) != FDT_MAGIC) {
-		debug("No FIT image appended to U-boot\n");
+		debug("No FIT image appended to U-Boot\n");
 		return NULL;
 	}
 

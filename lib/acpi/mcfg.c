@@ -7,11 +7,13 @@
 
 #define LOG_CATEGORY LOGC_ACPI
 
-#include <common.h>
 #include <mapmem.h>
 #include <tables_csum.h>
 #include <acpi/acpi_table.h>
 #include <dm/acpi.h>
+#include <linux/errno.h>
+#include <linux/string.h>
+#include <linux/types.h>
 
 int acpi_create_mcfg_mmconfig(struct acpi_mcfg_mmconfig *mmconfig, u32 base,
 			      u16 seg_nr, u8 start, u8 end)
@@ -55,7 +57,7 @@ int acpi_write_mcfg(struct acpi_ctx *ctx, const struct acpi_writer *entry)
 
 	/* (Re)calculate length and checksum */
 	header->length = (ulong)ctx->current - (ulong)mcfg;
-	header->checksum = table_compute_checksum(mcfg, header->length);
+	acpi_update_checksum(header);
 
 	acpi_add_table(ctx, mcfg);
 

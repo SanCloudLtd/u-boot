@@ -11,19 +11,11 @@
 
 #include <linux/bitops.h>
 #include <linux/list.h>
-#include <linux/sizes.h>
-#include <linux/compiler.h>
 #include <linux/dma-direction.h>
+#include <cyclic.h>
 #include <part.h>
 
 struct bd_info;
-
-#if CONFIG_IS_ENABLED(MMC_HS200_SUPPORT)
-#define MMC_SUPPORTS_TUNING
-#endif
-#if CONFIG_IS_ENABLED(MMC_UHS_SUPPORT)
-#define MMC_SUPPORTS_TUNING
-#endif
 
 /* SD/MMC version bits; 8 flags, 8 major, 8 minor, 8 change */
 #define SD_VERSION_SD	(1U << 31)
@@ -80,11 +72,14 @@ struct bd_info;
 #define MMC_MODE_1BIT		BIT(28)
 #define MMC_MODE_SPI		BIT(27)
 
-
 #define SD_DATA_4BIT	0x00040000
 
 #define IS_SD(x)	((x)->version & SD_VERSION_SD)
 #define IS_MMC(x)	((x)->version & MMC_VERSION_MMC)
+
+#define CID_MANFID_MICRON       0x13
+#define CID_MANFID_SAMSUNG      0x15
+#define CID_MANFID_SANDISK      0x45
 
 #define MMC_DATA_READ		1
 #define MMC_DATA_WRITE		2
@@ -119,7 +114,7 @@ struct bd_info;
 
 #define MMC_CMD62_ARG1			0xefac62ec
 #define MMC_CMD62_ARG2			0xcbaea7
-
+#define MMC_CMD62_ARG_SANDISK		0x254ddec4
 
 #define SD_CMD_SEND_RELATIVE_ADDR	3
 #define SD_CMD_SWITCH_FUNC		6
@@ -213,6 +208,7 @@ static inline bool mmc_is_tuning_cmd(uint cmdidx)
 /*
  * EXT_CSD fields
  */
+#define EXT_CSD_BOOT_SIZE_MULT_MICRON	125	/* R/W, vendor specific field */
 #define EXT_CSD_ENH_START_ADDR		136	/* R/W */
 #define EXT_CSD_ENH_SIZE_MULT		140	/* R/W */
 #define EXT_CSD_GP_SIZE_MULT		143	/* R/W */
@@ -241,6 +237,7 @@ static inline bool mmc_is_tuning_cmd(uint cmdidx)
 #define EXT_CSD_HC_WP_GRP_SIZE		221	/* RO */
 #define EXT_CSD_HC_ERASE_GRP_SIZE	224	/* RO */
 #define EXT_CSD_BOOT_MULT		226	/* RO */
+#define EXT_CSD_SEC_FEATURE		231	/* RO */
 #define EXT_CSD_GENERIC_CMD6_TIME       248     /* RO */
 #define EXT_CSD_BKOPS_SUPPORT		502	/* RO */
 
@@ -308,8 +305,14 @@ static inline bool mmc_is_tuning_cmd(uint cmdidx)
 
 #define EXT_CSD_HS_CTRL_REL	(1 << 0)	/* host controlled WR_REL_SET */
 
+#define EXT_CSD_BOOT_WP_B_SEC_WP_SEL	(0x80)	/* enable partition selector */
+#define EXT_CSD_BOOT_WP_B_PWR_WP_SEC_SEL (0x02)	/* partition selector to protect */
+#define EXT_CSD_BOOT_WP_B_PWR_WP_EN	(0x01)	/* power-on write-protect */
+
 #define EXT_CSD_WR_DATA_REL_USR		(1 << 0)	/* user data area WR_REL */
 #define EXT_CSD_WR_DATA_REL_GP(x)	(1 << ((x)+1))	/* GP part (x+1) WR_REL */
+
+#define EXT_CSD_SEC_FEATURE_TRIM_EN	(1 << 4) /* Support secure & insecure trim */
 
 #define R1_ILLEGAL_COMMAND		(1 << 22)
 #define R1_APP_CMD			(1 << 5)
@@ -374,6 +377,32 @@ enum mmc_voltage {
 #define MMC_TIMING_MMC_HS200	9
 #define MMC_TIMING_MMC_HS400	10
 
+/* emmc PARTITION_CONFIG BOOT_PARTITION_ENABLE values */
+enum emmc_boot_part {
+	EMMC_BOOT_PART_DEFAULT = 0,
+	EMMC_BOOT_PART_BOOT1 = 1,
+	EMMC_BOOT_PART_BOOT2 = 2,
+	EMMC_BOOT_PART_USER = 7,
+};
+
+/* emmc PARTITION_CONFIG BOOT_PARTITION_ENABLE names */
+extern const char *emmc_boot_part_names[8];
+
+/* emmc PARTITION_CONFIG ACCESS_ENABLE values */
+enum emmc_hwpart {
+	EMMC_HWPART_DEFAULT = 0, /* user */
+	EMMC_HWPART_BOOT1 = 1,
+	EMMC_HWPART_BOOT2 = 2,
+	EMMC_HWPART_RPMB = 3,
+	EMMC_HWPART_GP1 = 4,
+	EMMC_HWPART_GP2 = 5,
+	EMMC_HWPART_GP3 = 6,
+	EMMC_HWPART_GP4 = 7,
+};
+
+/* emmc PARTITION_CONFIG ACCESS_ENABLE names */
+extern const char *emmc_hwpart_names[8];
+
 /* Driver model support */
 
 /**
@@ -406,7 +435,7 @@ struct mmc_cid {
 };
 
 struct mmc_cmd {
-	ushort cmdidx;
+	uint cmdidx;
 	uint resp_type;
 	uint cmdarg;
 	uint response[4];
@@ -463,6 +492,14 @@ struct dm_mmc_ops {
 	int (*set_ios)(struct udevice *dev);
 
 	/**
+	 * send_init_stream() - send the initialization stream: 74 clock cycles
+	 * This is used after power up before sending the first command
+	 *
+	 * @dev:	Device to update
+	 */
+	void (*send_init_stream)(struct udevice *dev);
+
+	/**
 	 * get_cd() - See whether a card is present
 	 *
 	 * @dev:	Device to check
@@ -478,7 +515,7 @@ struct dm_mmc_ops {
 	 */
 	int (*get_wp)(struct udevice *dev);
 
-#ifdef MMC_SUPPORTS_TUNING
+#if CONFIG_IS_ENABLED(MMC_SUPPORTS_TUNING)
 	/**
 	 * execute_tuning() - Start the tuning process
 	 *
@@ -541,6 +578,7 @@ struct dm_mmc_ops {
 
 /* Transition functions for compatibility */
 int mmc_set_ios(struct mmc *mmc);
+void mmc_send_init_stream(struct mmc *mmc);
 int mmc_getcd(struct mmc *mmc);
 int mmc_getwp(struct mmc *mmc);
 int mmc_execute_tuning(struct mmc *mmc, uint opcode);
@@ -551,6 +589,8 @@ int mmc_deferred_probe(struct mmc *mmc);
 int mmc_reinit(struct mmc *mmc);
 int mmc_get_b_max(struct mmc *mmc, void *dst, lbaint_t blkcnt);
 int mmc_hs400_prepare_ddr(struct mmc *mmc);
+int mmc_send_stop_transmission(struct mmc *mmc, bool write);
+
 #else
 struct mmc_ops {
 	int (*send_cmd)(struct mmc *mmc,
@@ -561,6 +601,7 @@ struct mmc_ops {
 	int (*getwp)(struct mmc *mmc);
 	int (*host_power_cycle)(struct mmc *mmc);
 	int (*get_b_max)(struct mmc *mmc, void *dst, lbaint_t blkcnt);
+	int (*wait_dat0)(struct mmc *mmc, int state, int timeout_us);
 };
 
 static inline int mmc_hs400_prepare_ddr(struct mmc *mmc)
@@ -580,7 +621,7 @@ struct mmc_config {
 	uint f_max;
 	uint b_max;
 	unsigned char part_type;
-#ifdef CONFIG_MMC_PWRSEQ
+#if CONFIG_IS_ENABLED(MMC_PWRSEQ)
 	struct udevice *pwr_dev;
 #endif
 };
@@ -682,6 +723,7 @@ struct mmc {
 	uint tran_speed;
 	uint legacy_speed; /* speed for the legacy mode provided by the card */
 	uint read_bl_len;
+	bool can_trim;
 #if CONFIG_IS_ENABLED(MMC_WRITE)
 	uint write_bl_len;
 	uint erase_grp_size;	/* in 512-byte sectors */
@@ -697,7 +739,7 @@ struct mmc {
 	u64 capacity_boot;
 	u64 capacity_rpmb;
 	u64 capacity_gp[4];
-#ifndef CONFIG_SPL_BUILD
+#ifndef CONFIG_XPL_BUILD
 	u64 enh_user_start;
 	u64 enh_user_size;
 #endif
@@ -725,9 +767,16 @@ struct mmc {
 				  * accessing the boot partitions
 				  */
 	u32 quirks;
-	u8 hs400_tuning;
+	bool tuning:1;
+	bool hs400_tuning:1;
 
 	enum bus_mode user_speed_mode; /* input speed mode from user */
+
+	/*
+	 * If CONFIG_CYCLIC is not set, struct cyclic_info is
+	 * zero-size structure and does not add any space here.
+	 */
+	struct cyclic_info cyclic;
 };
 
 #if CONFIG_IS_ENABLED(DM_MMC)
@@ -762,7 +811,7 @@ struct mmc *mmc_create(const struct mmc_config *cfg, void *priv);
 /**
  * mmc_bind() - Set up a new MMC device ready for probing
  *
- * A child block device is bound with the IF_TYPE_MMC interface type. This
+ * A child block device is bound with the UCLASS_MMC interface type. This
  * allows the device to be used with CONFIG_BLK
  *
  * @dev:	MMC device to set up
@@ -784,7 +833,7 @@ int mmc_unbind(struct udevice *dev);
 int mmc_initialize(struct bd_info *bis);
 int mmc_init_device(int num);
 int mmc_init(struct mmc *mmc);
-int mmc_send_tuning(struct mmc *mmc, u32 opcode, int *cmd_error);
+int mmc_send_tuning(struct mmc *mmc, u32 opcode);
 int mmc_send_cmd(struct mmc *mmc, struct mmc_cmd *cmd, struct mmc_data *data);
 int mmc_deinit(struct mmc *mmc);
 
@@ -797,7 +846,7 @@ int mmc_deinit(struct mmc *mmc);
  */
 int mmc_of_parse(struct udevice *dev, struct mmc_config *cfg);
 
-#ifdef CONFIG_MMC_PWRSEQ
+#if CONFIG_IS_ENABLED(MMC_PWRSEQ)
 /**
  * mmc_pwrseq_get_power() - get a power device from device tree
  *
@@ -887,9 +936,17 @@ int mmc_rpmb_write(struct mmc *mmc, void *addr, unsigned short blk,
 int mmc_rpmb_route_frames(struct mmc *mmc, void *req, unsigned long reqlen,
 			  void *rsp, unsigned long rsplen);
 
-#ifdef CONFIG_CMD_BKOPS_ENABLE
-int mmc_set_bkops_enable(struct mmc *mmc);
-#endif
+/**
+ * mmc_set_bkops_enable() - enable background operations
+ * @param mmc		Pointer to a MMC device struct
+ * @param autobkops	Enable automatic bkops, not manual bkops
+ * @param enable	Enable bkops, not disable
+ *
+ * Enable or disable automatic or manual background operation of the eMMC.
+ *
+ * Return: 0 on success, <0 on error.
+ */
+int mmc_set_bkops_enable(struct mmc *mmc, bool autobkops, bool enable);
 
 /**
  * Start device initialization and return immediately; it does not block on
@@ -939,7 +996,7 @@ void board_mmc_power_init(void);
 int board_mmc_init(struct bd_info *bis);
 int cpu_mmc_init(struct bd_info *bis);
 int mmc_get_env_addr(struct mmc *mmc, int copy, u32 *env_addr);
-# ifdef CONFIG_SYS_MMC_ENV_PART
+# ifdef CONFIG_ENV_MMC_EMMC_HW_PARTITION
 extern uint mmc_get_env_part(struct mmc *mmc);
 # endif
 int mmc_get_env_dev(void);
@@ -947,18 +1004,23 @@ int mmc_get_env_dev(void);
 /* Minimum partition switch timeout in units of 10-milliseconds */
 #define MMC_MIN_PART_SWITCH_TIME	30 /* 300 ms */
 
-/* Set block count limit because of 16 bit register limit on some hardware*/
-#ifndef CONFIG_SYS_MMC_MAX_BLK_COUNT
-#define CONFIG_SYS_MMC_MAX_BLK_COUNT 65535
-#endif
-
 /**
  * mmc_get_blk_desc() - Get the block descriptor for an MMC device
  *
  * @mmc:	MMC device
- * Return: block device if found, else NULL
+ * Return: block descriptor if found, else NULL
  */
 struct blk_desc *mmc_get_blk_desc(struct mmc *mmc);
+
+/**
+ * mmc_get_blk() - Get the block device for an MMC device
+ *
+ * @dev:	MMC device
+ * @blkp:	Returns pointer to probed block device on sucesss
+ *
+ * Return: 0 on success, -ve on error
+ */
+int mmc_get_blk(struct udevice *dev, struct udevice **blkp);
 
 /**
  * mmc_send_ext_csd() - read the extended CSD register
@@ -979,6 +1041,18 @@ int mmc_send_ext_csd(struct mmc *mmc, u8 *ext_csd);
  * Return:	0 for success
  */
 int mmc_boot_wp(struct mmc *mmc);
+
+/**
+ * mmc_boot_wp_single_partition() - set write protection to a boot partition.
+ *
+ * This function sets a single boot partition to protect and leave the
+ * other partition writable.
+ *
+ * @param mmc the mmc device.
+ * @param partition 0 - first boot partition, 1 - second boot partition.
+ * @return 0 for success
+ */
+int mmc_boot_wp_single_partition(struct mmc *mmc, int partition);
 
 static inline enum dma_data_direction mmc_get_dma_dir(struct mmc_data *data)
 {

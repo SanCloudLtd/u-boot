@@ -3,7 +3,7 @@
  * Copyright (C) 2013-2014 Synopsys, Inc. All rights reserved.
  */
 
-#include <common.h>
+#include <bootm.h>
 #include <bootstage.h>
 #include <env.h>
 #include <image.h>
@@ -22,16 +22,18 @@ static int cleanup_before_linux(void)
 	return 0;
 }
 
-__weak int board_prep_linux(bootm_headers_t *images) { return 0; }
+__weak int board_prep_linux(struct bootm_headers *images) { return 0; }
 
 /* Subcommand: PREP */
-static int boot_prep_linux(bootm_headers_t *images)
+static int boot_prep_linux(struct bootm_headers *images)
 {
 	int ret;
 
-	ret = image_setup_linux(images);
-	if (ret)
-		return ret;
+	if (IS_ENABLED(CONFIG_LMB)) {
+		ret = image_setup_linux(images);
+		if (ret)
+			return ret;
+	}
 
 	return board_prep_linux(images);
 }
@@ -47,7 +49,7 @@ __weak void board_jump_and_run(ulong entry, int zero, int arch, uint params)
 }
 
 /* Subcommand: GO */
-static void boot_jump_linux(bootm_headers_t *images, int flag)
+static void boot_jump_linux(struct bootm_headers *images, int flag)
 {
 	ulong kernel_entry;
 	unsigned int r0, r2;
@@ -77,8 +79,10 @@ static void boot_jump_linux(bootm_headers_t *images, int flag)
 		board_jump_and_run(kernel_entry, r0, 0, r2);
 }
 
-int do_bootm_linux(int flag, int argc, char *argv[], bootm_headers_t *images)
+int do_bootm_linux(int flag, struct bootm_info *bmi)
 {
+	struct bootm_headers *images = bmi->images;
+
 	/* No need for those on ARC */
 	if ((flag & BOOTM_STATE_OS_BD_T) || (flag & BOOTM_STATE_OS_CMDLINE))
 		return -1;

@@ -3,7 +3,6 @@
  * Copyright (C) ASPEED Technology Inc.
  */
 
-#include <common.h>
 #include <errno.h>
 #include <asm/arch/pinctrl.h>
 #include <asm/arch/scu_ast2600.h>
@@ -267,6 +266,14 @@ static struct aspeed_sig_desc fmcquad_link[] = {
 	{ 0x438, GENMASK(5, 4), 0 },
 };
 
+static struct aspeed_sig_desc siopbi_link[] = {
+	{ 0x418, BIT(6), 0 },
+};
+
+static struct aspeed_sig_desc siopbo_link[] = {
+	{ 0x418, BIT(5), 0 },
+};
+
 static struct aspeed_sig_desc spi1_link[] = {
 	{ 0x438, GENMASK(13, 11), 0 },
 };
@@ -303,6 +310,22 @@ static struct aspeed_sig_desc spi2quad_link[] = {
 	{ 0x434, GENMASK(31, 30), 0 },
 };
 
+static struct aspeed_sig_desc thru0_link[] = {
+	{ 0x4bc, GENMASK(25, 24), 0 },
+};
+
+static struct aspeed_sig_desc thru1_link[] = {
+	{ 0x4bc, GENMASK(27, 26), 0 },
+};
+
+static struct aspeed_sig_desc thru2_link[] = {
+	{ 0x4bc, GENMASK(29, 28), 0 },
+};
+
+static struct aspeed_sig_desc thru3_link[] = {
+	{ 0x4bc, GENMASK(31, 30), 0 },
+};
+
 static struct aspeed_sig_desc fsi1[] = {
 	{ 0xd48, GENMASK(21, 20), 0 },
 };
@@ -335,6 +358,110 @@ static struct aspeed_sig_desc pcie1rc_link[] = {
 	{ 0x500, BIT(24), 0 }, /* dedicate rc reset */
 };
 
+static struct aspeed_sig_desc pwm0[] = {
+	{0x41c, BIT(16), 0},
+};
+
+static struct aspeed_sig_desc pwm1[] = {
+	{0x41c, BIT(17), 0},
+};
+
+static struct aspeed_sig_desc pwm2[] = {
+	{0x41c, BIT(18), 0},
+};
+
+static struct aspeed_sig_desc pwm3[] = {
+	{0x41c, BIT(19), 0},
+};
+
+static struct aspeed_sig_desc pwm4[] = {
+	{0x41c, BIT(20), 0},
+};
+
+static struct aspeed_sig_desc pwm5[] = {
+	{0x41c, BIT(21), 0},
+};
+
+static struct aspeed_sig_desc pwm6[] = {
+	{0x41c, BIT(22), 0},
+};
+
+static struct aspeed_sig_desc pwm7[] = {
+	{0x41c, BIT(23), 0},
+};
+
+static struct aspeed_sig_desc pwm8g0[] = {
+	{0x4B4, BIT(8), 0},
+};
+
+static struct aspeed_sig_desc pwm8g1[] = {
+	{0x41c, BIT(24), 0},
+};
+
+static struct aspeed_sig_desc pwm9g0[] = {
+	{0x4B4, BIT(9), 0},
+};
+
+static struct aspeed_sig_desc pwm9g1[] = {
+	{0x41c, BIT(25), 0},
+};
+
+static struct aspeed_sig_desc pwm10g0[] = {
+	{0x4B4, BIT(10), 0},
+};
+
+static struct aspeed_sig_desc pwm10g1[] = {
+	{0x41c, BIT(26), 0},
+};
+
+static struct aspeed_sig_desc pwm11g0[] = {
+	{0x4B4, BIT(11), 0},
+};
+
+static struct aspeed_sig_desc pwm11g1[] = {
+	{0x41c, BIT(27), 0},
+};
+
+static struct aspeed_sig_desc pwm12g0[] = {
+	{0x4B4, BIT(12), 0},
+};
+
+static struct aspeed_sig_desc pwm12g1[] = {
+	{0x41c, BIT(28), 0},
+};
+
+static struct aspeed_sig_desc pwm13g0[] = {
+	{0x4B4, BIT(13), 0},
+};
+
+static struct aspeed_sig_desc pwm13g1[] = {
+	{0x41c, BIT(29), 0},
+};
+
+static struct aspeed_sig_desc pwm14g0[] = {
+	{0x4B4, BIT(14), 0},
+};
+
+static struct aspeed_sig_desc pwm14g1[] = {
+	{0x41c, BIT(30), 0},
+};
+
+static struct aspeed_sig_desc pwm15g0[] = {
+	{0x4B4, BIT(15), 0},
+};
+
+static struct aspeed_sig_desc pwm15g1[] = {
+	{0x41c, BIT(31), 0},
+};
+
+static struct aspeed_sig_desc sgpm1[] = {
+	{0x414, GENMASK(27, 24), 0},
+};
+
+static struct aspeed_sig_desc sgpm2[] = {
+	{0x6d0, GENMASK(7, 4), 0},
+};
+
 static const struct aspeed_group_config ast2600_groups[] = {
 	{ "MAC1LINK", ARRAY_SIZE(mac1_link), mac1_link },
 	{ "MAC2LINK", ARRAY_SIZE(mac2_link), mac2_link },
@@ -362,6 +489,8 @@ static const struct aspeed_group_config ast2600_groups[] = {
 	{ "EMMC", ARRAY_SIZE(emmc_link), emmc_link },
 	{ "EMMCG8", ARRAY_SIZE(emmcg8_link), emmcg8_link },
 	{ "FMCQUAD", ARRAY_SIZE(fmcquad_link), fmcquad_link },
+	{ "SIOPBI", ARRAY_SIZE(siopbi_link), siopbi_link },
+	{ "SIOPBO", ARRAY_SIZE(siopbo_link), siopbo_link },
 	{ "SPI1", ARRAY_SIZE(spi1_link), spi1_link },
 	{ "SPI1ABR", ARRAY_SIZE(spi1abr_link), spi1abr_link },
 	{ "SPI1CS1", ARRAY_SIZE(spi1cs1_link), spi1cs1_link },
@@ -371,6 +500,10 @@ static const struct aspeed_group_config ast2600_groups[] = {
 	{ "SPI2CS1", ARRAY_SIZE(spi2cs1_link), spi2cs1_link },
 	{ "SPI2CS2", ARRAY_SIZE(spi2cs2_link), spi2cs2_link },
 	{ "SPI2QUAD", ARRAY_SIZE(spi2quad_link), spi2quad_link },
+	{ "THRU0", ARRAY_SIZE(thru0_link), thru0_link },
+	{ "THRU1", ARRAY_SIZE(thru1_link), thru1_link },
+	{ "THRU2", ARRAY_SIZE(thru2_link), thru2_link },
+	{ "THRU3", ARRAY_SIZE(thru3_link), thru3_link },
 	{ "I2C1", ARRAY_SIZE(i2c1_link), i2c1_link },
 	{ "I2C2", ARRAY_SIZE(i2c2_link), i2c2_link },
 	{ "I2C3", ARRAY_SIZE(i2c3_link), i2c3_link },
@@ -394,6 +527,32 @@ static const struct aspeed_group_config ast2600_groups[] = {
 	{ "USB2BH", ARRAY_SIZE(usb2bh_link), usb2bh_link },
 	{ "PCIE0RC", ARRAY_SIZE(pcie0rc_link), pcie0rc_link },
 	{ "PCIE1RC", ARRAY_SIZE(pcie1rc_link), pcie1rc_link },
+	{ "PWM0", ARRAY_SIZE(pwm0), pwm0 },
+	{ "PWM1", ARRAY_SIZE(pwm1), pwm1 },
+	{ "PWM2", ARRAY_SIZE(pwm2), pwm2 },
+	{ "PWM3", ARRAY_SIZE(pwm3), pwm3 },
+	{ "PWM4", ARRAY_SIZE(pwm4), pwm4 },
+	{ "PWM5", ARRAY_SIZE(pwm5), pwm5 },
+	{ "PWM6", ARRAY_SIZE(pwm6), pwm6 },
+	{ "PWM7", ARRAY_SIZE(pwm7), pwm7 },
+	{ "PWM8G0", ARRAY_SIZE(pwm8g0), pwm8g0 },
+	{ "PWM8G1", ARRAY_SIZE(pwm8g1), pwm8g1 },
+	{ "PWM9G0", ARRAY_SIZE(pwm9g0), pwm9g0 },
+	{ "PWM9G1", ARRAY_SIZE(pwm9g1), pwm9g1 },
+	{ "PWM10G0", ARRAY_SIZE(pwm10g0), pwm10g0 },
+	{ "PWM10G1", ARRAY_SIZE(pwm10g1), pwm10g1 },
+	{ "PWM11G0", ARRAY_SIZE(pwm11g0), pwm11g0 },
+	{ "PWM11G1", ARRAY_SIZE(pwm11g1), pwm11g1 },
+	{ "PWM12G0", ARRAY_SIZE(pwm12g0), pwm12g0 },
+	{ "PWM12G1", ARRAY_SIZE(pwm12g1), pwm12g1 },
+	{ "PWM13G0", ARRAY_SIZE(pwm13g0), pwm13g0 },
+	{ "PWM13G1", ARRAY_SIZE(pwm13g1), pwm13g1 },
+	{ "PWM14G0", ARRAY_SIZE(pwm14g0), pwm14g0 },
+	{ "PWM14G1", ARRAY_SIZE(pwm14g1), pwm14g1 },
+	{ "PWM15G0", ARRAY_SIZE(pwm15g0), pwm15g0 },
+	{ "PWM15G1", ARRAY_SIZE(pwm15g1), pwm15g1 },
+	{ "SGPM1", ARRAY_SIZE(sgpm1), sgpm1 },
+	{ "SGPM2", ARRAY_SIZE(sgpm2), sgpm2 },
 };
 
 static int ast2600_pinctrl_get_groups_count(struct udevice *dev)

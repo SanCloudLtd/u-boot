@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0+ */
 /*
- * Copyright (C) 2014-2022 Tony Dinh <mibodhi@gmail.com>
+ * Copyright (C) 2014-2023 Tony Dinh <mibodhi@gmail.com>
  *
  * Based on
  * Copyright (C) 2012
@@ -21,31 +21,21 @@
  */
 #include "mv-common.h"
 
-/*
- * Default environment variables
- */
-#define CONFIG_EXTRA_ENV_SETTINGS \
-	"dtb_file=/boot/dts/" CONFIG_DEFAULT_DEVICE_TREE ".dtb\0" \
-	"mtdparts=" CONFIG_MTDPARTS_DEFAULT "\0"\
-	"mtdids=nand0=orion_nand\0"\
-	"bootargs_console=console=ttyS0,115200\0" \
-	"bootcmd_usb=usb start; load usb 0:1 0x00800000 /boot/uImage; " \
-	"load usb 0:1 0x01100000 /boot/uInitrd; " \
-	"load usb 0:1 0x2c00000 $dtb_file\0"
+#define KERNEL_ADDR_R	__stringify(0x800000)
+#define FDT_ADDR_R	__stringify(0x2c00000)
+#define RAMDISK_ADDR_R	__stringify(0x01100000)
+#define SCRIPT_ADDR_R	__stringify(0x200000)
 
-/*
- * Ethernet Driver configuration
- */
-#define CONFIG_MVGBE_PORTS	{1, 0}	/* enable port 0 only */
-#define CONFIG_PHY_BASE_ADR	0
-#ifdef CONFIG_RESET_PHY_R
-#undef CONFIG_RESET_PHY_R	/* remove legacy reset_phy() */
-#endif
+#define LOAD_ADDRESS_ENV_SETTINGS \
+	"kernel_addr_r=" KERNEL_ADDR_R "\0" \
+	"fdt_addr_r=" FDT_ADDR_R "\0" \
+	"ramdisk_addr_r=" RAMDISK_ADDR_R "\0" \
+	"scriptaddr=" SCRIPT_ADDR_R "\0"
 
-/*
- * Support large disk for SATA and USB
- */
-#define CONFIG_SYS_64BIT_LBA
-#define CONFIG_LBA48
+#define CFG_EXTRA_ENV_SETTINGS \
+	LOAD_ADDRESS_ENV_SETTINGS \
+	"fdtfile=" CONFIG_DEFAULT_DEVICE_TREE ".dtb\0" \
+	"mtdparts=" CONFIG_MTDPARTS_DEFAULT "\0" \
+	"console=ttyS0,115200\0"
 
 #endif /* _CONFIG_POGO_V4_H */

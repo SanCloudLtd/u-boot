@@ -4,10 +4,9 @@
  * Author(s): Vikas Manocha, <vikas.manocha@st.com> for STMicroelectronics.
  */
 
-#include <common.h>
+#include <config.h>
 #include <dm.h>
 #include <init.h>
-#include <lcd.h>
 #include <log.h>
 #include <miiphy.h>
 #include <phy_interface.h>
@@ -15,7 +14,6 @@
 #include <serial.h>
 #include <spl.h>
 #include <splash.h>
-#include <st_logo_data.h>
 #include <video.h>
 #include <asm/global_data.h>
 #include <asm/io.h>
@@ -29,7 +27,7 @@ DECLARE_GLOBAL_DATA_PTR;
 
 int dram_init(void)
 {
-#ifndef CONFIG_SUPPORT_SPL
+#ifndef CONFIG_XPL_BUILD
 	int rv;
 	struct udevice *dev;
 	rv = uclass_get_device(UCLASS_RAM, 0, &dev);
@@ -47,7 +45,7 @@ int dram_init_banksize(void)
 	return fdtdec_setup_memory_banksize();
 }
 
-#ifdef CONFIG_SPL_BUILD
+#ifdef CONFIG_XPL_BUILD
 #ifdef CONFIG_SPL_OS_BOOT
 int spl_start_uboot(void)
 {
@@ -78,55 +76,16 @@ u32 spl_boot_device(void)
 }
 #endif
 
-int board_late_init(void)
-{
-	struct gpio_desc gpio = {};
-	int node;
-
-	node = fdt_node_offset_by_compatible(gd->fdt_blob, 0, "st,led1");
-	if (node < 0)
-		return -1;
-
-	gpio_request_by_name_nodev(offset_to_ofnode(node), "led-gpio", 0, &gpio,
-				   GPIOD_IS_OUT);
-
-	if (dm_gpio_is_valid(&gpio)) {
-		dm_gpio_set_value(&gpio, 0);
-		mdelay(10);
-		dm_gpio_set_value(&gpio, 1);
-	}
-
-	/* read button 1*/
-	node = fdt_node_offset_by_compatible(gd->fdt_blob, 0, "st,button1");
-	if (node < 0)
-		return -1;
-
-	gpio_request_by_name_nodev(offset_to_ofnode(node), "button-gpio", 0,
-				   &gpio, GPIOD_IS_IN);
-
-	if (dm_gpio_is_valid(&gpio)) {
-		if (dm_gpio_get_value(&gpio))
-			puts("usr button is at HIGH LEVEL\n");
-		else
-			puts("usr button is at LOW LEVEL\n");
-	}
-
-	return 0;
-}
-
 int board_init(void)
 {
 #ifdef CONFIG_ETH_DESIGNWARE
-	const char *phy_mode;
-	int node;
+	ofnode node;
 
-	node = fdt_node_offset_by_compatible(gd->fdt_blob, 0, "st,stm32-dwmac");
-	if (node < 0)
+	node = ofnode_by_compatible(ofnode_null(), "st,stm32-dwmac");
+	if (!ofnode_valid(node))
 		return -1;
 
-	phy_mode = fdt_getprop(gd->fdt_blob, node, "phy-mode", NULL);
-
-	switch (phy_get_interface_by_name(phy_mode)) {
+	switch (ofnode_read_phy_mode(node)) {
 	case PHY_INTERFACE_MODE_RMII:
 		STM32_SYSCFG->pmc |= SYSCFG_PMC_MII_RMII_SEL;
 		break;
@@ -134,14 +93,9 @@ int board_init(void)
 		STM32_SYSCFG->pmc &= ~SYSCFG_PMC_MII_RMII_SEL;
 		break;
 	default:
-		printf("PHY interface %s not supported !\n", phy_mode);
+		printf("Unsupported PHY interface!\n");
 	}
 #endif
-
-#if defined(CONFIG_CMD_BMP)
-	bmp_display((ulong)stmicroelectronics_uboot_logo_8bit_rle,
-		    BMP_ALIGN_CENTER, BMP_ALIGN_CENTER);
-#endif /* CONFIG_CMD_BMP */
 
 	return 0;
 }

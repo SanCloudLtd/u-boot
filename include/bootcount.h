@@ -6,7 +6,6 @@
 #ifndef _BOOTCOUNT_H__
 #define _BOOTCOUNT_H__
 
-#include <common.h>
 #include <asm/global_data.h>
 #include <asm/io.h>
 #include <asm/byteorder.h>
@@ -72,14 +71,6 @@ ulong bootcount_load(void);
 
 #if defined(CONFIG_SPL_BOOTCOUNT_LIMIT) || defined(CONFIG_TPL_BOOTCOUNT_LIMIT) || defined(CONFIG_BOOTCOUNT_LIMIT)
 
-#if !defined(CONFIG_SYS_BOOTCOUNT_LE) && !defined(CONFIG_SYS_BOOTCOUNT_BE)
-# if __BYTE_ORDER == __LITTLE_ENDIAN
-#  define CONFIG_SYS_BOOTCOUNT_LE
-# else
-#  define CONFIG_SYS_BOOTCOUNT_BE
-# endif
-#endif
-
 #ifdef CONFIG_SYS_BOOTCOUNT_LE
 static inline void raw_bootcount_store(volatile u32 *addr, u32 data)
 {
@@ -129,13 +120,13 @@ static inline void bootcount_inc(void)
 		return;
 	}
 
-#ifndef CONFIG_SPL_BUILD
+#ifndef CONFIG_XPL_BUILD
 	/* Only increment bootcount when no bootcount support in SPL */
 #if !defined(CONFIG_SPL_BOOTCOUNT_LIMIT) && !defined(CONFIG_TPL_BOOTCOUNT_LIMIT)
 	bootcount_store(++bootcount);
 #endif
 	env_set_ulong("bootcount", bootcount);
-#endif /* !CONFIG_SPL_BUILD */
+#endif /* !CONFIG_XPL_BUILD */
 }
 
 #else

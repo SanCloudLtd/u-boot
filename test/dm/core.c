@@ -5,7 +5,6 @@
  * Copyright (c) 2013 Google, Inc
  */
 
-#include <common.h>
 #include <errno.h>
 #include <dm.h>
 #include <fdtdec.h>
@@ -17,6 +16,7 @@
 #include <dm/util.h>
 #include <dm/test.h>
 #include <dm/uclass-internal.h>
+#include <linux/list.h>
 #include <test/test.h>
 #include <test/ut.h>
 
@@ -124,15 +124,15 @@ static int dm_test_autobind(struct unit_test_state *uts)
 	 * device with no children.
 	 */
 	ut_assert(uts->root);
-	ut_asserteq(1, list_count_items(gd->uclass_root));
-	ut_asserteq(0, list_count_items(&gd->dm_root->child_head));
+	ut_asserteq(1, list_count_nodes(gd->uclass_root));
+	ut_asserteq(0, list_count_nodes(&gd->dm_root->child_head));
 	ut_asserteq(0, dm_testdrv_op_count[DM_TEST_OP_POST_BIND]);
 
 	ut_assertok(dm_scan_plat(false));
 
 	/* We should have our test class now at least, plus more children */
-	ut_assert(1 < list_count_items(gd->uclass_root));
-	ut_assert(0 < list_count_items(&gd->dm_root->child_head));
+	ut_assert(1 < list_count_nodes(gd->uclass_root));
+	ut_assert(0 < list_count_nodes(&gd->dm_root->child_head));
 
 	/* Our 3 dm_test_infox children should be bound to the test uclass */
 	ut_asserteq(3, dm_testdrv_op_count[DM_TEST_OP_POST_BIND]);
@@ -167,15 +167,13 @@ static int dm_test_autobind_uclass_pdata_alloc(struct unit_test_state *uts)
 	for (uclass_find_first_device(UCLASS_TEST, &dev);
 	     dev;
 	     uclass_find_next_device(&dev)) {
-		ut_assertnonnull(dev);
-
 		uc_pdata = dev_get_uclass_plat(dev);
 		ut_assert(uc_pdata);
 	}
 
 	return 0;
 }
-DM_TEST(dm_test_autobind_uclass_pdata_alloc, UT_TESTF_SCAN_PDATA);
+DM_TEST(dm_test_autobind_uclass_pdata_alloc, UTF_SCAN_PDATA);
 
 /* compare node names ignoring the unit address */
 static int dm_test_compare_node_name(struct unit_test_state *uts)
@@ -186,10 +184,29 @@ static int dm_test_compare_node_name(struct unit_test_state *uts)
 	ut_assert(ofnode_valid(node));
 	ut_assert(ofnode_name_eq(node, "mmio-bus"));
 
+	ut_assert(!ofnode_name_eq(node, "mmio-bus@0"));
+
 	return 0;
 }
+DM_TEST(dm_test_compare_node_name, UTF_SCAN_PDATA);
 
-DM_TEST(dm_test_compare_node_name, UT_TESTF_SCAN_PDATA);
+/* compare node names ignoring the unit address */
+static int dm_test_compare_node_name_unit(struct unit_test_state *uts)
+{
+	ofnode node;
+
+	node = ofnode_path("/mmio-bus@0");
+	ut_assert(ofnode_valid(node));
+	ut_assert(ofnode_name_eq_unit(node, "mmio-bus"));
+
+	ut_assert(ofnode_name_eq_unit(node, "mmio-bus@0"));
+	ut_assert(!ofnode_name_eq_unit(node, "mmio-bus@1"));
+	ut_assert(!ofnode_name_eq_unit(node, "mmio-bu"));
+	ut_assert(!ofnode_name_eq_unit(node, "mmio-buss@0"));
+
+	return 0;
+}
+DM_TEST(dm_test_compare_node_name_unit, UTF_SCAN_PDATA);
 
 /* Test that binding with uclass plat setting occurs correctly */
 static int dm_test_autobind_uclass_pdata_valid(struct unit_test_state *uts)
@@ -204,8 +221,6 @@ static int dm_test_autobind_uclass_pdata_valid(struct unit_test_state *uts)
 	for (uclass_find_first_device(UCLASS_TEST, &dev);
 	     dev;
 	     uclass_find_next_device(&dev)) {
-		ut_assertnonnull(dev);
-
 		uc_pdata = dev_get_uclass_plat(dev);
 		ut_assert(uc_pdata);
 		ut_assert(uc_pdata->intval1 == TEST_UC_PDATA_INTVAL1);
@@ -215,7 +230,7 @@ static int dm_test_autobind_uclass_pdata_valid(struct unit_test_state *uts)
 
 	return 0;
 }
-DM_TEST(dm_test_autobind_uclass_pdata_valid, UT_TESTF_SCAN_PDATA);
+DM_TEST(dm_test_autobind_uclass_pdata_valid, UTF_SCAN_PDATA);
 
 /* Test that autoprobe finds all the expected devices */
 static int dm_test_autoprobe(struct unit_test_state *uts)
@@ -282,7 +297,7 @@ static int dm_test_autoprobe(struct unit_test_state *uts)
 
 	return 0;
 }
-DM_TEST(dm_test_autoprobe, UT_TESTF_SCAN_PDATA);
+DM_TEST(dm_test_autoprobe, UTF_SCAN_PDATA);
 
 /* Check that we see the correct plat in each device */
 static int dm_test_plat(struct unit_test_state *uts)
@@ -300,7 +315,7 @@ static int dm_test_plat(struct unit_test_state *uts)
 
 	return 0;
 }
-DM_TEST(dm_test_plat, UT_TESTF_SCAN_PDATA);
+DM_TEST(dm_test_plat, UTF_SCAN_PDATA);
 
 /* Test that we can bind, probe, remove, unbind a driver */
 static int dm_test_lifecycle(struct unit_test_state *uts)
@@ -369,7 +384,7 @@ static int dm_test_lifecycle(struct unit_test_state *uts)
 
 	return 0;
 }
-DM_TEST(dm_test_lifecycle, UT_TESTF_SCAN_PDATA | UT_TESTF_PROBE_TEST);
+DM_TEST(dm_test_lifecycle, UTF_SCAN_PDATA | UTF_PROBE_TEST);
 
 /* Test that we can bind/unbind and the lists update correctly */
 static int dm_test_ordering(struct unit_test_state *uts)
@@ -424,7 +439,7 @@ static int dm_test_ordering(struct unit_test_state *uts)
 
 	return 0;
 }
-DM_TEST(dm_test_ordering, UT_TESTF_SCAN_PDATA);
+DM_TEST(dm_test_ordering, UTF_SCAN_PDATA);
 
 /* Check that we can perform operations on a device (do a ping) */
 int dm_check_operations(struct unit_test_state *uts, struct udevice *dev,
@@ -482,7 +497,7 @@ static int dm_test_operations(struct unit_test_state *uts)
 
 	return 0;
 }
-DM_TEST(dm_test_operations, UT_TESTF_SCAN_PDATA);
+DM_TEST(dm_test_operations, UTF_SCAN_PDATA);
 
 /* Remove all drivers and check that things work */
 static int dm_test_remove(struct unit_test_state *uts)
@@ -504,7 +519,7 @@ static int dm_test_remove(struct unit_test_state *uts)
 
 	return 0;
 }
-DM_TEST(dm_test_remove, UT_TESTF_SCAN_PDATA | UT_TESTF_PROBE_TEST);
+DM_TEST(dm_test_remove, UTF_SCAN_PDATA | UTF_PROBE_TEST);
 
 /* Remove and recreate everything, check for memory leaks */
 static int dm_test_leak(struct unit_test_state *uts)
@@ -512,23 +527,15 @@ static int dm_test_leak(struct unit_test_state *uts)
 	int i;
 
 	for (i = 0; i < 2; i++) {
-		struct udevice *dev;
 		int ret;
-		int id;
 
 		dm_leak_check_start(uts);
 
 		ut_assertok(dm_scan_plat(false));
 		ut_assertok(dm_scan_fdt(false));
 
-		/* Scanning the uclass is enough to probe all the devices */
-		for (id = UCLASS_ROOT; id < UCLASS_COUNT; id++) {
-			for (ret = uclass_first_device(UCLASS_TEST, &dev);
-			     dev;
-			     ret = uclass_next_device(&dev))
-				;
-			ut_assertok(ret);
-		}
+		ret = uclass_probe_all(UCLASS_TEST);
+		ut_assertok(ret);
 
 		ut_assertok(dm_leak_check_end(uts));
 	}
@@ -653,10 +660,7 @@ static int dm_test_children(struct unit_test_state *uts)
 	ut_asserteq(2 + NODE_COUNT, dm_testdrv_op_count[DM_TEST_OP_PROBE]);
 
 	/* Probe everything */
-	for (ret = uclass_first_device(UCLASS_TEST, &dev);
-	     dev;
-	     ret = uclass_next_device(&dev))
-		;
+	ret = uclass_probe_all(UCLASS_TEST);
 	ut_assertok(ret);
 
 	ut_asserteq(total, dm_testdrv_op_count[DM_TEST_OP_PROBE]);
@@ -726,114 +730,90 @@ static int dm_test_device_reparent(struct unit_test_state *uts)
 
 	/* Re-parent top-level children with no grandchildren. */
 	ut_assertok(device_reparent(top[3], top[0]));
+
 	/* try to get devices */
-	for (ret = uclass_find_first_device(UCLASS_TEST, &dev);
-	     dev;
-	     ret = uclass_find_next_device(&dev)) {
-		ut_assert(!ret);
-		ut_assertnonnull(dev);
-	}
+	ret = uclass_find_first_device(UCLASS_TEST, &dev);
+	ut_assert(!ret);
+	ut_assertnonnull(dev);
 
 	ut_assertok(device_reparent(top[4], top[0]));
+
 	/* try to get devices */
-	for (ret = uclass_find_first_device(UCLASS_TEST, &dev);
-	     dev;
-	     ret = uclass_find_next_device(&dev)) {
-		ut_assert(!ret);
-		ut_assertnonnull(dev);
-	}
+	ret = uclass_find_first_device(UCLASS_TEST, &dev);
+	ut_assert(!ret);
+	ut_assertnonnull(dev);
 
 	/* Re-parent top-level children with grandchildren. */
 	ut_assertok(device_reparent(top[2], top[0]));
+
 	/* try to get devices */
-	for (ret = uclass_find_first_device(UCLASS_TEST, &dev);
-	     dev;
-	     ret = uclass_find_next_device(&dev)) {
-		ut_assert(!ret);
-		ut_assertnonnull(dev);
-	}
+	ret = uclass_find_first_device(UCLASS_TEST, &dev);
+	ut_assert(!ret);
+	ut_assertnonnull(dev);
 
 	ut_assertok(device_reparent(top[5], top[2]));
+
 	/* try to get devices */
-	for (ret = uclass_find_first_device(UCLASS_TEST, &dev);
-	     dev;
-	     ret = uclass_find_next_device(&dev)) {
-		ut_assert(!ret);
-		ut_assertnonnull(dev);
-	}
+	ret = uclass_find_first_device(UCLASS_TEST, &dev);
+	ut_assert(!ret);
+	ut_assertnonnull(dev);
 
 	/* Re-parent grandchildren. */
 	ut_assertok(device_reparent(grandchild[0], top[1]));
+
 	/* try to get devices */
-	for (ret = uclass_find_first_device(UCLASS_TEST, &dev);
-	     dev;
-	     ret = uclass_find_next_device(&dev)) {
-		ut_assert(!ret);
-		ut_assertnonnull(dev);
-	}
+	ret = uclass_find_first_device(UCLASS_TEST, &dev);
+	ut_assert(!ret);
+	ut_assertnonnull(dev);
 
 	ut_assertok(device_reparent(grandchild[1], top[1]));
+
 	/* try to get devices */
-	for (ret = uclass_find_first_device(UCLASS_TEST, &dev);
-	     dev;
-	     ret = uclass_find_next_device(&dev)) {
-		ut_assert(!ret);
-		ut_assertnonnull(dev);
-	}
+	ret = uclass_find_first_device(UCLASS_TEST, &dev);
+	ut_assert(!ret);
+	ut_assertnonnull(dev);
 
 	/* Remove re-pareneted devices. */
 	ut_assertok(device_remove(top[3], DM_REMOVE_NORMAL));
+
 	/* try to get devices */
-	for (ret = uclass_find_first_device(UCLASS_TEST, &dev);
-	     dev;
-	     ret = uclass_find_next_device(&dev)) {
-		ut_assert(!ret);
-		ut_assertnonnull(dev);
-	}
+	ret = uclass_find_first_device(UCLASS_TEST, &dev);
+	ut_assert(!ret);
+	ut_assertnonnull(dev);
 
 	ut_assertok(device_remove(top[4], DM_REMOVE_NORMAL));
+
 	/* try to get devices */
-	for (ret = uclass_find_first_device(UCLASS_TEST, &dev);
-	     dev;
-	     ret = uclass_find_next_device(&dev)) {
-		ut_assert(!ret);
-		ut_assertnonnull(dev);
-	}
+	ret = uclass_find_first_device(UCLASS_TEST, &dev);
+	ut_assert(!ret);
+	ut_assertnonnull(dev);
 
 	ut_assertok(device_remove(top[5], DM_REMOVE_NORMAL));
+
 	/* try to get devices */
-	for (ret = uclass_find_first_device(UCLASS_TEST, &dev);
-	     dev;
-	     ret = uclass_find_next_device(&dev)) {
-		ut_assert(!ret);
-		ut_assertnonnull(dev);
-	}
+	ret = uclass_find_first_device(UCLASS_TEST, &dev);
+	ut_assert(!ret);
+	ut_assertnonnull(dev);
 
 	ut_assertok(device_remove(top[2], DM_REMOVE_NORMAL));
-	for (ret = uclass_find_first_device(UCLASS_TEST, &dev);
-	     dev;
-	     ret = uclass_find_next_device(&dev)) {
-		ut_assert(!ret);
-		ut_assertnonnull(dev);
-	}
+
+	ret = uclass_find_first_device(UCLASS_TEST, &dev);
+	ut_assert(!ret);
+	ut_assertnonnull(dev);
 
 	ut_assertok(device_remove(grandchild[0], DM_REMOVE_NORMAL));
+
 	/* try to get devices */
-	for (ret = uclass_find_first_device(UCLASS_TEST, &dev);
-	     dev;
-	     ret = uclass_find_next_device(&dev)) {
-		ut_assert(!ret);
-		ut_assertnonnull(dev);
-	}
+	ret = uclass_find_first_device(UCLASS_TEST, &dev);
+	ut_assert(!ret);
+	ut_assertnonnull(dev);
 
 	ut_assertok(device_remove(grandchild[1], DM_REMOVE_NORMAL));
+
 	/* try to get devices */
-	for (ret = uclass_find_first_device(UCLASS_TEST, &dev);
-	     dev;
-	     ret = uclass_find_next_device(&dev)) {
-		ut_assert(!ret);
-		ut_assertnonnull(dev);
-	}
+	ret = uclass_find_first_device(UCLASS_TEST, &dev);
+	ut_assert(!ret);
+	ut_assertnonnull(dev);
 
 	/* Try the same with unbind */
 	ut_assertok(device_unbind(top[3]));
@@ -1011,6 +991,56 @@ static int dm_test_remove_vital(struct unit_test_state *uts)
 }
 DM_TEST(dm_test_remove_vital, 0);
 
+/* Test removal of 'active' devices */
+static int dm_test_remove_active(struct unit_test_state *uts)
+{
+	struct udevice *normal, *dma, *vital, *dma_vital;
+
+	/* Skip the behaviour in test_post_probe() */
+	uts->skip_post_probe = 1;
+
+	ut_assertok(device_bind_by_name(uts->root, false, &driver_info_manual,
+					&normal));
+	ut_assertnonnull(normal);
+
+	ut_assertok(device_bind_by_name(uts->root, false, &driver_info_act_dma,
+					&dma));
+	ut_assertnonnull(dma);
+
+	ut_assertok(device_bind_by_name(uts->root, false,
+					&driver_info_vital_clk, &vital));
+	ut_assertnonnull(vital);
+
+	ut_assertok(device_bind_by_name(uts->root, false,
+					&driver_info_act_dma_vital_clk,
+					&dma_vital));
+	ut_assertnonnull(dma_vital);
+
+	/* Probe the devices */
+	ut_assertok(device_probe(normal));
+	ut_assertok(device_probe(dma));
+	ut_assertok(device_probe(vital));
+	ut_assertok(device_probe(dma_vital));
+
+	/* Check that devices are active right now */
+	ut_asserteq(true, device_active(normal));
+	ut_asserteq(true, device_active(dma));
+	ut_asserteq(true, device_active(vital));
+	ut_asserteq(true, device_active(dma_vital));
+
+	/* Remove active devices in an ordered way */
+	dm_remove_devices_active();
+
+	/* Check that all devices are inactive right now */
+	ut_asserteq(true, device_active(normal));
+	ut_asserteq(false, device_active(dma));
+	ut_asserteq(true, device_active(vital));
+	ut_asserteq(false, device_active(dma_vital));
+
+	return 0;
+}
+DM_TEST(dm_test_remove_active, 0);
+
 static int dm_test_uclass_before_ready(struct unit_test_state *uts)
 {
 	struct uclass *uc;
@@ -1018,7 +1048,6 @@ static int dm_test_uclass_before_ready(struct unit_test_state *uts)
 	ut_assertok(uclass_get(UCLASS_TEST, &uc));
 
 	gd->dm_root = NULL;
-	gd->dm_root_f = NULL;
 	memset(&gd->uclass_root, '\0', sizeof(gd->uclass_root));
 
 	ut_asserteq_ptr(NULL, uclass_find(UCLASS_TEST));
@@ -1033,19 +1062,16 @@ static int dm_test_uclass_devices_find(struct unit_test_state *uts)
 	struct udevice *dev;
 	int ret;
 
-	for (ret = uclass_find_first_device(UCLASS_TEST, &dev);
-	     dev;
-	     ret = uclass_find_next_device(&dev)) {
-		ut_assert(!ret);
-		ut_assertnonnull(dev);
-	}
+	ret = uclass_find_first_device(UCLASS_TEST, &dev);
+	ut_assert(!ret);
+	ut_assertnonnull(dev);
 
 	ut_assertok(uclass_find_first_device(UCLASS_TEST_DUMMY, &dev));
 	ut_assertnull(dev);
 
 	return 0;
 }
-DM_TEST(dm_test_uclass_devices_find, UT_TESTF_SCAN_PDATA);
+DM_TEST(dm_test_uclass_devices_find, UTF_SCAN_PDATA);
 
 static int dm_test_uclass_devices_find_by_name(struct unit_test_state *uts)
 {
@@ -1064,42 +1090,39 @@ static int dm_test_uclass_devices_find_by_name(struct unit_test_state *uts)
 	 * this will fail on checking condition: testdev == finddev, since the
 	 * uclass_find_device_by_name(), returns the first device by given name.
 	*/
-	for (ret = uclass_find_first_device(UCLASS_TEST_FDT, &testdev);
-	     testdev;
-	     ret = uclass_find_next_device(&testdev)) {
-		ut_assertok(ret);
-		ut_assertnonnull(testdev);
+	ret = uclass_find_first_device(UCLASS_TEST_FDT, &testdev);
+	ut_assertok(ret);
+	ut_assertnonnull(testdev);
 
+	for (; testdev; uclass_find_next_device(&testdev)) {
 		findret = uclass_find_device_by_name(UCLASS_TEST_FDT,
 						     testdev->name,
 						     &finddev);
 
 		ut_assertok(findret);
-		ut_assert(testdev);
 		ut_asserteq_str(testdev->name, finddev->name);
 		ut_asserteq_ptr(testdev, finddev);
 	}
 
 	return 0;
 }
-DM_TEST(dm_test_uclass_devices_find_by_name, UT_TESTF_SCAN_FDT);
+DM_TEST(dm_test_uclass_devices_find_by_name, UTF_SCAN_FDT);
 
 static int dm_test_uclass_devices_get(struct unit_test_state *uts)
 {
 	struct udevice *dev;
 	int ret;
 
-	for (ret = uclass_first_device(UCLASS_TEST, &dev);
+	for (ret = uclass_first_device_check(UCLASS_TEST, &dev);
 	     dev;
-	     ret = uclass_next_device(&dev)) {
+	     ret = uclass_next_device_check(&dev)) {
 		ut_assert(!ret);
-		ut_assert(dev);
 		ut_assert(device_active(dev));
 	}
 
 	return 0;
 }
-DM_TEST(dm_test_uclass_devices_get, UT_TESTF_SCAN_PDATA);
+DM_TEST(dm_test_uclass_devices_get, UTF_SCAN_PDATA);
 
 static int dm_test_uclass_devices_get_by_name(struct unit_test_state *uts)
 {
@@ -1123,11 +1146,10 @@ static int dm_test_uclass_devices_get_by_name(struct unit_test_state *uts)
 	 * this will fail on checking condition: testdev == finddev, since the
 	 * uclass_get_device_by_name(), returns the first device by given name.
 	*/
-	for (ret = uclass_first_device(UCLASS_TEST_FDT, &testdev);
+	for (ret = uclass_first_device_check(UCLASS_TEST_FDT, &testdev);
 	     testdev;
-	     ret = uclass_next_device(&testdev)) {
+	     ret = uclass_next_device_check(&testdev)) {
 		ut_assertok(ret);
-		ut_assert(testdev);
 		ut_assert(device_active(testdev));
 
 		findret = uclass_get_device_by_name(UCLASS_TEST_FDT,
@@ -1143,7 +1165,7 @@ static int dm_test_uclass_devices_get_by_name(struct unit_test_state *uts)
 
 	return 0;
 }
-DM_TEST(dm_test_uclass_devices_get_by_name, UT_TESTF_SCAN_FDT);
+DM_TEST(dm_test_uclass_devices_get_by_name, UTF_SCAN_FDT);
 
 static int dm_test_device_get_uclass_id(struct unit_test_state *uts)
 {
@@ -1154,16 +1176,18 @@ static int dm_test_device_get_uclass_id(struct unit_test_state *uts)
 
 	return 0;
 }
-DM_TEST(dm_test_device_get_uclass_id, UT_TESTF_SCAN_PDATA);
+DM_TEST(dm_test_device_get_uclass_id, UTF_SCAN_PDATA);
 
 static int dm_test_uclass_names(struct unit_test_state *uts)
 {
 	ut_asserteq_str("test", uclass_get_name(UCLASS_TEST));
 	ut_asserteq(UCLASS_TEST, uclass_get_by_name("test"));
 
+	ut_asserteq(UCLASS_SPI, uclass_get_by_name("spi"));
+
 	return 0;
 }
-DM_TEST(dm_test_uclass_names, UT_TESTF_SCAN_PDATA);
+DM_TEST(dm_test_uclass_names, UTF_SCAN_PDATA);
 
 static int dm_test_inactive_child(struct unit_test_state *uts)
 {
@@ -1193,7 +1217,7 @@ static int dm_test_inactive_child(struct unit_test_state *uts)
 
 	return 0;
 }
-DM_TEST(dm_test_inactive_child, UT_TESTF_SCAN_PDATA);
+DM_TEST(dm_test_inactive_child, UTF_SCAN_PDATA);
 
 /* Make sure all bound devices have a sequence number */
 static int dm_test_all_have_seq(struct unit_test_state *uts)
@@ -1212,7 +1236,7 @@ static int dm_test_all_have_seq(struct unit_test_state *uts)
 
 	return 0;
 }
-DM_TEST(dm_test_all_have_seq, UT_TESTF_SCAN_PDATA);
+DM_TEST(dm_test_all_have_seq, UTF_SCAN_PDATA);
 
 #if CONFIG_IS_ENABLED(DM_DMA)
 static int dm_test_dma_offset(struct unit_test_state *uts)
@@ -1243,7 +1267,7 @@ static int dm_test_dma_offset(struct unit_test_state *uts)
 
        return 0;
 }
-DM_TEST(dm_test_dma_offset, UT_TESTF_SCAN_PDATA | UT_TESTF_SCAN_FDT);
+DM_TEST(dm_test_dma_offset, UTF_SCAN_PDATA | UTF_SCAN_FDT);
 #endif
 
 /* Test dm_get_stats() */
@@ -1257,4 +1281,132 @@ static int dm_test_get_stats(struct unit_test_state *uts)
 
 	return 0;
 }
-DM_TEST(dm_test_get_stats, UT_TESTF_SCAN_FDT);
+DM_TEST(dm_test_get_stats, UTF_SCAN_FDT);
+
+/* Test uclass_find_device_by_name() */
+static int dm_test_uclass_find_device(struct unit_test_state *uts)
+{
+	struct udevice *dev;
+
+	ut_assertok(uclass_find_device_by_name(UCLASS_I2C, "i2c@0", &dev));
+	ut_asserteq(-ENODEV,
+		    uclass_find_device_by_name(UCLASS_I2C, "i2c@0x", &dev));
+	ut_assertok(uclass_find_device_by_namelen(UCLASS_I2C, "i2c@0x", 5,
+						  &dev));
+
+	return 0;
+}
+DM_TEST(dm_test_uclass_find_device, UTF_SCAN_FDT);
+
+/* Test getting information about tags attached to devices */
+static int dm_test_dev_get_attach(struct unit_test_state *uts)
+{
+	struct udevice *dev;
+
+	ut_assertok(uclass_first_device_err(UCLASS_TEST_FDT, &dev));
+	ut_asserteq_str("a-test", dev->name);
+
+	ut_assertnonnull(dev_get_attach_ptr(dev, DM_TAG_PLAT));
+	ut_assertnonnull(dev_get_attach_ptr(dev, DM_TAG_PRIV));
+	ut_assertnull(dev_get_attach_ptr(dev, DM_TAG_UC_PRIV));
+	ut_assertnull(dev_get_attach_ptr(dev, DM_TAG_UC_PLAT));
+	ut_assertnull(dev_get_attach_ptr(dev, DM_TAG_PARENT_PLAT));
+	ut_assertnull(dev_get_attach_ptr(dev, DM_TAG_PARENT_PRIV));
+
+	ut_asserteq(sizeof(struct dm_test_pdata),
+		    dev_get_attach_size(dev, DM_TAG_PLAT));
+	ut_asserteq(sizeof(struct dm_test_priv),
+		    dev_get_attach_size(dev, DM_TAG_PRIV));
+	ut_asserteq(0, dev_get_attach_size(dev, DM_TAG_UC_PRIV));
+	ut_asserteq(0, dev_get_attach_size(dev, DM_TAG_UC_PLAT));
+	ut_asserteq(0, dev_get_attach_size(dev, DM_TAG_PARENT_PLAT));
+	ut_asserteq(0, dev_get_attach_size(dev, DM_TAG_PARENT_PRIV));
+
+	return 0;
+}
+DM_TEST(dm_test_dev_get_attach, UTF_SCAN_FDT);
+
+/* Test getting information about tags attached to bus devices */
+static int dm_test_dev_get_attach_bus(struct unit_test_state *uts)
+{
+	struct udevice *dev, *child;
+
+	ut_assertok(uclass_first_device_err(UCLASS_TEST_BUS, &dev));
+	ut_asserteq_str("some-bus", dev->name);
+
+	ut_assertnonnull(dev_get_attach_ptr(dev, DM_TAG_PLAT));
+	ut_assertnonnull(dev_get_attach_ptr(dev, DM_TAG_PRIV));
+	ut_assertnonnull(dev_get_attach_ptr(dev, DM_TAG_UC_PRIV));
+	ut_assertnonnull(dev_get_attach_ptr(dev, DM_TAG_UC_PLAT));
+	ut_assertnull(dev_get_attach_ptr(dev, DM_TAG_PARENT_PLAT));
+	ut_assertnull(dev_get_attach_ptr(dev, DM_TAG_PARENT_PRIV));
+
+	ut_asserteq(sizeof(struct dm_test_pdata),
+		    dev_get_attach_size(dev, DM_TAG_PLAT));
+	ut_asserteq(sizeof(struct dm_test_priv),
+		    dev_get_attach_size(dev, DM_TAG_PRIV));
+	ut_asserteq(sizeof(struct dm_test_uclass_priv),
+		    dev_get_attach_size(dev, DM_TAG_UC_PRIV));
+	ut_asserteq(sizeof(struct dm_test_uclass_plat),
+		    dev_get_attach_size(dev, DM_TAG_UC_PLAT));
+	ut_asserteq(0, dev_get_attach_size(dev, DM_TAG_PARENT_PLAT));
+	ut_asserteq(0, dev_get_attach_size(dev, DM_TAG_PARENT_PRIV));
+
+	/* Now try the child of the bus */
+	ut_assertok(device_first_child_err(dev, &child));
+	ut_asserteq_str("c-test@5", child->name);
+
+	ut_assertnonnull(dev_get_attach_ptr(child, DM_TAG_PLAT));
+	ut_assertnonnull(dev_get_attach_ptr(child, DM_TAG_PRIV));
+	ut_assertnull(dev_get_attach_ptr(child, DM_TAG_UC_PRIV));
+	ut_assertnull(dev_get_attach_ptr(child, DM_TAG_UC_PLAT));
+	ut_assertnonnull(dev_get_attach_ptr(child, DM_TAG_PARENT_PLAT));
+	ut_assertnonnull(dev_get_attach_ptr(child, DM_TAG_PARENT_PRIV));
+
+	ut_asserteq(sizeof(struct dm_test_pdata),
+		    dev_get_attach_size(child, DM_TAG_PLAT));
+	ut_asserteq(sizeof(struct dm_test_priv),
+		    dev_get_attach_size(child, DM_TAG_PRIV));
+	ut_asserteq(0, dev_get_attach_size(child, DM_TAG_UC_PRIV));
+	ut_asserteq(0, dev_get_attach_size(child, DM_TAG_UC_PLAT));
+	ut_asserteq(sizeof(struct dm_test_parent_plat),
+		    dev_get_attach_size(child, DM_TAG_PARENT_PLAT));
+	ut_asserteq(sizeof(struct dm_test_parent_data),
+		    dev_get_attach_size(child, DM_TAG_PARENT_PRIV));
+
+	return 0;
+}
+DM_TEST(dm_test_dev_get_attach_bus, UTF_SCAN_FDT);
+
+/* Test getting information about tags attached to bus devices */
+static int dm_test_dev_get_mem(struct unit_test_state *uts)
+{
+	struct dm_stats stats;
+
+	dm_get_mem(&stats);
+
+	return 0;
+}
+DM_TEST(dm_test_dev_get_mem, UTF_SCAN_FDT);
+
+/* Test uclass_try_first_device() */
+static int dm_test_try_first_device(struct unit_test_state *uts)
+{
+	struct udevice *dev;
+
+	/* Check that it doesn't create a device or uclass */
+	ut_assertnull(uclass_find(UCLASS_TEST));
+	ut_assertnull(uclass_try_first_device(UCLASS_TEST));
+	ut_assertnull(uclass_try_first_device(UCLASS_TEST));
+	ut_assertnull(uclass_find(UCLASS_TEST));
+
+	/* Create a test device */
+	ut_assertok(device_bind_by_name(uts->root, false, &driver_info_manual,
+					&dev));
+	dev = uclass_try_first_device(UCLASS_TEST);
+	ut_assertnonnull(dev);
+	ut_asserteq(UCLASS_TEST, device_get_uclass_id(dev));
+
+	return 0;
+}
+DM_TEST(dm_test_try_first_device, 0);

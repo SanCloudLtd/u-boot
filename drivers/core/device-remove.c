@@ -10,7 +10,6 @@
 
 #define LOG_CATEGORY	LOGC_DM
 
-#include <common.h>
 #include <errno.h>
 #include <log.h>
 #include <malloc.h>
@@ -29,7 +28,7 @@ int device_chld_unbind(struct udevice *dev, struct driver *drv)
 
 	assert(dev);
 
-	list_for_each_entry_safe(pos, n, &dev->child_head, sibling_node) {
+	device_foreach_child_safe(pos, n, dev) {
 		if (drv && (pos->driver != drv))
 			continue;
 
@@ -52,7 +51,7 @@ int device_chld_remove(struct udevice *dev, struct driver *drv,
 
 	assert(dev);
 
-	list_for_each_entry_safe(pos, n, &dev->child_head, sibling_node) {
+	device_foreach_child_safe(pos, n, dev) {
 		int ret;
 
 		if (drv && (pos->driver != drv))
@@ -207,6 +206,10 @@ int device_remove(struct udevice *dev, uint flags)
 	if (!(dev_get_flags(dev) & DM_FLAG_ACTIVATED))
 		return 0;
 
+	ret = device_notify(dev, EVT_DM_PRE_REMOVE);
+	if (ret)
+		return ret;
+
 	/*
 	 * If the child returns EKEYREJECTED, continue. It just means that it
 	 * didn't match the flags.
@@ -255,6 +258,10 @@ int device_remove(struct udevice *dev, uint flags)
 	device_free(dev);
 
 	dev_bic_flags(dev, DM_FLAG_ACTIVATED);
+
+	ret = device_notify(dev, EVT_DM_POST_REMOVE);
+	if (ret)
+		goto err_remove;
 
 	return 0;
 

@@ -1,8 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  *	Copied from LiMon - BOOTP.
  *
  *	Copyright 1994, 1995, 2000 Neil Russell.
- *	(See License)
  *	Copyright 2000 Paolo Scaffardi
  */
 
@@ -14,6 +14,9 @@
 #endif /* __NET_H__ */
 
 /**********************************************************************/
+
+#define PORT_BOOTPS	67		/* BOOTP server UDP port */
+#define PORT_BOOTPC	68		/* BOOTP client UDP port */
 
 /*
  *	BOOTP header.
@@ -62,7 +65,6 @@ struct bootp_hdr {
 extern u32	bootp_id;		/* ID of cur BOOTP request	*/
 extern int	bootp_try;
 
-
 /* Send a BOOTP request */
 void bootp_reset(void);
 void bootp_request(void);
@@ -87,6 +89,8 @@ typedef enum { INIT,
 #define DHCP_ACK      5
 #define DHCP_NAK      6
 #define DHCP_RELEASE  7
+
+#define DHCP_OPTION_PXE_CONFIG_FILE	209	/* "ConfigFile" option according to rfc5071 */
 
 /**********************************************************************/
 

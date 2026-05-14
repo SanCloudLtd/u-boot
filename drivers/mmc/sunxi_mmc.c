@@ -5,9 +5,14 @@
  * Aaron <leafy.myeh@allwinnertech.com>
  *
  * MMC driver for allwinner sunxi platform.
+ *
+ * This driver is used by the (ARM) SPL with the legacy MMC interface, and
+ * by U-Boot proper using the full DM interface. The actual hardware access
+ * code is common, and comes first in this file.
+ * The legacy MMC interface implementation comes next, followed by the
+ * proper DM_MMC implementation at the end.
  */
 
-#include <common.h>
 #include <dm.h>
 #include <errno.h>
 #include <log.h>
@@ -19,8 +24,13 @@
 #include <asm/io.h>
 #include <asm/arch/clock.h>
 #include <asm/arch/cpu.h>
+#if !CONFIG_IS_ENABLED(DM_MMC)
 #include <asm/arch/mmc.h>
+#endif
 #include <linux/delay.h>
+#include <sunxi_gpio.h>
+
+#include "sunxi_mmc.h"
 
 #ifndef CCM_MMC_CTRL_MODE_SEL_NEW
 #define CCM_MMC_CTRL_MODE_SEL_NEW	0
@@ -40,69 +50,6 @@ struct sunxi_mmc_priv {
 	struct mmc_config cfg;
 };
 
-#if !CONFIG_IS_ENABLED(DM_MMC)
-/* support 4 mmc hosts */
-struct sunxi_mmc_priv mmc_host[4];
-
-static int sunxi_mmc_getcd_gpio(int sdc_no)
-{
-	switch (sdc_no) {
-	case 0: return sunxi_name_to_gpio(CONFIG_MMC0_CD_PIN);
-	case 1: return sunxi_name_to_gpio(CONFIG_MMC1_CD_PIN);
-	case 2: return sunxi_name_to_gpio(CONFIG_MMC2_CD_PIN);
-	case 3: return sunxi_name_to_gpio(CONFIG_MMC3_CD_PIN);
-	}
-	return -EINVAL;
-}
-
-static int mmc_resource_init(int sdc_no)
-{
-	struct sunxi_mmc_priv *priv = &mmc_host[sdc_no];
-	struct sunxi_ccm_reg *ccm = (struct sunxi_ccm_reg *)SUNXI_CCM_BASE;
-	int cd_pin, ret = 0;
-
-	debug("init mmc %d resource\n", sdc_no);
-
-	switch (sdc_no) {
-	case 0:
-		priv->reg = (struct sunxi_mmc *)SUNXI_MMC0_BASE;
-		priv->mclkreg = &ccm->sd0_clk_cfg;
-		break;
-	case 1:
-		priv->reg = (struct sunxi_mmc *)SUNXI_MMC1_BASE;
-		priv->mclkreg = &ccm->sd1_clk_cfg;
-		break;
-#ifdef SUNXI_MMC2_BASE
-	case 2:
-		priv->reg = (struct sunxi_mmc *)SUNXI_MMC2_BASE;
-		priv->mclkreg = &ccm->sd2_clk_cfg;
-		break;
-#endif
-#ifdef SUNXI_MMC3_BASE
-	case 3:
-		priv->reg = (struct sunxi_mmc *)SUNXI_MMC3_BASE;
-		priv->mclkreg = &ccm->sd3_clk_cfg;
-		break;
-#endif
-	default:
-		printf("Wrong mmc number %d\n", sdc_no);
-		return -1;
-	}
-	priv->mmc_no = sdc_no;
-
-	cd_pin = sunxi_mmc_getcd_gpio(sdc_no);
-	if (cd_pin >= 0) {
-		ret = gpio_request(cd_pin, "mmc_cd");
-		if (!ret) {
-			sunxi_gpio_set_pull(cd_pin, SUNXI_GPIO_PULL_UP);
-			ret = gpio_direction_input(cd_pin);
-		}
-	}
-
-	return ret;
-}
-#endif
-
 /*
  * All A64 and later MMC controllers feature auto-calibration. This would
  * normally be detected via the compatible string, but we need something
@@ -113,6 +60,7 @@ static bool sunxi_mmc_can_calibrate(void)
 	return IS_ENABLED(CONFIG_MACH_SUN50I) ||
 	       IS_ENABLED(CONFIG_MACH_SUN50I_H5) ||
 	       IS_ENABLED(CONFIG_SUN50I_GEN_H6) ||
+	       IS_ENABLED(CONFIG_SUNXI_GEN_NCAT2) ||
 	       IS_ENABLED(CONFIG_MACH_SUN8I_R40);
 }
 
@@ -144,6 +92,26 @@ static int mmc_set_mod_clk(struct sunxi_mmc_priv *priv, unsigned int hz)
 		pll = CCM_MMC_CTRL_PLL6;
 		pll_hz = clock_get_pll6();
 #endif
+		/*
+		 * On the D1/R528/T113 mux source 1 refers to PLL_PERIPH0(1x),
+		 * like for the older SoCs. However we still have the hidden
+		 * divider of 2x, so compensate for that here.
+		 */
+		if (IS_ENABLED(CONFIG_MACH_SUN8I_R528))
+			pll_hz /= 2;
+
+		/*
+		 * The A523/T527 uses PERIPH0_400M as the MMC0/1 input clock,
+		 * and PERIPH0_800M for MMC2. There is also the hidden divider
+		 * of 2. The clock code reports 600 MHz for PERIPH0.
+		 * Adjust the calculation accordingly: 600 * hidden2 / 3 for
+		 * MMC0/1, and 600 * hidden2 / 3 * 2 for MMC2.
+		 */
+		if (IS_ENABLED(CONFIG_MACH_SUN55I_A523)) {
+			pll_hz /= 3;
+			if (priv->mmc_no == 2)
+				pll_hz *= 2;
+		}
 	}
 
 	div = pll_hz / hz;
@@ -198,6 +166,10 @@ static int mmc_set_mod_clk(struct sunxi_mmc_priv *priv, unsigned int hz)
 			CCM_MMC_CTRL_SCLK_DLY(sclk_dly);
 	}
 
+	/* The A523 has a second divider, not a shift. */
+	if (IS_ENABLED(CONFIG_MACH_SUN55I_A523))
+		n = (1U << n) - 1;
+
 	writel(CCM_MMC_CTRL_ENABLE| pll | CCM_MMC_CTRL_N(n) |
 	       CCM_MMC_CTRL_M(div) | val, priv->mclkreg);
 
@@ -247,7 +219,7 @@ static int mmc_config_clock(struct sunxi_mmc_priv *priv, struct mmc *mmc)
 	rval &= ~SUNXI_MMC_CLK_DIVIDER_MASK;
 	writel(rval, &priv->reg->clkcr);
 
-#if defined(CONFIG_SUNXI_GEN_SUN6I) || defined(CONFIG_SUN50I_GEN_H6)
+#if defined(CONFIG_SUNXI_GEN_SUN6I) || defined(CONFIG_SUN50I_GEN_H6) || defined(CONFIG_SUNXI_GEN_NCAT2)
 	/* A64 supports calibration of delays on MMC controller and we
 	 * have to set delay of zero before starting calibration.
 	 * Allwinner BSP driver sets a delay only in the case of
@@ -289,19 +261,6 @@ static int sunxi_mmc_set_ios_common(struct sunxi_mmc_priv *priv,
 
 	return 0;
 }
-
-#if !CONFIG_IS_ENABLED(DM_MMC)
-static int sunxi_mmc_core_init(struct mmc *mmc)
-{
-	struct sunxi_mmc_priv *priv = mmc->priv;
-
-	/* Reset controller */
-	writel(SUNXI_MMC_GCTRL_RESET, &priv->reg->gctrl);
-	udelay(1000);
-
-	return 0;
-}
-#endif
 
 static int mmc_trans_data_by_cpu(struct sunxi_mmc_priv *priv, struct mmc *mmc,
 				 struct mmc_data *data)
@@ -507,7 +466,78 @@ out:
 	return error;
 }
 
+static void sunxi_mmc_reset(void *regs)
+{
+	/* Reset controller */
+	writel(SUNXI_MMC_GCTRL_RESET, regs + SUNXI_MMC_GCTRL);
+	udelay(1000);
+
+	if (IS_ENABLED(CONFIG_SUN50I_GEN_H6) || IS_ENABLED(CONFIG_SUNXI_GEN_NCAT2)) {
+		/* Reset card */
+		writel(SUNXI_MMC_HWRST_ASSERT, regs + SUNXI_MMC_HWRST);
+		udelay(10);
+		writel(SUNXI_MMC_HWRST_DEASSERT, regs + SUNXI_MMC_HWRST);
+		udelay(300);
+
+		/* Setup FIFO R/W threshold. Needed on H616. */
+		writel(SUNXI_MMC_THLDC_READ_THLD(512) |
+		       SUNXI_MMC_THLDC_WRITE_EN |
+		       SUNXI_MMC_THLDC_READ_EN, regs + SUNXI_MMC_THLDC);
+	}
+}
+
+/* non-DM code here is used by the (ARM) SPL only */
+
 #if !CONFIG_IS_ENABLED(DM_MMC)
+/* support 4 mmc hosts */
+struct sunxi_mmc_priv mmc_host[4];
+
+static int mmc_resource_init(int sdc_no)
+{
+	struct sunxi_mmc_priv *priv = &mmc_host[sdc_no];
+	void *ccm = (void *)SUNXI_CCM_BASE;
+
+	debug("init mmc %d resource\n", sdc_no);
+
+	switch (sdc_no) {
+	case 0:
+		priv->reg = (struct sunxi_mmc *)SUNXI_MMC0_BASE;
+		priv->mclkreg = ccm + CCU_MMC0_CLK_CFG;
+		break;
+	case 1:
+		priv->reg = (struct sunxi_mmc *)SUNXI_MMC1_BASE;
+		priv->mclkreg = ccm + CCU_MMC1_CLK_CFG;
+		break;
+#ifdef SUNXI_MMC2_BASE
+	case 2:
+		priv->reg = (struct sunxi_mmc *)SUNXI_MMC2_BASE;
+		priv->mclkreg = ccm + CCU_MMC2_CLK_CFG;
+		break;
+#endif
+#ifdef SUNXI_MMC3_BASE
+	case 3:
+		priv->reg = (struct sunxi_mmc *)SUNXI_MMC3_BASE;
+		priv->mclkreg = ccm + CCU_MMC3_CLK_CFG;
+		break;
+#endif
+	default:
+		printf("Wrong mmc number %d\n", sdc_no);
+		return -1;
+	}
+	priv->mmc_no = sdc_no;
+
+	return 0;
+}
+
+static int sunxi_mmc_core_init(struct mmc *mmc)
+{
+	struct sunxi_mmc_priv *priv = mmc->priv;
+
+	sunxi_mmc_reset(priv->reg);
+
+	return 0;
+}
+
 static int sunxi_mmc_set_ios_legacy(struct mmc *mmc)
 {
 	struct sunxi_mmc_priv *priv = mmc->priv;
@@ -523,28 +553,16 @@ static int sunxi_mmc_send_cmd_legacy(struct mmc *mmc, struct mmc_cmd *cmd,
 	return sunxi_mmc_send_cmd_common(priv, mmc, cmd, data);
 }
 
-static int sunxi_mmc_getcd_legacy(struct mmc *mmc)
-{
-	struct sunxi_mmc_priv *priv = mmc->priv;
-	int cd_pin;
-
-	cd_pin = sunxi_mmc_getcd_gpio(priv->mmc_no);
-	if (cd_pin < 0)
-		return 1;
-
-	return !gpio_get_value(cd_pin);
-}
-
+/* .getcd is not needed by the SPL */
 static const struct mmc_ops sunxi_mmc_ops = {
 	.send_cmd	= sunxi_mmc_send_cmd_legacy,
 	.set_ios	= sunxi_mmc_set_ios_legacy,
 	.init		= sunxi_mmc_core_init,
-	.getcd		= sunxi_mmc_getcd_legacy,
 };
 
 struct mmc *sunxi_mmc_init(int sdc_no)
 {
-	struct sunxi_ccm_reg *ccm = (struct sunxi_ccm_reg *)SUNXI_CCM_BASE;
+	void *ccm = (void *)SUNXI_CCM_BASE;
 	struct sunxi_mmc_priv *priv = &mmc_host[sdc_no];
 	struct mmc_config *cfg = &priv->cfg;
 	int ret;
@@ -558,7 +576,8 @@ struct mmc *sunxi_mmc_init(int sdc_no)
 	cfg->host_caps = MMC_MODE_4BIT;
 
 	if ((IS_ENABLED(CONFIG_MACH_SUN50I) || IS_ENABLED(CONFIG_MACH_SUN8I) ||
-	    IS_ENABLED(CONFIG_SUN50I_GEN_H6)) && (sdc_no == 2))
+	    IS_ENABLED(CONFIG_SUN50I_GEN_H6) || IS_ENABLED(CONFIG_MACH_SUN55I_A523)) &&
+	    (sdc_no == 2))
 		cfg->host_caps = MMC_MODE_8BIT;
 
 	cfg->host_caps |= MMC_MODE_HS_52MHz | MMC_MODE_HS;
@@ -572,12 +591,12 @@ struct mmc *sunxi_mmc_init(int sdc_no)
 
 	/* config ahb clock */
 	debug("init mmc %d clock and io\n", sdc_no);
-#if !defined(CONFIG_SUN50I_GEN_H6)
-	setbits_le32(&ccm->ahb_gate0, 1 << AHB_GATE_OFFSET_MMC(sdc_no));
+#if !defined(CONFIG_SUN50I_GEN_H6) && !defined(CONFIG_SUNXI_GEN_NCAT2)
+	setbits_le32(ccm + CCU_AHB_GATE0, 1 << AHB_GATE_OFFSET_MMC(sdc_no));
 
 #ifdef CONFIG_SUNXI_GEN_SUN6I
 	/* unassert reset */
-	setbits_le32(&ccm->ahb_reset0_cfg, 1 << AHB_RESET_OFFSET_MMC(sdc_no));
+	setbits_le32(ccm + CCU_AHB_RESET0_CFG, 1 << AHB_RESET_OFFSET_MMC(sdc_no));
 #endif
 #if defined(CONFIG_MACH_SUN9I)
 	/* sun9i has a mmc-common module, also set the gate and reset there */
@@ -585,9 +604,9 @@ struct mmc *sunxi_mmc_init(int sdc_no)
 	       SUNXI_MMC_COMMON_BASE + 4 * sdc_no);
 #endif
 #else /* CONFIG_SUN50I_GEN_H6 */
-	setbits_le32(&ccm->sd_gate_reset, 1 << sdc_no);
+	setbits_le32(ccm + CCU_H6_MMC_GATE_RESET, 1 << sdc_no);
 	/* unassert reset */
-	setbits_le32(&ccm->sd_gate_reset, 1 << (RESET_SHIFT + sdc_no));
+	setbits_le32(ccm + CCU_H6_MMC_GATE_RESET, 1 << (RESET_SHIFT + sdc_no));
 #endif
 	ret = mmc_set_mod_clk(priv, 24000000);
 	if (ret)
@@ -595,7 +614,8 @@ struct mmc *sunxi_mmc_init(int sdc_no)
 
 	return mmc_create(cfg, priv);
 }
-#else
+
+#else /* CONFIG_DM_MMC code below, as used by U-Boot proper */
 
 static int sunxi_mmc_set_ios(struct udevice *dev)
 {
@@ -646,7 +666,7 @@ static unsigned get_mclk_offset(void)
 	if (IS_ENABLED(CONFIG_MACH_SUN9I_A80))
 		return 0x410;
 
-	if (IS_ENABLED(CONFIG_SUN50I_GEN_H6))
+	if (IS_ENABLED(CONFIG_SUN50I_GEN_H6) || IS_ENABLED(CONFIG_SUNXI_GEN_NCAT2))
 		return 0x830;
 
 	return 0x88;
@@ -707,9 +727,7 @@ static int sunxi_mmc_probe(struct udevice *dev)
 
 	upriv->mmc = &plat->mmc;
 
-	/* Reset controller */
-	writel(SUNXI_MMC_GCTRL_RESET, &priv->reg->gctrl);
-	udelay(1000);
+	sunxi_mmc_reset(priv->reg);
 
 	return 0;
 }
@@ -727,6 +745,7 @@ static const struct udevice_id sunxi_mmc_ids[] = {
 	{ .compatible = "allwinner,sun7i-a20-mmc" },
 	{ .compatible = "allwinner,sun8i-a83t-emmc" },
 	{ .compatible = "allwinner,sun9i-a80-mmc" },
+	{ .compatible = "allwinner,sun20i-d1-mmc" },
 	{ .compatible = "allwinner,sun50i-a64-mmc" },
 	{ .compatible = "allwinner,sun50i-a64-emmc" },
 	{ .compatible = "allwinner,sun50i-h6-mmc" },

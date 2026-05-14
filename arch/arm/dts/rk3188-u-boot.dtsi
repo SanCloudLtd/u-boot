@@ -4,10 +4,7 @@
  */
 
 #include "rockchip-u-boot.dtsi"
-
-&global_timer {
-	status = "okay";
-};
+#include "rk3xxx-u-boot.dtsi"
 
 &gpio0 {
 	compatible = "rockchip,gpio-bank";

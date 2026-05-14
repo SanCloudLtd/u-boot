@@ -3,7 +3,6 @@
  * Copyright (c) 2019 Microsemi Corporation
  */
 
-#include <common.h>
 #include <config.h>
 #include <dm.h>
 #include <malloc.h>
@@ -133,7 +132,6 @@
 #define CPU_PORT		26
 #define INTERNAL_PORT_MSK	0xFFFFFF
 #define IFH_LEN			2
-#define ETH_ALEN		6
 #define PGID_BROADCAST		28
 #define PGID_UNICAST		29
 #define PGID_SRC		80
@@ -628,7 +626,6 @@ static int luton_probe(struct udevice *dev)
 			      GCB_MISC_STAT_PHY_READY, true, 500, false))
 		return -EACCES;
 
-
 	/* Initialize miim buses */
 	memset(&miim, 0x0, sizeof(miim) * LUTON_MIIM_BUS_COUNT);
 
@@ -685,7 +682,7 @@ static int luton_probe(struct udevice *dev)
 
 		phy = phy_connect(priv->ports[i].bus,
 				  priv->ports[i].phy_addr, dev,
-				  PHY_INTERFACE_MODE_NONE);
+				  PHY_INTERFACE_MODE_NA);
 		if (phy && i >= MAX_INT_PORT)
 			board_phy_config(phy);
 	}

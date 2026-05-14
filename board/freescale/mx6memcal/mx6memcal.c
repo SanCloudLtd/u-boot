@@ -7,17 +7,11 @@
  * Author: Eric Nelson <eric@nelint.com>
  */
 
-#include <common.h>
 #include <init.h>
 #include <asm/arch/sys_proto.h>
 #include <asm/global_data.h>
 
 DECLARE_GLOBAL_DATA_PTR;
-
-int board_init(void)
-{
-	return 0;
-}
 
 int checkboard(void)
 {

@@ -5,12 +5,16 @@
 # Entry-type module for a Coreboot Filesystem (CBFS)
 #
 
+from __future__ import annotations
 from collections import OrderedDict
 
 from binman import cbfs_util
 from binman.cbfs_util import CbfsWriter
 from binman.entry import Entry
 from dtoc import fdt_util
+
+# This is imported if needed
+state = None
 
 class Entry_cbfs(Entry):
     """Coreboot Filesystem (CBFS)
@@ -242,7 +246,7 @@ class Entry_cbfs(Entry):
             cfile = entry._cbfs_file
             entry.size = cfile.data_len
             entry.offset = cfile.calced_cbfs_offset
-            entry.image_pos = self.image_pos + entry.offset
+            entry.SetImagePos(image_pos + self.offset)
             if entry._cbfs_compress:
                 entry.uncomp_size = cfile.memlen
 
@@ -273,7 +277,8 @@ class Entry_cbfs(Entry):
         for entry in self._entries.values():
             entry.ListEntries(entries, indent + 1)
 
-    def GetEntries(self):
+    def GetEntries(self) -> dict[str, Entry]:
+        """Returns the entries (tree children) of this section"""
         return self._entries
 
     def ReadData(self, decomp=True, alt_format=None):
@@ -292,4 +297,9 @@ class Entry_cbfs(Entry):
         # Recreate the data structure, leaving the data for this child alone,
         # so that child.data is used to pack into the FIP.
         self.ObtainContents(skip_entry=child)
-        return True
+        return super().WriteChildData(child)
+
+    def AddBintools(self, btools):
+        super().AddBintools(btools)
+        for entry in self._entries.values():
+            entry.AddBintools(btools)

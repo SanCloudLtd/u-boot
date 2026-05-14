@@ -4,10 +4,9 @@ config ARCH_S5P4418
 	bool "Nexell S5P4418 SoC"
 	select CPU_V7A
 	select OF_CONTROL
-	select OF_SEPARATE
 	select NX_GPIO
-	select PL011_SERIAL
-	select PL011_SERIAL_FLUSH_ON_INIT
+	select DM_SERIAL
+	select PL01X_SERIAL
 	help
 	  Enable support for Nexell S5P4418 SoC.
 

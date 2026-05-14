@@ -2,7 +2,7 @@
 /*
  * Copyright (C) 2018-2019 Toradex AG
  */
-#include <common.h>
+#include <config.h>
 #include <init.h>
 #include <asm/global_data.h>
 #include <linux/delay.h>
@@ -67,7 +67,7 @@ static void setup_gpmi_nand(void)
 }
 #endif /* CONFIG_NAND_MXS */
 
-#ifdef CONFIG_DM_VIDEO
+#ifdef CONFIG_VIDEO
 static const iomux_v3_cfg_t backlight_pads[] = {
 	/* Backlight On */
 	MX6_PAD_JTAG_TMS__GPIO1_IO11		| MUX_PAD_CTRL(NO_PAD_CTRL),
@@ -100,26 +100,19 @@ static int setup_fec(void)
 	struct iomuxc *iomuxc_regs = (struct iomuxc *)IOMUXC_BASE_ADDR;
 	int ret;
 
-	/* provide the PHY clock from the i.MX 6 */
+	/*
+	 * Use 50MHz anatop loopback REF_CLK2 for ENET2,
+	 * clear gpr1[14], set gpr1[18].
+	 */
+	clrsetbits_le32(&iomuxc_regs->gpr[1], IOMUX_GPR1_FEC2_MASK,
+			IOMUX_GPR1_FEC2_CLOCK_MUX1_SEL_MASK);
+
 	ret = enable_fec_anatop_clock(1, ENET_50MHZ);
 	if (ret)
 		return ret;
 
-	/* Use 50M anatop REF_CLK and output it on ENET2_TX_CLK */
-	clrsetbits_le32(&iomuxc_regs->gpr[1],
-			IOMUX_GPR1_FEC2_CLOCK_MUX2_SEL_MASK,
-			IOMUX_GPR1_FEC2_CLOCK_MUX1_SEL_MASK);
+	enable_enet_clk(1);
 
-	/* give new Ethernet PHY power save mode circuitry time to settle */
-	mdelay(300);
-
-	return 0;
-}
-
-int board_phy_config(struct phy_device *phydev)
-{
-	if (phydev->drv->config)
-		phydev->drv->config(phydev);
 	return 0;
 }
 #endif /* CONFIG_FEC_MXC */
@@ -172,10 +165,14 @@ int board_late_init(void)
 	} else {
 		if (is_emmc)
 			env_set("variant", "-emmc");
+		else
+			env_set("variant", "");
 	}
 #else
 	if (is_emmc)
 		env_set("variant", "-emmc");
+	else
+		env_set("variant", "");
 #endif
 
 	/*
@@ -190,24 +187,20 @@ int board_late_init(void)
 	add_board_boot_modes(board_boot_modes);
 #endif
 
-#ifdef CONFIG_CMD_USB_SDP
-	if (is_boot_from_usb()) {
-		printf("Serial Downloader recovery mode, using sdp command\n");
+	if (IS_ENABLED(CONFIG_USB) && is_boot_from_usb()) {
 		env_set("bootdelay", "0");
-		env_set("bootcmd", "sdp 0");
+		if (IS_ENABLED(CONFIG_CMD_USB_SDP)) {
+			printf("Serial Downloader recovery mode, using sdp command\n");
+			env_set("bootcmd", "sdp 0");
+		} else if (IS_ENABLED(CONFIG_CMD_FASTBOOT)) {
+			printf("Fastboot recovery mode, using fastboot command\n");
+			env_set("bootcmd", "fastboot usb 0");
+		}
 	}
-#endif /* CONFIG_CMD_USB_SDP */
 
-#if defined(CONFIG_DM_VIDEO)
+#if defined(CONFIG_VIDEO)
 	setup_lcd();
 #endif
-
-	return 0;
-}
-
-int checkboard(void)
-{
-	printf("Model: Toradex Colibri iMX6ULL\n");
 
 	return 0;
 }
@@ -215,17 +208,6 @@ int checkboard(void)
 #if defined(CONFIG_OF_LIBFDT) && defined(CONFIG_OF_BOARD_SETUP)
 int ft_board_setup(void *blob, struct bd_info *bd)
 {
-#if defined(CONFIG_FDT_FIXUP_PARTITIONS)
-	static struct node_info nodes[] = {
-		{ "fsl,imx6ull-gpmi-nand", MTD_DEV_TYPE_NAND, },
-		{ "fsl,imx6q-gpmi-nand", MTD_DEV_TYPE_NAND, },
-	};
-
-	/* Update partition nodes using info from mtdparts env var */
-	puts("   Updating MTD partitions...\n");
-	fdt_fixup_mtdparts(blob, nodes, ARRAY_SIZE(nodes));
-#endif
-
 	return ft_common_board_setup(blob, bd);
 }
 #endif

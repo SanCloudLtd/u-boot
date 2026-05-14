@@ -7,7 +7,7 @@
  * Taken from Linux arch/riscv/kernel/sbi.c
  */
 
-#include <common.h>
+#include <errno.h>
 #include <asm/encoding.h>
 #include <asm/sbi.h>
 
@@ -128,6 +128,71 @@ int sbi_probe_extension(int extid)
 }
 
 /**
+ * sbi_get_mvendorid() - get machine vendor ID
+ *
+ * @mimpid:	on return machine vendor ID
+ * Return:	0 on success
+ */
+int sbi_get_mvendorid(long *mvendorid)
+{
+	struct sbiret ret;
+
+	ret = sbi_ecall(SBI_EXT_BASE, SBI_EXT_BASE_GET_MVENDORID,
+			0, 0, 0, 0, 0, 0);
+	if (ret.error)
+		return -ENOTSUPP;
+
+	if (mvendorid)
+		*mvendorid = ret.value;
+
+	return 0;
+}
+
+/**
+ * sbi_get_marchid() - get machine architecture ID
+ *
+ * @mimpid:	on return machine architecture ID
+ * Return:	0 on success
+ */
+int sbi_get_marchid(long *marchid)
+{
+	struct sbiret ret;
+
+	ret = sbi_ecall(SBI_EXT_BASE, SBI_EXT_BASE_GET_MARCHID,
+			0, 0, 0, 0, 0, 0);
+
+	if (ret.error)
+		return -ENOTSUPP;
+
+	if (marchid)
+		*marchid = ret.value;
+
+	return 0;
+}
+
+/**
+ * sbi_get_mimpid() - get machine implementation ID
+ *
+ * @mimpid:	on return machine implementation ID
+ * Return:	0 on success
+ */
+int sbi_get_mimpid(long *mimpid)
+{
+	struct sbiret ret;
+
+	ret = sbi_ecall(SBI_EXT_BASE, SBI_EXT_BASE_GET_MIMPID,
+			0, 0, 0, 0, 0, 0);
+
+	if (ret.error)
+		return -ENOTSUPP;
+
+	if (mimpid)
+		*mimpid = ret.value;
+
+	return 0;
+}
+
+/**
  * sbi_srst_reset() - invoke system reset extension
  *
  * @type:	type of reset
@@ -137,6 +202,22 @@ void sbi_srst_reset(unsigned long type, unsigned long reason)
 {
 	sbi_ecall(SBI_EXT_SRST, SBI_EXT_SRST_RESET, type, reason,
 		  0, 0, 0, 0);
+}
+
+/**
+ * sbi_dbcn_write_byte() - write byte to debug console
+ *
+ * @ch:		byte to be written
+ * Return:	SBI error code (SBI_SUCCESS = 0 on success)
+ */
+int sbi_dbcn_write_byte(unsigned char ch)
+{
+	struct sbiret ret;
+
+	ret = sbi_ecall(SBI_EXT_DBCN,
+			SBI_EXT_DBCN_CONSOLE_WRITE_BYTE,
+			ch, 0, 0, 0, 0, 0);
+	return ret.error;
 }
 
 #ifdef CONFIG_SBI_V01

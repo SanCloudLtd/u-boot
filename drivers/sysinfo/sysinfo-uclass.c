@@ -6,7 +6,6 @@
 
 #define LOG_CATEGORY UCLASS_SYSINFO
 
-#include <common.h>
 #include <dm.h>
 #include <sysinfo.h>
 
@@ -16,7 +15,15 @@ struct sysinfo_priv {
 
 int sysinfo_get(struct udevice **devp)
 {
-	return uclass_first_device_err(UCLASS_SYSINFO, devp);
+	int ret = uclass_first_device_err(UCLASS_SYSINFO, devp);
+
+	/*
+	 * There is some very dodgy error handling in gazerbeam,
+	 * do not return a device on error.
+	 */
+	if (ret)
+		*devp = NULL;
+	return ret;
 }
 
 int sysinfo_detect(struct udevice *dev)
@@ -90,6 +97,55 @@ int sysinfo_get_str(struct udevice *dev, int id, size_t size, char *val)
 		return -ENOSYS;
 
 	return ops->get_str(dev, id, size, val);
+}
+
+int sysinfo_get_data(struct udevice *dev, int id, void **data, size_t *size)
+{
+	struct sysinfo_priv *priv;
+	struct sysinfo_ops *ops;
+
+	if (!dev)
+		return -ENOSYS;
+
+	priv = dev_get_uclass_priv(dev);
+	ops = sysinfo_get_ops(dev);
+
+	if (!priv->detected)
+		return -EPERM;
+
+	if (!ops->get_data)
+		return -ENOSYS;
+
+	return ops->get_data(dev, id, data, size);
+}
+
+int sysinfo_get_item_count(struct udevice *dev, int id)
+{
+	struct sysinfo_priv *priv = dev_get_uclass_priv(dev);
+	struct sysinfo_ops *ops = sysinfo_get_ops(dev);
+
+	if (!priv->detected)
+		return -EPERM;
+
+	if (!ops->get_item_count)
+		return -ENOSYS;
+
+	return ops->get_item_count(dev, id);
+}
+
+int sysinfo_get_data_by_index(struct udevice *dev, int id, int index,
+			      void **data, size_t *size)
+{
+	struct sysinfo_priv *priv = dev_get_uclass_priv(dev);
+	struct sysinfo_ops *ops = sysinfo_get_ops(dev);
+
+	if (!priv->detected)
+		return -EPERM;
+
+	if (!ops->get_data_by_index)
+		return -ENOSYS;
+
+	return ops->get_data_by_index(dev, id, index, data, size);
 }
 
 UCLASS_DRIVER(sysinfo) = {

@@ -19,7 +19,7 @@
  * This file handles the architecture-dependent parts of hardware exceptions
  */
 
-#include <common.h>
+#include <asm/ppc.h>
 #include <asm/global_data.h>
 #include <asm/ptrace.h>
 #include <command.h>
@@ -110,7 +110,6 @@ void show_regs(struct pt_regs *regs)
 		}
 	}
 }
-
 
 static void _exception(int signr, struct pt_regs *regs)
 {
@@ -260,7 +259,7 @@ void UnknownException(struct pt_regs *regs)
 
 void ExtIntException(struct pt_regs *regs)
 {
-	volatile ccsr_pic_t *pic = (void *)(CONFIG_SYS_MPC8xxx_PIC_ADDR);
+	volatile ccsr_pic_t *pic = (void *)(CFG_SYS_MPC8xxx_PIC_ADDR);
 
 	uint vect;
 

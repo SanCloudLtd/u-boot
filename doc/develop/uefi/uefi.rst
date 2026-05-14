@@ -14,7 +14,7 @@ Development target
 ------------------
 
 The implementation of UEFI in U-Boot strives to reach the requirements described
-in the "Embedded Base Boot Requirements (EBBR) Specification - Release v1.0"
+in the "Embedded Base Boot Requirements (EBBR) Specification - Release v2.1.0"
 [2]. The "Server Base Boot Requirements System Software on ARM Platforms" [3]
 describes a superset of the EBBR specification and may be used as further
 reference.
@@ -72,7 +72,7 @@ bootm command. This feature is available if U-Boot is configured with::
 
     CONFIG_BOOTM_EFI=y
 
-A sample configuration is provided as file doc/uImage.FIT/uefi.its.
+A sample configuration is provided in :doc:`../../usage/fit/uefi`.
 
 Below you find the output of an example session starting GRUB::
 
@@ -96,7 +96,7 @@ Below you find the output of an example session starting GRUB::
     ## Transferring control to EFI (at address 404000d0) ...
     Welcome to GRUB!
 
-See doc/uImage.FIT/howto.txt for an introduction to FIT images.
+See :doc:`../../usage/fit/howto` for an introduction to FIT images.
 
 Configuring UEFI secure boot
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -193,7 +193,7 @@ on the sandbox
 .. code-block:: bash
 
     cd <U-Boot source directory>
-    pytest.py test/py/tests/test_efi_secboot/test_signed.py --bd sandbox
+    pytest test/py/tests/test_efi_secboot/test_signed.py --bd sandbox
 
 UEFI binaries may be signed by Microsoft using the following certificates:
 
@@ -277,6 +277,8 @@ Enable ``CONFIG_OPTEE``, ``CONFIG_CMD_OPTEE_RPMB`` and ``CONFIG_EFI_MM_COMM_TEE`
 
 [1] https://optee.readthedocs.io/en/latest/building/efi_vars/stmm.html
 
+.. _uefi_capsule_update_ref:
+
 Enabling UEFI Capsule Update feature
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -312,8 +314,92 @@ Run the following command
 .. code-block:: console
 
     $ mkeficapsule \
-      --index 1 --instance 0 \
-      [--fit <FIT image> | --raw <raw image>] \
+      --index <index> --instance 0 \
+      --guid <image GUID> \
+      <capsule_file_name>
+
+Capsule with firmware version
+*****************************
+
+The UEFI specification does not define the firmware versioning mechanism.
+EDK II reference implementation inserts the FMP Payload Header right before
+the payload. It coutains the fw_version and lowest supported version,
+EDK II reference implementation uses these information to implement the
+firmware versioning and anti-rollback protection, the firmware version and
+lowest supported version is stored into EFI non-volatile variable.
+
+In U-Boot, the firmware versioning is implemented utilizing
+the FMP Payload Header same as EDK II reference implementation,
+reads the FMP Payload Header and stores the firmware version into
+"FmpStateXXXX" EFI non-volatile variable. XXXX indicates the image index,
+since FMP protocol handles multiple image indexes.
+
+To add the fw_version into the FMP Payload Header,
+add --fw-version option in mkeficapsule tool.
+
+.. code-block:: console
+
+    $ mkeficapsule \
+      --index <index> --instance 0 \
+      --guid <image GUID> \
+      --fw-version 5 \
+      <capsule_file_name>
+
+If the --fw-version option is not set, FMP Payload Header is not inserted
+and fw_version is set as 0.
+
+Capsule Generation through binman
+*********************************
+
+Support has also been added to generate capsules during U-Boot build
+through binman. This requires the platform's DTB to be populated with
+the capsule entry nodes for binman. The capsules then can be generated
+by specifying the capsule parameters as properties in the capsule
+entry node.
+
+Check the test/py/tests/test_efi_capsule/capsule_gen_binman.dts file
+as reference for how a typical binman node for capsule generation
+looks like. For generating capsules as part of the platform's build, a
+capsule node would then have to be included into the platform's
+devicetree.
+
+A typical binman node for generating a capsule would look like::
+
+	capsule {
+		filename = "u-boot.capsule";
+		efi-capsule {
+			image-index = <0x1>;
+			image-guid = "09d7cf52-0720-4710-91d1-08469b7fe9c8";
+
+			u-boot {
+			};
+		};
+	};
+
+In the above example, a capsule file named u-boot.capsule will be
+generated with u-boot.bin as it's input payload. The capsule
+generation parameters like image-index and image-guid are being
+specified as properties. Similarly, other properties like the private
+and public key certificate can be specified for generating signed
+capsules. Refer :ref:`etype_efi_capsule` for documentation about the
+efi-capsule binman entry type, which describes all the properties that
+can be specified.
+
+Dumping capsule headers
+***********************
+
+The mkeficapsule tool also provides a command-line option to dump the
+contents of the capsule header. This is a useful functionality when
+trying to understand the structure of a capsule and is also used in
+capsule verification. This feature is used in testing the capsule
+contents in binman's test framework.
+
+To check the contents of the capsule headers, the mkeficapsule command
+can be used.
+
+.. code-block:: console
+
+    $ mkeficapsule --dump-capsule \
       <capsule_file_name>
 
 Performing the update
@@ -326,14 +412,147 @@ bit in OsIndications variable with
 
 .. code-block:: console
 
-    => setenv -e -nv -bs -rt -v OsIndications =0x04
+    => setenv -e -nv -bs -rt -v OsIndications =0x0000000000000004
 
-Since U-boot doesn't currently support SetVariable at runtime, its value
+Since U-Boot doesn't currently support SetVariable at runtime, its value
 won't be taken over across the reboot. If this is the case, you can skip
 this feature check with the Kconfig option (CONFIG_EFI_IGNORE_OSINDICATIONS)
 set.
 
+A few values need to be defined in the board file for performing the
+capsule update. These values are defined in the board file by
+initialisation of a structure which provides information needed for
+capsule updates. The following structures have been defined for
+containing the image related information
+
+.. code-block:: c
+
+	struct efi_fw_image {
+		efi_guid_t image_type_id;
+		u16 *fw_name;
+		u8 image_index;
+	};
+
+	struct efi_capsule_update_info {
+		const char *dfu_string;
+		struct efi_fw_image *images;
+	};
+
+
+A string is defined which is to be used for populating the
+dfu_alt_info variable. This string is used by the function
+set_dfu_alt_info. Instead of taking the variable from the environment,
+the capsule update feature requires that the variable be set through
+the function, since that is more robust. Allowing the user to change
+the location of the firmware updates is not a very secure
+practice. Getting this information from the firmware itself is more
+secure, assuming the firmware has been verified by a previous stage
+boot loader.
+
+Dynamic Firmware Update GUIDs
+*****************************
+
+The image_type_id contains a GUID value which is specific to the image
+and board being updated, that is to say it should uniquely identify the
+board model (and revision if relevant) and image pair. Traditionally,
+these GUIDs are generated manually and hardcoded on a per-board basis,
+however this scheme makes it difficult to scale up to support many
+boards.
+
+To address this, v5 GUIDs can be used to generate board-specific GUIDs
+at runtime, based on the board's devicetree root compatible
+(e.g. "qcom,qrb5165-rb5").
+
+These strings are combined with the fw_image name to generate GUIDs for
+each image. Support for dynamic UUIDs can be enabled by generating a new
+namespace UUID and setting EFI_CAPSULE_NAMESPACE_GUID to it. Dynamic GUID
+generation is only enabled if the image_type_id property is unset for your
+firmware images, this is to avoid breaking existing boards with hardcoded
+GUIDs.
+
+The mkeficapsule tool can be used to determine the GUIDs for a particular
+board and image. It can be found in the tools directory.
+
+Firmware update images
+**********************
+
+The firmware images structure defines the GUID values, image index
+values and the name of the images that are to be updated through
+the capsule update feature. These values are to be defined as part of
+an array. These GUID values would be used by the Firmware Management
+Protocol(FMP) to populate the image descriptor array and also
+displayed as part of the ESRT table. The image index values defined in
+the array should be one greater than the dfu alt number that
+corresponds to the firmware image. So, if the dfu alt number for an
+image is 2, the value of image index in the fw_images array for that
+image should be 3. The dfu alt number can be obtained by running the
+following command::
+
+    dfu list
+
+When the FWU Multi Bank Update feature is enabled on the platform, the
+image index is used only to identify the image index with the image
+GUID. The image index would not correspond to the dfu alt number. This
+is because the FWU feature supports multiple partitions(banks) of
+updatable images, and the actual dfu alt number to which the image is
+to be written to is determined at runtime, based on the value of the
+update bank to which the image is to be written. For more information
+on the FWU Multi Bank Update feature, please refer to
+:doc:`/develop/uefi/fwu_updates`.
+
+When using the FMP for FIT images, the image index value needs to be
+set to 1.
+
 Finally, the capsule update can be initiated by rebooting the board.
+
+An example of setting the values in the struct efi_fw_image and
+struct efi_capsule_update_info is shown below
+
+.. code-block:: c
+
+	struct efi_fw_image fw_images[] = {
+		{
+			.image_type_id = DEVELOPERBOX_UBOOT_IMAGE_GUID,
+			.fw_name = u"DEVELOPERBOX-UBOOT",
+			.image_index = 1,
+		},
+		{
+			.image_type_id = DEVELOPERBOX_FIP_IMAGE_GUID,
+			.fw_name = u"DEVELOPERBOX-FIP",
+			.image_index = 2,
+		},
+		{
+			.image_type_id = DEVELOPERBOX_OPTEE_IMAGE_GUID,
+			.fw_name = u"DEVELOPERBOX-OPTEE",
+			.image_index = 3,
+		},
+	};
+
+	struct efi_capsule_update_info update_info = {
+		.dfu_string = "mtd nor1=u-boot.bin raw 200000 100000;"
+				"fip.bin raw 180000 78000;"
+				"optee.bin raw 500000 100000",
+		.images = fw_images,
+	};
+
+Platforms must declare a variable update_info of type struct
+efi_capsule_update_info as shown in the example above. The platform
+will also define a fw_images array which contains information of all
+the firmware images that are to be updated through capsule update
+mechanism. The dfu_string is the string that is to be set as
+dfu_alt_info. In the example above, the image index to be set for
+u-boot.bin binary is 0x1, for fip.bin is 0x2 and for optee.bin is 0x3.
+
+As an example, for generating the capsule for the optee.bin image, the
+following command can be issued
+
+.. code-block:: bash
+
+    $ ./tools/mkeficapsule \
+      --index 0x3 --instance 0 \
+      --guid c1b629f1-ce0e-4894-82bf-f0a38387e630 \
+      optee.bin optee.capsule
+
 
 Enabling Capsule Authentication
 *******************************
@@ -378,29 +597,63 @@ and used by the steps highlighted below.
       [--fit | --raw | --guid <guid-string] \
       <image_blob> <capsule_file_name>
 
-4. Insert the signature list into a device tree in the following format::
+Anti-rollback Protection
+************************
 
-    {
-            signature {
-                    capsule-key = [ <binary of signature list> ];
-            }
-            ...
-    }
+Anti-rollback prevents unintentional installation of outdated firmware.
+To enable anti-rollback, you must add the lowest-supported-version property
+to dtb and specify --fw-version when creating a capsule file with the
+mkeficapsule tool.
+When executing capsule update, U-Boot checks if fw_version is greater than
+or equal to lowest-supported-version. If fw_version is less than
+lowest-supported-version, the update will fail.
+For example, if lowest-supported-version is set to 7 and you run capsule
+update using a capsule file with --fw-version of 5, the update will fail.
+When the --fw-version in the capsule file is updated, lowest-supported-version
+in the dtb might be updated accordingly.
 
-You can do step-4 manually with
+If user needs to enforce anti-rollback to any older version,
+the lowest-supported-version property in dtb must be always updated manually.
+
+Note that the lowest-supported-version property specified in U-Boot's control
+device tree can be changed by U-Boot fdt command.
+Secure systems should not enable this command.
+
+To insert the lowest supported version into a dtb
 
 .. code-block:: console
 
-    $ dtc -@ -I dts -O dtb -o signature.dtbo signature.dts
-    $ fdtoverlay -i orig.dtb -o new.dtb -v signature.dtbo
+    $ dtc -@ -I dts -O dtb -o version.dtbo version.dtso
+    $ fdtoverlay -i orig.dtb -o new.dtb -v version.dtbo
 
-where signature.dts looks like::
+where version.dtso looks like::
 
+    /dts-v1/;
+    /plugin/;
     &{/} {
-            signature {
-                    capsule-key = /incbin/("CRT.esl");
+            firmware-version {
+                    image1 {
+                            image-type-id = "09D7CF52-0720-4710-91D1-08469B7FE9C8";
+                            image-index = <1>;
+                            lowest-supported-version = <3>;
+                    };
             };
     };
+
+The properties of image-type-id and image-index must match the value
+defined in the efi_fw_image array as image_type_id and image_index.
+
+Porting Capsule Updates to new boards
+*************************************
+
+It is important, when using a reference board as a starting point for a custom
+board, that certain steps are taken to properly support Capsule Updates.
+
+Capsule GUIDs need to be unique for each firmware and board. That is, if two
+firmwares are built from the same source but result in different binaries
+because they are built for different boards, they should have different GUIDs.
+Therefore it is important when creating support for a new board, new GUIDs are
+defined in the board's header file.  *DO NOT* reuse capsule GUIDs.
 
 Executing the boot manager
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -413,12 +666,87 @@ UEFI variables. Booting according to these variables is possible via::
 As of U-Boot v2020.10 UEFI variables cannot be set at runtime. The U-Boot
 command 'efidebug' can be used to set the variables.
 
+UEFI HTTP Boot using the legacy TCP stack
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+HTTP Boot provides the capability for system deployment and configuration
+over the network. HTTP Boot can be activated by specifying::
+
+    CONFIG_EFI_HTTP_BOOT
+
+Enabling that will automatically select::
+
+    CONFIG_CMD_DNS
+    CONFIG_CMD_WGET
+    CONFIG_BLKMAP
+
+Set up the load option specifying the target URI::
+
+    efidebug boot add -u 1 netinst http://foo/bar
+
+When this load option is selected as boot selection, resolve the
+host ip address by dns, then download the file with wget.
+If the downloaded file extension is .iso or .img file, efibootmgr tries to
+mount the image and boot with the default file(e.g. EFI/BOOT/BOOTAA64.EFI).
+If the downloaded file is PE-COFF image, load the downloaded file and
+start it.
+
+The current implementation tries to resolve the IP address as a host name.
+If the uri is like "http://192.168.1.1/foobar",
+the dns process tries to resolve the host "192.168.1.1" and it will
+end up with "host not found".
+
+We need to preset the "httpserverip" environment variable to proceed the wget::
+
+    setenv httpserverip 192.168.1.1
+
+UEFI HTTP(s) Boot using lwIP
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Similar to the above U-Boot can do EFI HTTP boot using lwIP. If we combine this
+with Mbed TLS we can also download from https://
+
+HTTP(s) Boot can be activated by specifying::
+
+    CONFIG_EFI_HTTP_BOOT
+    CONFIG_NET_LWIP
+    CONFIG_WGET_HTTPS
+
+For QEMU targets there's a Kconfig that supports this by default::
+
+    make qemu_arm64_lwip_defconfig
+
+The commands and functionality are similar to the legacy stack, with the notable
+exception of not having to define an "httpserverip" if you are trying to resolve
+an IP. However, lwIP code doesn't yet support redirects::
+
+    => efidebug boot add -u 1 netinst https://cdimage.debian.org/cdimage/weekly-builds/arm64/iso-cd/debian-testing-arm64-netinst.iso
+    => dhcp
+    DHCP client bound to address 10.0.2.15 (3 ms)
+    => efidebug boot order 1
+    => bootefi bootmgr
+
+    HTTP server error 302
+    Loading Boot0001 'netinst' failed
+    EFI boot manager: Cannot load any image
+
+If the url you specified isn't a redirect::
+
+    => efidebug boot add -u 1 netinst https://download.rockylinux.org/pub/rocky/9/isos/aarch64/Rocky-9.4-aarch64-minimal.iso
+    => dhcp
+    => bootefi bootmgr
+    #######################################
+
+If the downloaded file extension is .iso or .img file, efibootmgr tries to
+mount the image and boot with the default file(e.g. EFI/BOOT/BOOTAA64.EFI).
+If the downloaded file is PE-COFF image, load the downloaded file and
+start it.
+
 Executing the built in hello world application
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 A hello world UEFI application can be built with::
 
-    CONFIG_CMD_BOOTEFI_HELLO_COMPILE=y
+    CONFIG_BOOTEFI_HELLO_COMPILE=y
 
 It can be embedded into the U-Boot binary with::
 
@@ -567,7 +895,7 @@ driver on a device the ConnectController service is called. In this context
 controller refers to the device for which the driver is installed.
 
 The relevant drivers are identified using the EFI_DRIVER_BINDING_PROTOCOL. This
-protocol has has three functions:
+protocol has three functions:
 
 * supported - determines if the driver is compatible with the device
 * start - installs the driver by opening the relevant protocol with
@@ -652,7 +980,7 @@ UEFI block IO driver
 The UEFI block IO driver supports devices exposing the EFI_BLOCK_IO_PROTOCOL.
 
 When connected it creates a new U-Boot block IO device with interface type
-IF_TYPE_EFI_LOADER, adds child controllers mapping the partitions, and installs
+UCLASS_EFI_LOADER, adds child controllers mapping the partitions, and installs
 the EFI_SIMPLE_FILE_SYSTEM_PROTOCOL on these. This can be used together with the
 software iPXE to boot from iSCSI network drives [4].
 
@@ -691,8 +1019,8 @@ Links
 -----
 
 * [1] http://uefi.org/specifications - UEFI specifications
-* [2] https://github.com/ARM-software/ebbr/releases/download/v1.0/ebbr-v1.0.pdf -
-  Embedded Base Boot Requirements (EBBR) Specification - Release v1.0
+* [2] https://github.com/ARM-software/ebbr/releases/download/v2.1.0/ebbr-v2.1.0.pdf -
+  Embedded Base Boot Requirements (EBBR) Specification - Release v2.1.0
 * [3] https://developer.arm.com/docs/den0044/latest/server-base-boot-requirements-system-software-on-arm-platforms-version-11 -
   Server Base Boot Requirements System Software on ARM Platforms - Version 1.1
 * [4] :doc:`iscsi`

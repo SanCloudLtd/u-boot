@@ -8,7 +8,6 @@
  */
 #ifndef _CLOCKS_OMAP5_H_
 #define _CLOCKS_OMAP5_H_
-#include <asm/omap_common.h>
 
 /*
  * Assuming a maximum of 1.5 GHz ARM speed and a minimum of 2 cycles per
@@ -111,7 +110,6 @@
 #define CD_CLKCTRL_CLKTRCTRL_SW_SLEEP		1
 #define CD_CLKCTRL_CLKTRCTRL_SW_WKUP		2
 #define CD_CLKCTRL_CLKTRCTRL_HW_AUTO		3
-
 
 /* CM_<clock_domain>_<module>_CLKCTRL */
 #define MODULE_CLKCTRL_MODULEMODE_SHIFT		0

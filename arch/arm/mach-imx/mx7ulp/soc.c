@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2016 Freescale Semiconductor, Inc.
+ * Copyright 2021 NXP
  */
 
-#include <common.h>
+#include <config.h>
 #include <cpu_func.h>
 #include <init.h>
 #include <log.h>
@@ -16,6 +17,7 @@
 #include <asm/mach-imx/sys_proto.h>
 #include <asm/setup.h>
 #include <linux/bitops.h>
+#include <dm.h>
 
 #define PMC0_BASE_ADDR		0x410a1000
 #define PMC0_CTRL		0x28
@@ -36,8 +38,13 @@
 static char *get_reset_cause(char *);
 
 #if defined(CONFIG_IMX_HAB)
-struct imx_sec_config_fuse_t const imx_sec_config_fuse = {
+struct imx_fuse const imx_sec_config_fuse = {
 	.bank = 29,
+	.word = 6,
+};
+
+struct imx_fuse const imx_field_return_fuse = {
+	.bank = 9,
 	.word = 6,
 };
 #endif
@@ -81,6 +88,22 @@ int arch_cpu_init(void)
 	enable_ca7_smp();
 	return 0;
 }
+
+#if defined(CONFIG_ARCH_MISC_INIT)
+int arch_misc_init(void)
+{
+	if (IS_ENABLED(CONFIG_FSL_CAAM)) {
+		struct udevice *dev;
+		int ret;
+
+		ret = uclass_get_device_by_driver(UCLASS_MISC, DM_DRIVER_GET(caam_jr), &dev);
+		if (ret)
+			printf("Failed to initialize caam_jr: %d\n", ret);
+	}
+
+	return 0;
+}
+#endif
 
 #ifdef CONFIG_BOARD_POSTCLK_INIT
 int board_postclk_init(void)
@@ -153,7 +176,7 @@ static bool ldo_mode_is_enabled(void)
 		return false;
 }
 
-#if !defined(CONFIG_SPL) || (defined(CONFIG_SPL) && defined(CONFIG_SPL_BUILD))
+#if !defined(CONFIG_SPL) || (defined(CONFIG_SPL) && defined(CONFIG_XPL_BUILD))
 #if defined(CONFIG_LDO_ENABLED_MODE)
 static void init_ldo_mode(void)
 {
@@ -339,7 +362,7 @@ static char *get_reset_cause(char *ret)
 #ifdef CONFIG_ENV_IS_IN_MMC
 __weak int board_mmc_get_env_dev(int devno)
 {
-	return CONFIG_SYS_MMC_ENV_DEV;
+	return CONFIG_ENV_MMC_DEVICE_INDEX;
 }
 
 int mmc_get_env_dev(void)
@@ -349,7 +372,7 @@ int mmc_get_env_dev(void)
 
 	/* If not boot from sd/mmc, use default value */
 	if (get_boot_mode() == LOW_POWER_BOOT)
-		return CONFIG_SYS_MMC_ENV_DEV;
+		return CONFIG_ENV_MMC_DEVICE_INDEX;
 
 	bt1_cfg = readl(CMC1_RBASE + 0x40);
 	devno = (bt1_cfg >> 9) & 0x7;

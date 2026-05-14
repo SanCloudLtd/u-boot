@@ -5,7 +5,6 @@
  * Copyright (C) 2021 Xilinx, Inc.
  */
 
-#include <common.h>
 #include <dm.h>
 #include <soc.h>
 #include <zynqmp_firmware.h>
@@ -45,7 +44,7 @@ static const struct soc_ops soc_xilinx_versal_ops = {
 static int soc_xilinx_versal_probe(struct udevice *dev)
 {
 	struct soc_xilinx_versal_priv *priv = dev_get_priv(dev);
-	u32 ret_payload[4];
+	u32 ret_payload[PAYLOAD_ARG_CNT];
 	int ret;
 
 	priv->family = versal_family;

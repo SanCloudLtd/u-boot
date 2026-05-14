@@ -8,12 +8,12 @@
  * Copyright (C) 2018 Texas Instruments, Inc
  */
 
-#include <common.h>
 #include <dm.h>
 #include <log.h>
 #include <pci.h>
 #include <dm/device_compat.h>
 #include <asm/io.h>
+#include <linux/bitfield.h>
 #include <linux/delay.h>
 #include "pcie_dw_common.h"
 
@@ -27,6 +27,50 @@ int pcie_dw_get_link_width(struct pcie_dw *pci)
 {
 	return (readl(pci->dbi_base + PCIE_LINK_STATUS_REG) &
 		PCIE_LINK_STATUS_WIDTH_MASK) >> PCIE_LINK_STATUS_WIDTH_OFF;
+}
+
+void dw_pcie_link_set_max_link_width(struct pcie_dw *pci, u32 num_lanes)
+{
+	u32 lnkcap, lwsc, plc;
+	u8 cap;
+
+	if (!num_lanes)
+		return;
+
+	/* Set the number of lanes */
+	plc = readl(pci->dbi_base + PCIE_PORT_LINK_CONTROL);
+	plc &= ~PORT_LINK_FAST_LINK_MODE;
+	plc &= ~PORT_LINK_MODE_MASK;
+
+	/* Set link width speed control register */
+	lwsc = readl(pci->dbi_base + PCIE_LINK_WIDTH_SPEED_CONTROL);
+	lwsc &= ~PORT_LOGIC_LINK_WIDTH_MASK;
+	lwsc |= PORT_LOGIC_LINK_WIDTH_1_LANES;
+	switch (num_lanes) {
+	case 1:
+		plc |= PORT_LINK_MODE_1_LANES;
+		break;
+	case 2:
+		plc |= PORT_LINK_MODE_2_LANES;
+		break;
+	case 4:
+		plc |= PORT_LINK_MODE_4_LANES;
+		break;
+	case 8:
+		plc |= PORT_LINK_MODE_8_LANES;
+		break;
+	default:
+		dev_err(pci->dev, "num-lanes %u: invalid value\n", num_lanes);
+		return;
+	}
+	writel(plc, pci->dbi_base + PCIE_PORT_LINK_CONTROL);
+	writel(lwsc, pci->dbi_base + PCIE_LINK_WIDTH_SPEED_CONTROL);
+
+	cap = pcie_dw_find_capability(pci, PCI_CAP_ID_EXP);
+	lnkcap = readl(pci->dbi_base + cap + PCI_EXP_LNKCAP);
+	lnkcap &= ~PCI_EXP_LNKCAP_MLW;
+	lnkcap |= FIELD_PREP(PCI_EXP_LNKCAP_MLW, num_lanes);
+	writel(lnkcap, pci->dbi_base + cap + PCI_EXP_LNKCAP);
 }
 
 static void dw_pcie_writel_ob_unroll(struct pcie_dw *pci, u32 index, u32 reg,
@@ -73,6 +117,8 @@ int pcie_dw_prog_outbound_atu_unroll(struct pcie_dw *pci, int index,
 				 upper_32_bits(cpu_addr));
 	dw_pcie_writel_ob_unroll(pci, index, PCIE_ATU_UNR_LIMIT,
 				 lower_32_bits(cpu_addr + size - 1));
+	dw_pcie_writel_ob_unroll(pci, index, PCIE_ATU_UNR_UPPER_LIMIT,
+				 upper_32_bits(cpu_addr + size - 1));
 	dw_pcie_writel_ob_unroll(pci, index, PCIE_ATU_UNR_LOWER_TARGET,
 				 lower_32_bits(pci_addr));
 	dw_pcie_writel_ob_unroll(pci, index, PCIE_ATU_UNR_UPPER_TARGET,
@@ -139,9 +185,9 @@ static uintptr_t set_cfg_address(struct pcie_dw *pcie,
 
 	/*
 	 * Not accessing root port configuration space?
-	 * Region #0 is used for Outbound CFG space access.
+	 * Region #1 is used for Outbound CFG space access.
 	 * Direction = Outbound
-	 * Region Index = 0
+	 * Region Index = 1
 	 */
 	d = PCI_MASK_BUS(d);
 	d = PCI_ADD_BUS(bus, d);
@@ -266,6 +312,48 @@ int pcie_dw_write_config(struct udevice *bus, pci_dev_t bdf,
 						 pcie->io.bus_start, pcie->io.size);
 }
 
+/*
+ * These interfaces resemble the pci_find_*capability() interfaces, but these
+ * are for configuring host controllers, which are bridges *to* PCI devices but
+ * are not PCI devices themselves.
+ */
+static u8 pcie_dw_find_next_cap(struct pcie_dw *pci, u8 cap_ptr, u8 cap)
+{
+	u8 cap_id, next_cap_ptr;
+	u32 val;
+	u16 reg;
+
+	if (!cap_ptr)
+		return 0;
+
+	val = readl(pci->dbi_base + (cap_ptr & ~0x3));
+	reg = pci_conv_32_to_size(val, cap_ptr, 2);
+	cap_id = (reg & 0x00ff);
+
+	if (cap_id > PCI_CAP_ID_MAX)
+		return 0;
+
+	if (cap_id == cap)
+		return cap_ptr;
+
+	next_cap_ptr = (reg & 0xff00) >> 8;
+	return pcie_dw_find_next_cap(pci, next_cap_ptr, cap);
+}
+
+u8 pcie_dw_find_capability(struct pcie_dw *pci, u8 cap)
+{
+	u8 next_cap_ptr;
+	u32 val;
+	u16 reg;
+
+	val = readl(pci->dbi_base + (PCI_CAPABILITY_LIST & ~0x3));
+	reg = pci_conv_32_to_size(val, PCI_CAPABILITY_LIST, 2);
+
+	next_cap_ptr = (reg & 0x00ff);
+
+	return pcie_dw_find_next_cap(pci, next_cap_ptr, cap);
+}
+
 /**
  * pcie_dw_setup_host() - Setup the PCIe controller for RC opertaion
  *
@@ -326,8 +414,10 @@ void pcie_dw_setup_host(struct pcie_dw *pci)
 			pci->prefetch.bus_start = hose->regions[ret].bus_start;  /* PREFETCH_bus_addr */
 			pci->prefetch.size = hose->regions[ret].size;	    /* PREFETCH size */
 		} else if (hose->regions[ret].flags == PCI_REGION_SYS_MEMORY) {
-			pci->cfg_base = (void *)(pci->io.phys_start - pci->io.size);
-			pci->cfg_size = pci->io.size;
+			if (!pci->cfg_base) {
+				pci->cfg_base = (void *)(pci->io.phys_start - pci->io.size);
+				pci->cfg_size = pci->io.size;
+			}
 		} else {
 			dev_err(pci->dev, "invalid flags type!\n");
 		}

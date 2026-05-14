@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * Copyright (C) 2020-2021 Linaro Limited
+ * Copyright (C) 2020-2022 Linaro Limited
  */
 
 #define LOG_CATEGORY UCLASS_REGULATOR
 
-#include <common.h>
 #include <dm.h>
 #include <errno.h>
 #include <scmi_agent.h>
+#include <scmi_agent-uclass.h>
 #include <scmi_protocols.h>
 #include <asm/types.h>
 #include <dm/device.h>
@@ -38,15 +38,11 @@ static int scmi_voltd_set_enable(struct udevice *dev, bool enable)
 					  in, out);
 	int ret;
 
-	ret = devm_scmi_process_msg(dev->parent->parent, &msg);
+	ret = devm_scmi_process_msg(dev, &msg);
 	if (ret)
 		return ret;
 
-	ret = scmi_to_linux_errno(out.status);
-	if (ret)
-		return ret;
-
-	return ret;
+	return scmi_to_linux_errno(out.status);
 }
 
 static int scmi_voltd_get_enable(struct udevice *dev)
@@ -61,7 +57,7 @@ static int scmi_voltd_get_enable(struct udevice *dev)
 					  in, out);
 	int ret;
 
-	ret = devm_scmi_process_msg(dev->parent->parent, &msg);
+	ret = devm_scmi_process_msg(dev, &msg);
 	if (ret < 0)
 		return ret;
 
@@ -85,7 +81,7 @@ static int scmi_voltd_set_voltage_level(struct udevice *dev, int uV)
 					  in, out);
 	int ret;
 
-	ret = devm_scmi_process_msg(dev->parent->parent, &msg);
+	ret = devm_scmi_process_msg(dev, &msg);
 	if (ret < 0)
 		return ret;
 
@@ -104,7 +100,7 @@ static int scmi_voltd_get_voltage_level(struct udevice *dev)
 					  in, out);
 	int ret;
 
-	ret = devm_scmi_process_msg(dev->parent->parent, &msg);
+	ret = devm_scmi_process_msg(dev, &msg);
 	if (ret < 0)
 		return ret;
 
@@ -144,10 +140,14 @@ static int scmi_regulator_probe(struct udevice *dev)
 	};
 	int ret;
 
+	ret = devm_scmi_of_get_channel(dev);
+	if (ret)
+		return ret;
+
 	/* Check voltage domain is known from SCMI server */
 	in.domain_id = pdata->domain_id;
 
-	ret = devm_scmi_process_msg(dev->parent->parent, &scmi_msg);
+	ret = devm_scmi_process_msg(dev, &scmi_msg);
 	if (ret) {
 		dev_err(dev, "Failed to query voltage domain %u: %d\n",
 			pdata->domain_id, ret);
@@ -176,12 +176,19 @@ U_BOOT_DRIVER(scmi_regulator) = {
 static int scmi_regulator_bind(struct udevice *dev)
 {
 	struct driver *drv;
+	ofnode regul_node;
 	ofnode node;
 	int ret;
 
+	regul_node = ofnode_find_subnode(dev_ofnode(dev), "regulators");
+	if (!ofnode_valid(regul_node)) {
+		dev_err(dev, "no regulators node\n");
+		return -ENXIO;
+	}
+
 	drv = DM_DRIVER_GET(scmi_regulator);
 
-	ofnode_for_each_subnode(node, dev_ofnode(dev)) {
+	ofnode_for_each_subnode(node, regul_node) {
 		ret = device_bind(dev, drv, ofnode_get_name(node),
 				  NULL, node, NULL);
 		if (ret)
@@ -196,3 +203,10 @@ U_BOOT_DRIVER(scmi_voltage_domain) = {
 	.id = UCLASS_NOP,
 	.bind = scmi_regulator_bind,
 };
+
+static struct scmi_proto_match match[] = {
+	{ .proto_id = SCMI_PROTOCOL_ID_VOLTAGE_DOMAIN },
+	{ /* Sentinel */ }
+};
+
+U_BOOT_SCMI_PROTO_DRIVER(scmi_voltage_domain, match);

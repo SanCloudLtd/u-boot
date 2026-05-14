@@ -5,7 +5,6 @@
  * Author: Liviu Dudau <Liviu.Dudau@arm.com>
  */
 
-#include <common.h>
 #include <init.h>
 #include <log.h>
 #include <asm/io.h>
@@ -110,7 +109,6 @@ static void xr3pci_setup_atr(void)
 			     XR3_PCI_MEMSPACE64_SIZE,
 			     XR3PCI_ATR_TRSLID_AXIMEMORY);
 
-
 	/* setup CPU to PCIe address translation table */
 	base = XR3_CONFIG_BASE + XR3PCI_ATR_AXI4_SLV0;
 
@@ -150,7 +148,7 @@ static void xr3pci_init(void)
 	/* allow ECRC */
 	writel(0x6006, XR3_CONFIG_BASE + XR3PCI_PEX_SPC2);
 	/* setup the correct class code for the host bridge */
-	writel(PCI_CLASS_BRIDGE_PCI << 16, XR3_CONFIG_BASE + XR3PCI_BRIDGE_PCI_IDS);
+	writel(PCI_CLASS_BRIDGE_PCI_NORMAL << 8, XR3_CONFIG_BASE + XR3PCI_BRIDGE_PCI_IDS);
 
 	/* reset phy and root complex */
 	writel(JUNO_RESET_CTRL_PHY | JUNO_RESET_CTRL_RC,

@@ -173,13 +173,13 @@ int uclass_get(enum uclass_id key, struct uclass **ucp);
 const char *uclass_get_name(enum uclass_id id);
 
 /**
- * uclass_get_by_name_len() - Look up a uclass by its partial driver name
+ * uclass_get_by_namelen() - Look up a uclass by its driver name
  *
  * @name: Name to look up
- * @len: Length of the partial name
+ * @len: Length of @name (the uclass driver name must have the same length)
  * Return: the associated uclass ID, or UCLASS_INVALID if not found
  */
-enum uclass_id uclass_get_by_name_len(const char *name, int len);
+enum uclass_id uclass_get_by_namelen(const char *name, int len);
 
 /**
  * uclass_get_by_name() - Look up a uclass by its driver name
@@ -265,6 +265,23 @@ int uclass_get_device_by_ofnode(enum uclass_id id, ofnode node,
 				struct udevice **devp);
 
 /**
+ * uclass_get_device_by_of_path() - Get a uclass device by device tree path
+ *
+ * This searches the devices in the uclass for one attached to the
+ * device tree node corresponding to the given path (which may also be
+ * an alias).
+ *
+ * The device is probed to activate it ready for use.
+ *
+ * @id: ID to look up
+ * @path: Device tree path to search for (if no such path then -ENODEV is returned)
+ * @devp: Returns pointer to device (there is only one for each node)
+ * Return: 0 if OK, -ve on error
+ */
+int uclass_get_device_by_of_path(enum uclass_id id, const char *path,
+				 struct udevice **devp);
+
+/**
  * uclass_get_device_by_phandle_id() - Get a uclass device by phandle id
  *
  * This searches the devices in the uclass for one with the given phandle id.
@@ -317,25 +334,64 @@ int uclass_get_device_by_driver(enum uclass_id id, const struct driver *drv,
 				struct udevice **devp);
 
 /**
+ * uclass_get_device_by_endpoint() - Get a uclass device for a remote endpoint
+ *
+ * This searches through the parents of the specified remote endpoint
+ * for the first device matching the uclass. Said otherwise, this helper
+ * goes through the graph (endpoint) representation and searches for
+ * matching devices. Endpoints can be subnodes of the "port" node or
+ * subnodes of ports identified with a reg property, themselves in a
+ * "ports" container.
+ *
+ * The device is probed to activate it ready for use.
+ *
+ * @class_id: uclass ID to look up
+ * @dev: Device to start from
+ * @port_idx: Index of the port to follow, -1 if there is a single 'port'
+ *            node without reg.
+ * @ep_idx: Index of the endpoint to follow, -1 if there is a single 'endpoint'
+ *          node without reg.
+ * @target: Returns pointer to the first device matching the expected uclass.
+ * Return: 0 if OK, -ve on error
+ */
+int uclass_get_device_by_endpoint(enum uclass_id class_id, struct udevice *dev,
+				  int port_idx, int ep_idx, struct udevice **target);
+
+/**
  * uclass_first_device() - Get the first device in a uclass
  *
  * The device returned is probed if necessary, and ready for use
+ * Devices that fail to probe are skipped
  *
  * This function is useful to start iterating through a list of devices which
  * are functioning correctly and can be probed.
  *
  * @id: Uclass ID to look up
  * @devp: Returns pointer to the first device in that uclass if no error
- * occurred, or NULL if there is no first device, or an error occurred with
- * that device.
- * Return: 0 if OK (found or not found), other -ve on error
+ * occurred, or NULL if there is no usable device
  */
-int uclass_first_device(enum uclass_id id, struct udevice **devp);
+void uclass_first_device(enum uclass_id id, struct udevice **devp);
+
+/**
+ * uclass_next_device() - Get the next device in a uclass
+ *
+ * The device returned is probed if necessary, and ready for use
+ * Devices that fail to probe are skipped
+ *
+ * This function is useful to iterate through a list of devices which
+ * are functioning correctly and can be probed.
+ *
+ * @devp: On entry, pointer to device to lookup. On exit, returns pointer
+ * to the next device in the uclass if no error occurred, or NULL if there is
+ * no next device
+ */
+void uclass_next_device(struct udevice **devp);
 
 /**
  * uclass_first_device_err() - Get the first device in a uclass
  *
- * The device returned is probed if necessary, and ready for use
+ * The device returned is probed if necessary, and ready for use if no error is
+ * returned
  *
  * @id: Uclass ID to look up
  * @devp: Returns pointer to the first device in that uclass, or NULL if none
@@ -344,24 +400,10 @@ int uclass_first_device(enum uclass_id id, struct udevice **devp);
 int uclass_first_device_err(enum uclass_id id, struct udevice **devp);
 
 /**
- * uclass_next_device() - Get the next device in a uclass
- *
- * The device returned is probed if necessary, and ready for use
- *
- * This function is useful to iterate through a list of devices which
- * are functioning correctly and can be probed.
- *
- * @devp: On entry, pointer to device to lookup. On exit, returns pointer
- * to the next device in the uclass if no error occurred, or NULL if there is
- * no next device, or an error occurred with that next device.
- * Return: 0 if OK (found or not found), other -ve on error
- */
-int uclass_next_device(struct udevice **devp);
-
-/**
  * uclass_next_device_err() - Get the next device in a uclass
  *
- * The device returned is probed if necessary, and ready for use
+ * The device returned is probed if necessary, and ready for use if no error is
+ * returned
  *
  * @devp: On entry, pointer to device to lookup. On exit, returns pointer
  * to the next device in the uclass if no error occurred, or NULL if
@@ -373,7 +415,8 @@ int uclass_next_device_err(struct udevice **devp);
 /**
  * uclass_first_device_check() - Get the first device in a uclass
  *
- * The device returned is probed if necessary, and ready for use
+ * The device returned is probed if necessary, and ready for use if no error is
+ * returned
  *
  * This function is useful to start iterating through a list of devices which
  * are functioning correctly and can be probed.
@@ -389,7 +432,8 @@ int uclass_first_device_check(enum uclass_id id, struct udevice **devp);
 /**
  * uclass_next_device_check() - Get the next device in a uclass
  *
- * The device returned is probed if necessary, and ready for use
+ * The device returned is probed if necessary, and ready for use if no error is
+ * returned
  *
  * This function is useful to start iterating through a list of devices which
  * are functioning correctly and can be probed.
@@ -416,6 +460,17 @@ int uclass_first_device_drvdata(enum uclass_id id, ulong driver_data,
 				struct udevice **devp);
 
 /**
+ * uclass_try_first_device()- See if there is a device for a uclass
+ *
+ * If the uclass exists, this returns the first device on that uclass, without
+ * probing it. If the uclass does not exist, it gives up
+ *
+ * @id: Uclass ID to check
+ * Return: Pointer to device, if found, else NULL
+ */
+struct udevice *uclass_try_first_device(enum uclass_id id);
+
+/**
  * uclass_probe_all() - Probe all devices based on an uclass ID
  *
  * This function probes all devices associated with a uclass by
@@ -435,7 +490,7 @@ int uclass_probe_all(enum uclass_id id);
 int uclass_id_count(enum uclass_id id);
 
 /**
- * uclass_id_foreach_dev() - Helper function to iteration through devices
+ * uclass_id_foreach_dev() - iterate through devices of a given uclass ID
  *
  * This creates a for() loop which works through the available devices in
  * a uclass ID in order from start to end.
@@ -452,20 +507,20 @@ int uclass_id_count(enum uclass_id id);
 		list_for_each_entry(pos, &uc->dev_head, uclass_node)
 
 /**
- * uclass_foreach_dev() - Helper function to iteration through devices
+ * uclass_foreach_dev() - iterate through devices of a given uclass
  *
  * This creates a for() loop which works through the available devices in
  * a uclass in order from start to end.
  *
  * @pos: struct udevice * to hold the current device. Set to NULL when there
  * are no more devices.
- * @uc: uclass to scan
+ * @uc: uclass to scan (`struct uclass *`)
  */
 #define uclass_foreach_dev(pos, uc)	\
 	list_for_each_entry(pos, &uc->dev_head, uclass_node)
 
 /**
- * uclass_foreach_dev_safe() - Helper function to safely iteration through devs
+ * uclass_foreach_dev_safe() - safely iterate through devices of a given uclass
  *
  * This creates a for() loop which works through the available devices in
  * a uclass in order from start to end. Inside the loop, it is safe to remove
@@ -474,14 +529,13 @@ int uclass_id_count(enum uclass_id id);
  * @pos: struct udevice * to hold the current device. Set to NULL when there
  * are no more devices.
  * @next: struct udevice * to hold the next next
- * @uc: uclass to scan
+ * @uc: uclass to scan (`struct uclass *`)
  */
 #define uclass_foreach_dev_safe(pos, next, uc)	\
 	list_for_each_entry_safe(pos, next, &uc->dev_head, uclass_node)
 
 /**
- * uclass_foreach_dev_probe() - Helper function to iteration through devices
- * of given uclass
+ * uclass_foreach_dev_probe() - iterate through devices of a given uclass ID
  *
  * This creates a for() loop which works through the available devices in
  * a uclass in order from start to end. Devices are probed if necessary,
@@ -492,7 +546,7 @@ int uclass_id_count(enum uclass_id id);
  * are no more devices.
  */
 #define uclass_foreach_dev_probe(id, dev)	\
-	for (int _ret = uclass_first_device_err(id, &dev); !_ret && dev; \
-	     _ret = uclass_next_device_err(&dev))
+	for (uclass_first_device(id, &dev); dev; \
+	     uclass_next_device(&dev))
 
 #endif

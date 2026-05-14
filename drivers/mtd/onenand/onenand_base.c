@@ -19,13 +19,13 @@
  * published by the Free Software Foundation.
  */
 
-#include <common.h>
 #include <log.h>
 #include <watchdog.h>
 #include <dm/devres.h>
 #include <linux/bitops.h>
 #include <linux/compat.h>
 #include <linux/mtd/mtd.h>
+#include <linux/printk.h>
 #include "linux/mtd/flashchip.h"
 #include <linux/mtd/onenand.h>
 
@@ -478,7 +478,7 @@ static int onenand_wait(struct mtd_info *mtd, int state)
 	u32 timeo = (CONFIG_SYS_HZ * 20) / 1000;
 	u32 time_start = get_timer(0);
 	do {
-		WATCHDOG_RESET();
+		schedule();
 		if (get_timer(time_start) > timeo)
 			return -EIO;
 		interrupt = this->read_word(this->base + ONENAND_REG_INTERRUPT);
@@ -502,7 +502,6 @@ static int onenand_wait(struct mtd_info *mtd, int state)
 
 		return -EIO;
 	}
-
 
 	return 0;
 }
@@ -1170,7 +1169,7 @@ static int onenand_bbt_wait(struct mtd_info *mtd, int state)
 	u32 timeo = (CONFIG_SYS_HZ * 20) / 1000;
 	u32 time_start = get_timer(0);
 	do {
-		WATCHDOG_RESET();
+		schedule();
 		if (get_timer(time_start) > timeo)
 			return ONENAND_BBT_READ_FATAL_ERROR;
 		interrupt = this->read_word(this->base + ONENAND_REG_INTERRUPT);
@@ -1277,7 +1276,6 @@ int onenand_bbt_read_oob(struct mtd_info *mtd, loff_t from,
 	ops->oobretlen = read;
 	return ret;
 }
-
 
 #ifdef CONFIG_MTD_ONENAND_VERIFY_WRITE
 /**
@@ -1720,7 +1718,6 @@ static int onenand_block_isbad_nolock(struct mtd_info *mtd, loff_t ofs, int allo
 	return bbm->isbad_bbt(mtd, ofs, allowbbt);
 }
 
-
 /**
  * onenand_erase - [MTD Interface] erase block(s)
  * @param mtd		MTD device structure
@@ -2127,7 +2124,6 @@ static void onenand_unlock_all(struct mtd_info *mtd)
 
 	onenand_do_lock_cmd(mtd, ofs, len, ONENAND_CMD_UNLOCK);
 }
-
 
 /**
  * onenand_check_features - Check and set OneNAND features

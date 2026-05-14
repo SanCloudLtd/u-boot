@@ -4,8 +4,10 @@
  * Copyright 2022 Linaro
  */
 
-#include <common.h>
 #include <dwc3-uboot.h>
+#include <efi.h>
+#include <efi_loader.h>
+#include <env.h>
 #include <errno.h>
 #include <miiphy.h>
 #include <netdev.h>
@@ -21,21 +23,10 @@
 #include <asm/arch/clock.h>
 #include <asm/mach-imx/dma.h>
 #include <linux/delay.h>
+#include <linux/kernel.h>
 #include <power/pmic.h>
 
 DECLARE_GLOBAL_DATA_PTR;
-
-#define UART_PAD_CTRL	(PAD_CTL_DSE6 | PAD_CTL_FSEL1)
-#define WDOG_PAD_CTRL	(PAD_CTL_DSE6 | PAD_CTL_ODE | PAD_CTL_PUE | PAD_CTL_PE)
-
-static const iomux_v3_cfg_t uart_pads[] = {
-	MX8MP_PAD_ECSPI1_SCLK__UART3_DCE_RX | MUX_PAD_CTRL(UART_PAD_CTRL),
-	MX8MP_PAD_ECSPI1_MOSI__UART3_DCE_TX | MUX_PAD_CTRL(UART_PAD_CTRL),
-};
-
-static const iomux_v3_cfg_t wdog_pads[] = {
-	MX8MP_PAD_GPIO1_IO02__WDOG1_WDOG_B  | MUX_PAD_CTRL(WDOG_PAD_CTRL),
-};
 
 #ifdef CONFIG_NAND_MXS
 static void setup_gpmi_nand(void)
@@ -44,16 +35,33 @@ static void setup_gpmi_nand(void)
 }
 #endif
 
+#if IS_ENABLED(CONFIG_EFI_HAVE_CAPSULE_SUPPORT)
+struct efi_fw_image fw_images[] = {
+#if defined(CONFIG_TARGET_IMX8MP_RSB3720A1_4G)
+	{
+		.image_type_id = IMX8MP_RSB3720A1_4G_FIT_IMAGE_GUID,
+		.fw_name = u"IMX8MP-RSB3720-FIT",
+		.image_index = 1,
+	},
+#elif defined(CONFIG_TARGET_IMX8MP_RSB3720A1_6G)
+	{
+		.image_type_id = IMX8MP_RSB3720A1_6G_FIT_IMAGE_GUID,
+		.fw_name = u"IMX8MP-RSB3720-FIT",
+		.image_index = 1,
+	},
+#endif
+};
+
+struct efi_capsule_update_info update_info = {
+	.dfu_string = "mmc 2=flash-bin raw 0 0x1B00 mmcpart 1",
+	.num_images = ARRAY_SIZE(fw_images),
+	.images = fw_images,
+};
+
+#endif /* EFI_HAVE_CAPSULE_SUPPORT */
+
 int board_early_init_f(void)
 {
-	struct wdog_regs *wdog = (struct wdog_regs *)WDOG1_BASE_ADDR;
-
-	imx_iomux_v3_setup_multiple_pads(wdog_pads, ARRAY_SIZE(wdog_pads));
-
-	set_wdog_reset(wdog);
-
-	imx_iomux_v3_setup_multiple_pads(uart_pads, ARRAY_SIZE(uart_pads));
-
 	init_uart_clk(2);
 
 	return 0;
@@ -104,7 +112,7 @@ static const iomux_v3_cfg_t eqos_rst_pads[] = {
 	MX8MP_PAD_SAI2_RXC__GPIO4_IO22 | MUX_PAD_CTRL(NO_PAD_CTRL),
 };
 
-static void setup_iomux_eqos(void)
+static void setup_eqos(void)
 {
 	imx_iomux_v3_setup_multiple_pads(eqos_rst_pads,
 					 ARRAY_SIZE(eqos_rst_pads));
@@ -114,21 +122,6 @@ static void setup_iomux_eqos(void)
 	mdelay(15);
 	gpio_direction_output(EQOS_RST_PAD, 1);
 	mdelay(100);
-}
-
-static int setup_eqos(void)
-{
-	struct iomuxc_gpr_base_regs *gpr =
-		(struct iomuxc_gpr_base_regs *)IOMUXC_GPR_BASE_ADDR;
-
-	setup_iomux_eqos();
-
-	/* set INTF as RGMII, enable RGMII TXC clock */
-	clrsetbits_le32(&gpr->gpr[1],
-			IOMUXC_GPR_GPR1_GPR_ENET_QOS_INTF_SEL_MASK, BIT(16));
-	setbits_le32(&gpr->gpr[1], BIT(19) | BIT(21));
-
-	return set_clk_eqos(ENET_125MHZ);
 }
 #endif /* CONFIG_DWC_ETH_QOS */
 
@@ -197,9 +190,10 @@ int board_late_init(void)
 	return 0;
 }
 
-#ifdef CONFIG_SPL_MMC_SUPPORT
+#ifdef CONFIG_SYS_MMCSD_RAW_MODE_U_BOOT_USE_SECTOR
 #define UBOOT_RAW_SECTOR_OFFSET 0x40
-unsigned long spl_mmc_get_uboot_raw_sector(struct mmc *mmc)
+unsigned long board_spl_mmc_get_uboot_raw_sector(struct mmc *mmc,
+					   unsigned long raw_sector)
 {
 	u32 boot_dev = spl_boot_device();
 
@@ -210,4 +204,4 @@ unsigned long spl_mmc_get_uboot_raw_sector(struct mmc *mmc)
 		return CONFIG_SYS_MMCSD_RAW_MODE_U_BOOT_SECTOR;
 	}
 }
-#endif /* CONFIG_SPL_MMC_SUPPORT */
+#endif /* CONFIG_SYS_MMCSD_RAW_MODE_U_BOOT_USE_SECTOR */

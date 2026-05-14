@@ -4,7 +4,6 @@
  * Corscience GmbH & Co. KG - Simon Schwarz <schwarz@corscience.de>
  */
 
-#include <common.h>
 #include <command.h>
 #include <cmd_spl.h>
 #include <env.h>
@@ -61,12 +60,13 @@ static int call_bootm(int argc, char *const argv[], const char *subcommand[])
 	switch (argc) {
 	case 3:
 		bootm_argv[4] = argv[2]; /* fdt addr */
+		fallthrough;
 	case 2:
 		bootm_argv[3] = argv[1]; /* initrd addr */
+		fallthrough;
 	case 1:
 		bootm_argv[2] = argv[0]; /* kernel addr */
 	}
-
 
 	/*
 	 * - do the work -

@@ -16,10 +16,10 @@ import urllib.error
 from binman import bintool
 from binman.bintool import Bintool
 
-from patman import command
-from patman import terminal
-from patman import test_util
-from patman import tools
+from u_boot_pylib import command
+from u_boot_pylib import terminal
+from u_boot_pylib import test_util
+from u_boot_pylib import tools
 
 # pylint: disable=R0904
 class TestBintool(unittest.TestCase):
@@ -55,14 +55,14 @@ class TestBintool(unittest.TestCase):
     def test_version(self):
         """Check handling of a tool being present or absent"""
         btest = Bintool.create('_testing')
-        with test_util.capture_sys_output() as (stdout, _):
+        with terminal.capture() as (stdout, _):
             btest.show()
         self.assertFalse(btest.is_present())
         self.assertIn('-', stdout.getvalue())
         btest.present = True
         self.assertTrue(btest.is_present())
         self.assertEqual('123', btest.version())
-        with test_util.capture_sys_output() as (stdout, _):
+        with terminal.capture() as (stdout, _):
             btest.show()
         self.assertIn('123', stdout.getvalue())
 
@@ -90,7 +90,7 @@ class TestBintool(unittest.TestCase):
         col = terminal.Color()
         with unittest.mock.patch.object(tools, 'download',
                                         side_effect=fake_download):
-            with test_util.capture_sys_output() as (stdout, _):
+            with terminal.capture() as (stdout, _):
                 btest.fetch_tool(method, col, False)
         return stdout.getvalue()
 
@@ -134,15 +134,17 @@ class TestBintool(unittest.TestCase):
         dirname = os.path.join(self._indir, 'download_dir')
         os.mkdir(dirname)
         fname = os.path.join(dirname, 'downloaded')
+
+        # Rely on bintool to create this directory
         destdir = os.path.join(self._indir, 'dest_dir')
-        os.mkdir(destdir)
+
         dest_fname = os.path.join(destdir, '_testing')
         self.seq = 0
 
-        with unittest.mock.patch.object(bintool, 'DOWNLOAD_DESTDIR', destdir):
+        with unittest.mock.patch.object(bintool.Bintool, 'tooldir', destdir):
             with unittest.mock.patch.object(tools, 'download',
                                             side_effect=handle_download):
-                with test_util.capture_sys_output() as (stdout, _):
+                with terminal.capture() as (stdout, _):
                     Bintool.fetch_tools(bintool.FETCH_ANY, ['_testing'] * 2)
         self.assertTrue(os.path.exists(dest_fname))
         data = tools.read_file(dest_fname)
@@ -175,7 +177,7 @@ class TestBintool(unittest.TestCase):
         self.count = collections.defaultdict(int)
         with unittest.mock.patch.object(bintool.Bintool, 'fetch_tool',
                                         side_effect=fake_fetch):
-            with test_util.capture_sys_output() as (stdout, _):
+            with terminal.capture() as (stdout, _):
                 Bintool.fetch_tools(method, ['all'])
         lines = stdout.getvalue().splitlines()
         self.assertIn(f'{self.count[bintool.FETCHED]}: ', lines[-2])
@@ -218,7 +220,7 @@ class TestBintool(unittest.TestCase):
                                             side_effect=[all_tools]):
                 with unittest.mock.patch.object(bintool.Bintool, 'create',
                                                 side_effect=self.btools.values()):
-                    with test_util.capture_sys_output() as (stdout, _):
+                    with terminal.capture() as (stdout, _):
                         Bintool.fetch_tools(bintool.FETCH_ANY, ['missing'])
         lines = stdout.getvalue().splitlines()
         num_tools = len(self.btools)
@@ -250,10 +252,10 @@ class TestBintool(unittest.TestCase):
         btest = Bintool.create('_testing')
         col = terminal.Color()
         self.fname = None
-        with unittest.mock.patch.object(bintool, 'DOWNLOAD_DESTDIR',
+        with unittest.mock.patch.object(bintool.Bintool, 'tooldir',
                                         self._indir):
             with unittest.mock.patch.object(tools, 'run', side_effect=fake_run):
-                with test_util.capture_sys_output() as (stdout, _):
+                with terminal.capture() as (stdout, _):
                     btest.fetch_tool(bintool.FETCH_BUILD, col, False)
         fname = os.path.join(self._indir, '_testing')
         return fname if write_file else self.fname, stdout.getvalue()
@@ -276,7 +278,7 @@ class TestBintool(unittest.TestCase):
         btest.install = True
         col = terminal.Color()
         with unittest.mock.patch.object(tools, 'run', return_value=None):
-            with test_util.capture_sys_output() as _:
+            with terminal.capture() as _:
                 result = btest.fetch_tool(bintool.FETCH_BIN, col, False)
         self.assertEqual(bintool.FETCHED, result)
 
@@ -285,7 +287,7 @@ class TestBintool(unittest.TestCase):
         btest = Bintool.create('_testing')
         btest.disable = True
         col = terminal.Color()
-        with test_util.capture_sys_output() as _:
+        with terminal.capture() as _:
             result = btest.fetch_tool(bintool.FETCH_BIN, col, False)
         self.assertEqual(bintool.FAIL, result)
 
@@ -301,6 +303,7 @@ class TestBintool(unittest.TestCase):
                 # See Bintool.build_from_git()
                 tmpdir = cmd[2]
                 self.fname = os.path.join(tmpdir, 'pathname')
+                os.makedirs(os.path.dirname(tmpdir), exist_ok=True)
                 tools.write_file(self.fname, b'hello')
 
         expected = b'this is a test'
@@ -311,7 +314,7 @@ class TestBintool(unittest.TestCase):
         with unittest.mock.patch.object(tools, 'run', side_effect=fake_run):
             with unittest.mock.patch.object(tools, 'download',
                                             side_effect=handle_download):
-                with test_util.capture_sys_output() as _:
+                with terminal.capture() as _:
                     for name in Bintool.get_tool_list():
                         btool = Bintool.create(name)
                         for method in range(bintool.FETCH_COUNT):
@@ -344,8 +347,11 @@ class TestBintool(unittest.TestCase):
 
     def test_failed_command(self):
         """Check that running a command that does not exist returns None"""
-        btool = Bintool.create('_testing')
-        result = btool.run_cmd_result('fred')
+        destdir = os.path.join(self._indir, 'dest_dir')
+        os.mkdir(destdir)
+        with unittest.mock.patch.object(bintool.Bintool, 'tooldir', destdir):
+            btool = Bintool.create('_testing')
+            result = btool.run_cmd_result('fred')
         self.assertIsNone(result)
 
 

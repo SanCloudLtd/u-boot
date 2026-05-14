@@ -298,6 +298,8 @@ int nix_lf_setup(struct nix *nix)
 			goto error;
 	}
 
+	err = -1;
+
 	/* Alloc memory for Qints HW contexts */
 	nix->qint_base = nix_memalloc(nix_af->qints, nix_af->qint_ctx_sz,
 				      "Qint CTX");
@@ -580,7 +582,7 @@ int nix_lf_xmit(struct udevice *dev, void *pkt, int pkt_len)
 		__iowmb();
 		result = lmt_submit((u64)(nix->nix_base +
 					       NIXX_LF_OP_SENDX(0)));
-		WATCHDOG_RESET();
+		schedule();
 	} while (result == 0);
 
 	return 0;

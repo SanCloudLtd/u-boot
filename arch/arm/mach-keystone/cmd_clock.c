@@ -6,8 +6,9 @@
  *     Texas Instruments Incorporated, <www.ti.com>
  */
 
-#include <common.h>
+#include <vsprintf.h>
 #include <command.h>
+#include <linux/string.h>
 #include <asm/arch/hardware.h>
 #include <asm/arch/clock.h>
 #include <asm/arch/psc_defs.h>

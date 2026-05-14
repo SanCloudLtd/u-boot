@@ -30,7 +30,7 @@ struct devres_stats {
 	int total_size;
 };
 
-#ifdef CONFIG_DEVRES
+#if CONFIG_IS_ENABLED(DEVRES)
 
 #ifdef CONFIG_DEBUG_DEVRES
 void *__devres_alloc(dr_release_t release, size_t size, gfp_t gfp,
@@ -207,7 +207,7 @@ void devm_kfree(struct udevice *dev, void *ptr);
 /* Get basic stats on allocations */
 void devres_get_stats(const struct udevice *dev, struct devres_stats *stats);
 
-#else /* ! CONFIG_DEVRES */
+#else /* ! DEVRES */
 
 static inline void *devres_alloc(dr_release_t release, size_t size, gfp_t gfp)
 {
@@ -266,17 +266,13 @@ static inline void *devm_kzalloc(struct udevice *dev, size_t size, gfp_t gfp)
 static inline void *devm_kmalloc_array(struct udevice *dev,
 				       size_t n, size_t size, gfp_t flags)
 {
-	/* TODO: add kmalloc_array() to linux/compat.h */
-	if (size != 0 && n > SIZE_MAX / size)
-		return NULL;
-	return kmalloc(n * size, flags);
+	return kmalloc_array(n, size, flags);
 }
 
 static inline void *devm_kcalloc(struct udevice *dev,
 				 size_t n, size_t size, gfp_t flags)
 {
-	/* TODO: add kcalloc() to linux/compat.h */
-	return kmalloc(n * size, flags | __GFP_ZERO);
+	return kcalloc(n, size, flags);
 }
 
 static inline void devm_kfree(struct udevice *dev, void *ptr)

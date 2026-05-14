@@ -4,9 +4,9 @@
  * Command for encapsulating/decapsulating blob of memory.
  */
 
-#include <common.h>
 #include <command.h>
 #include <malloc.h>
+#include <vsprintf.h>
 #include <asm/byteorder.h>
 #include <linux/compiler.h>
 #if defined(CONFIG_ARCH_MX6) || defined(CONFIG_ARCH_MX7) || \
@@ -84,7 +84,7 @@ static int do_blob(struct cmd_tbl *cmdtp, int flag, int argc,
 
 	hab_caam_clock_enable(1);
 
-	u32 out_jr_size = sec_in32(CONFIG_SYS_FSL_JR0_ADDR +
+	u32 out_jr_size = sec_in32(CFG_SYS_FSL_JR0_ADDR +
 				   FSL_CAAM_ORSR_JRa_OFFSET);
 	if (out_jr_size != FSL_CAAM_MAX_JR_SIZE)
 		sec_init();
@@ -99,7 +99,7 @@ static int do_blob(struct cmd_tbl *cmdtp, int flag, int argc,
 }
 
 /***************************************************/
-static char blob_help_text[] =
+U_BOOT_LONGHELP(blob,
 	"enc src dst len km - Encapsulate and create blob of data\n"
 	"                          $len bytes long at address $src and\n"
 	"                          store the result at address $dst.\n"
@@ -115,7 +115,7 @@ static char blob_help_text[] =
 	"                          modifier is stored.\n"
 	"                          The modifier is required for generation\n"
 	"                          /use as key for cryptographic operation.\n"
-	"                          Key modifier should be 16 byte long.\n";
+	"                          Key modifier should be 16 byte long.\n");
 
 U_BOOT_CMD(
 	blob, 6, 1, do_blob,

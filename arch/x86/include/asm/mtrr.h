@@ -91,6 +91,22 @@ struct mtrr_info {
 };
 
 /**
+ * mtrr_to_size() - Convert a mask to a size value
+ *
+ * @mask: Value of the mask register
+ * Return: associated size
+ */
+u64 mtrr_to_size(u64 mask);
+
+/**
+ * mtrr_to_mask() - Convert a size to a mask value
+ *
+ * @size: Value of the size register
+ * Return: associated mask, without MTRR_PHYS_MASK_VALID
+ */
+u64 mtrr_to_mask(u64 size);
+
+/**
  * mtrr_open() - Prepare to adjust MTRRs
  *
  * Use mtrr_open() passing in a structure - this function will init it. Then
@@ -189,6 +205,26 @@ int mtrr_set(int cpu_select, int reg, u64 base, u64 mask);
  * Return: number of variable MTRRs
  */
 int mtrr_get_var_count(void);
+
+/**
+ * mtrr_list() - List the MTRRs
+ *
+ * Shows a list of all the MTRRs including their values
+ *
+ * @reg_count: Number of registers to show. You can use mtrr_get_var_count() for
+ * this
+ * @cpu_select: CPU to use. Use MP_SELECT_BSP for the boot CPU
+ * Returns: 0 if OK, -ve if the CPU was not found
+ */
+int mtrr_list(int reg_count, int cpu_select);
+
+/**
+ * mtrr_get_type_by_name() - Get the type of an MTRR given its type name
+ *
+ * @typename: Name to check
+ * Returns: MTRR type (MTRR_TYPE_...) or -EINVAL if invalid
+ */
+int mtrr_get_type_by_name(const char *typename);
 
 #endif
 

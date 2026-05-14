@@ -5,7 +5,6 @@
 
 #define LOG_CATEGORY UCLASS_TIMER
 
-#include <common.h>
 #include <clk.h>
 #include <cpu.h>
 #include <dm.h>
@@ -18,6 +17,7 @@
 #include <init.h>
 #include <timer.h>
 #include <linux/err.h>
+#include <relocate.h>
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -32,7 +32,7 @@ DECLARE_GLOBAL_DATA_PTR;
 
 int notrace timer_get_count(struct udevice *dev, u64 *count)
 {
-	const struct timer_ops *ops = device_get_ops(dev);
+	struct timer_ops *ops = timer_get_ops(dev);
 
 	if (!ops->get_count)
 		return -ENOSYS;
@@ -65,13 +65,13 @@ static int timer_pre_probe(struct udevice *dev)
 		err = clk_get_by_index(dev, 0, &timer_clk);
 		if (!err) {
 			ret = clk_get_rate(&timer_clk);
-			if (IS_ERR_VALUE(ret))
-				return ret;
-			uc_priv->clock_rate = ret;
-		} else {
-			uc_priv->clock_rate =
-				dev_read_u32_default(dev, "clock-frequency", 0);
+			if (!IS_ERR_VALUE(ret)) {
+				uc_priv->clock_rate = ret;
+				return 0;
+			}
 		}
+
+		uc_priv->clock_rate = dev_read_u32_default(dev, "clock-frequency", 0);
 	}
 
 	return 0;
@@ -122,7 +122,7 @@ u64 timer_conv_64(u32 count)
 	return ((u64)gd->timebase_h << 32) | gd->timebase_l;
 }
 
-int notrace dm_timer_init(void)
+int dm_timer_init(void)
 {
 	struct udevice *dev = NULL;
 	__maybe_unused ofnode node;

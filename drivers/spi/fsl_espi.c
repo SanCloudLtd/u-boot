@@ -8,7 +8,7 @@
  *	   Chuanhua Han (chuanhua.han@nxp.com)
  */
 
-#include <common.h>
+#include <config.h>
 #include <log.h>
 #include <linux/bitops.h>
 #include <linux/delay.h>
@@ -390,7 +390,7 @@ struct spi_slave *spi_setup_slave(unsigned int bus, unsigned int cs,
 	if (!fsl)
 		return NULL;
 
-	fsl->espi = (void *)(CONFIG_SYS_MPC85xx_ESPI_ADDR);
+	fsl->espi = (void *)(CFG_SYS_MPC85xx_ESPI_ADDR);
 	fsl->mode = mode;
 	fsl->max_transfer_length = ESPI_MAX_DATA_TRANSFER_LEN;
 	fsl->speed_hz = max_hz;
@@ -513,8 +513,8 @@ static int fsl_espi_child_pre_probe(struct udevice *dev)
 	struct udevice *bus = dev->parent;
 	struct fsl_spi_slave *fsl = dev_get_priv(bus);
 
-	debug("%s cs %u\n", __func__, slave_plat->cs);
-	fsl->cs = slave_plat->cs;
+	debug("%s cs %u\n", __func__, slave_plat->cs[0]);
+	fsl->cs = slave_plat->cs[0];
 
 	return 0;
 }

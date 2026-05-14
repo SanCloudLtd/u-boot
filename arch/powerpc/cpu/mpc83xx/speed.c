@@ -8,7 +8,6 @@
 
 #ifndef CONFIG_CLK_MPC83XX
 
-#include <common.h>
 #include <clock_legacy.h>
 #include <mpc83xx.h>
 #include <command.h>
@@ -93,8 +92,6 @@ int get_clocks(void)
 	u32 tsec1_clk;
 	u32 tsec2_clk;
 	u32 usbdr_clk;
-#elif defined(CONFIG_ARCH_MPC8309)
-	u32 usbdr_clk;
 #endif
 #ifdef CONFIG_ARCH_MPC834X
 	u32 usbmph_clk;
@@ -107,9 +104,7 @@ int get_clocks(void)
 #if defined(CONFIG_FSL_ESDHC)
 	u32 sdhc_clk;
 #endif
-#if !defined(CONFIG_ARCH_MPC8309)
 	u32 enc_clk;
-#endif
 	u32 lbiu_clk;
 	u32 lclk_clk;
 	u32 mem_clk;
@@ -252,7 +247,6 @@ int get_clocks(void)
 		return -6;
 	}
 #endif
-#if !defined(CONFIG_ARCH_MPC8309)
 	switch ((sccr & SCCR_ENCCM) >> SCCR_ENCCM_SHIFT) {
 	case 0:
 		enc_clk = 0;
@@ -270,7 +264,6 @@ int get_clocks(void)
 		/* unknown SCCR_ENCCM value */
 		return -7;
 	}
-#endif
 
 #if defined(CONFIG_FSL_ESDHC)
 	switch ((sccr & SCCR_SDHCCM) >> SCCR_SDHCCM_SHIFT) {
@@ -304,8 +297,6 @@ int get_clocks(void)
 	i2c1_clk = sdhc_clk;
 #elif defined(CONFIG_ARCH_MPC837X)
 	i2c1_clk = enc_clk;
-#elif defined(CONFIG_ARCH_MPC8309)
-	i2c1_clk = csb_clk;
 #endif
 #if !defined(CONFIG_ARCH_MPC832X)
 	i2c2_clk = csb_clk; /* i2c-2 clk is equal to csb clk */
@@ -434,8 +425,6 @@ int get_clocks(void)
 	gd->arch.tsec1_clk = tsec1_clk;
 	gd->arch.tsec2_clk = tsec2_clk;
 	gd->arch.usbdr_clk = usbdr_clk;
-#elif defined(CONFIG_ARCH_MPC8309)
-	gd->arch.usbdr_clk = usbdr_clk;
 #endif
 #if defined(CONFIG_ARCH_MPC834X)
 	gd->arch.usbmph_clk = usbmph_clk;
@@ -448,9 +437,7 @@ int get_clocks(void)
 #if !defined(CONFIG_ARCH_MPC832X)
 	gd->arch.i2c2_clk = i2c2_clk;
 #endif
-#if !defined(CONFIG_ARCH_MPC8309)
 	gd->arch.enc_clk = enc_clk;
-#endif
 	gd->arch.lbiu_clk = lbiu_clk;
 	gd->arch.lclk_clk = lclk_clk;
 	gd->mem_clk = mem_clk;
@@ -469,7 +456,7 @@ int get_clocks(void)
 #if defined(CONFIG_ARCH_MPC837X)
 	gd->arch.sata_clk = sata_clk;
 #endif
-	gd->pci_clk = pci_sync_in;
+	gd->arch.pci_clk = pci_sync_in;
 	gd->cpu_clk = gd->arch.core_clk;
 	gd->bus_clk = gd->arch.csb_clk;
 	return 0;
@@ -524,10 +511,8 @@ static int do_clocks(struct cmd_tbl *cmdtp, int flag, int argc,
 	printf("  DDR Secondary:       %-4s MHz\n",
 	       strmhz(buf, gd->arch.mem_sec_clk));
 #endif
-#if !defined(CONFIG_ARCH_MPC8309)
 	printf("  SEC:                 %-4s MHz\n",
 	       strmhz(buf, gd->arch.enc_clk));
-#endif
 	printf("  I2C1:                %-4s MHz\n",
 	       strmhz(buf, gd->arch.i2c1_clk));
 #if !defined(CONFIG_ARCH_MPC832X)
@@ -544,9 +529,6 @@ static int do_clocks(struct cmd_tbl *cmdtp, int flag, int argc,
 	       strmhz(buf, gd->arch.tsec1_clk));
 	printf("  TSEC2:               %-4s MHz\n",
 	       strmhz(buf, gd->arch.tsec2_clk));
-	printf("  USB DR:              %-4s MHz\n",
-	       strmhz(buf, gd->arch.usbdr_clk));
-#elif defined(CONFIG_ARCH_MPC8309)
 	printf("  USB DR:              %-4s MHz\n",
 	       strmhz(buf, gd->arch.usbdr_clk));
 #endif

@@ -1,7 +1,7 @@
 /*
  * am335x_evm.h
  *
- * Copyright (C) 2011 Texas Instruments Incorporated - http://www.ti.com/
+ * Copyright (C) 2011 Texas Instruments Incorporated - https://www.ti.com/
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -19,22 +19,18 @@
 #include <configs/ti_am335x_common.h>
 #include <linux/sizes.h>
 
-#define CONFIG_SYS_BOOTM_LEN		SZ_16M
-
 /* Clock Defines */
 #define V_OSCK				24000000  /* Clock output from T2 */
 #define V_SCLK				(V_OSCK)
 
 #ifdef CONFIG_MTD_RAW_NAND
 #define NANDARGS \
-	"mtdids=" CONFIG_MTDIDS_DEFAULT "\0" \
-	"mtdparts=" CONFIG_MTDPARTS_DEFAULT "\0" \
 	"nandargs=setenv bootargs console=${console} " \
 		"${optargs} " \
 		"root=${nandroot} " \
 		"rootfstype=${nandrootfstype}\0" \
 	"nandroot=ubi0:rootfs rw ubi.mtd=NAND.file-system,2048\0" \
-	"nandrootfstype=ubifs rootwait=1\0" \
+	"nandrootfstype=ubifs rootwait\0" \
 	"nandboot=echo Booting from nand ...; " \
 		"run nandargs; " \
 		"nand read ${fdtaddr} NAND.u-boot-spl-os; " \
@@ -51,7 +47,7 @@
 #define BOOTENV_DEV_NAME_NAND(devtypeu, devtypel, instance) \
 	#devtypel #instance " "
 
-#if CONFIG_IS_ENABLED(CMD_USB)
+#if IS_ENABLED(CONFIG_CMD_USB)
 # define BOOT_TARGET_USB(func) func(USB, usb, 0)
 #else
 # define BOOT_TARGET_USB(func)
@@ -79,10 +75,10 @@
 
 #include <config_distro_bootcmd.h>
 
-#ifndef CONFIG_SPL_BUILD
-#include <environment/ti/dfu.h>
+#ifndef CONFIG_XPL_BUILD
+#include <env/ti/dfu.h>
 
-#define CONFIG_EXTRA_ENV_SETTINGS \
+#define CFG_EXTRA_ENV_SETTINGS \
 	DEFAULT_LINUX_BOOT_ENV \
 	"fdtfile=undefined\0" \
 	"finduuid=part uuid mmc 0:2 uuid\0" \
@@ -130,6 +126,8 @@
 			"setenv fdtfile am335x-bonegreen.dtb; fi; " \
 		"if test $board_name = BBGW; then " \
 			"setenv fdtfile am335x-bonegreen-wireless.dtb; fi; " \
+		"if test $board_name = BBGE; then " \
+			"setenv fdtfile am335x-bonegreen-eco.dtb; fi; " \
 		"if test $board_name = BBBL; then " \
 			"setenv fdtfile am335x-boneblue.dtb; fi; " \
 		"if test $board_name = BBEN; then " \
@@ -142,11 +140,10 @@
 			"setenv fdtfile am335x-evm.dtb; fi; " \
 		"if test $board_name = A335X_SK; then " \
 			"setenv fdtfile am335x-evmsk.dtb; fi; " \
-		"if test $board_name = A335_ICE; then " \
-			"setenv fdtfile am335x-icev2.dtb; " \
-			"if test $ice_mii = mii; then " \
-				"setenv pxe_label_override Pruss; fi;" \
-		"fi; " \
+		"if test $board_name = A335_ICE && test $ice_mii = rmii; then " \
+			"setenv fdtfile am335x-icev2.dtb; fi; " \
+		"if test $board_name = A335_ICE && test $ice_mii = mii; then " \
+			"setenv fdtfile am335x-icev2-prueth.dtb; fi; " \
 		"if test $fdtfile = undefined; then " \
 			"echo WARNING: Could not determine device tree to use; fi; \0" \
 	"init_console=" \
@@ -162,29 +159,17 @@
 #endif
 
 /* NS16550 Configuration */
-#define CONFIG_SYS_NS16550_COM1		0x44e09000	/* Base EVM has UART0 */
-#define CONFIG_SYS_NS16550_COM2		0x48022000	/* UART1 */
-#define CONFIG_SYS_NS16550_COM3		0x48024000	/* UART2 */
-#define CONFIG_SYS_NS16550_COM4		0x481a6000	/* UART3 */
-#define CONFIG_SYS_NS16550_COM5		0x481a8000	/* UART4 */
-#define CONFIG_SYS_NS16550_COM6		0x481aa000	/* UART5 */
-
-/* PMIC support */
-#define CONFIG_POWER_TPS65217
-#define CONFIG_POWER_TPS65910
-
-/* SPL */
-#ifndef CONFIG_NOR_BOOT
-/* Bootcount using the RTC block */
-#define CONFIG_SYS_BOOTCOUNT_BE
-
-/* USB gadget RNDIS */
-#endif
+#define CFG_SYS_NS16550_COM1		0x44e09000	/* Base EVM has UART0 */
+#define CFG_SYS_NS16550_COM2		0x48022000	/* UART1 */
+#define CFG_SYS_NS16550_COM3		0x48024000	/* UART2 */
+#define CFG_SYS_NS16550_COM4		0x481a6000	/* UART3 */
+#define CFG_SYS_NS16550_COM5		0x481a8000	/* UART4 */
+#define CFG_SYS_NS16550_COM6		0x481aa000	/* UART5 */
 
 #ifdef CONFIG_MTD_RAW_NAND
 /* NAND: device related configs */
 /* NAND: driver related configs */
-#define CONFIG_SYS_NAND_ECCPOS		{ 2, 3, 4, 5, 6, 7, 8, 9, \
+#define CFG_SYS_NAND_ECCPOS		{ 2, 3, 4, 5, 6, 7, 8, 9, \
 					 10, 11, 12, 13, 14, 15, 16, 17, \
 					 18, 19, 20, 21, 22, 23, 24, 25, \
 					 26, 27, 28, 29, 30, 31, 32, 33, \
@@ -192,72 +177,18 @@
 					 42, 43, 44, 45, 46, 47, 48, 49, \
 					 50, 51, 52, 53, 54, 55, 56, 57, }
 
-#define CONFIG_SYS_NAND_ECCSIZE		512
-#define CONFIG_SYS_NAND_ECCBYTES	14
-/* NAND: SPL related configs */
-#ifdef CONFIG_SPL_OS_BOOT
-#define CONFIG_SYS_NAND_SPL_KERNEL_OFFS	0x00200000 /* kernel offset */
-#endif
+#define CFG_SYS_NAND_ECCSIZE		512
+#define CFG_SYS_NAND_ECCBYTES	14
 #endif /* !CONFIG_MTD_RAW_NAND */
 
-/*
- * For NOR boot, we must set this to the start of where NOR is mapped
- * in memory.
- */
-
-/*
- * USB configuration.  We enable MUSB support, both for host and for
- * gadget.  We set USB0 as peripheral and USB1 as host, based on the
- * board schematic and physical port wired to each.  Then for host we
- * add mass storage support and for gadget we add both RNDIS ethernet
- * and DFU.
- */
-#define CONFIG_AM335X_USB0
-#define CONFIG_AM335X_USB0_MODE	MUSB_PERIPHERAL
-#define CONFIG_AM335X_USB1
-#define CONFIG_AM335X_USB1_MODE MUSB_HOST
-
-/*
- * Disable MMC DM for SPL build and can be re-enabled after adding
- * DM support in SPL
- */
-#ifdef CONFIG_SPL_BUILD
-#undef CONFIG_DM_MMC
-#undef CONFIG_TIMER
-#endif
-
-#if defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_USB_ETHER)
-/* Remove other SPL modes. */
-/* disable host part of MUSB in SPL */
-/* disable EFI partitions and partition UUID support */
-#endif
-
 /* USB Device Firmware Update support */
-#ifndef CONFIG_SPL_BUILD
+#ifndef CONFIG_XPL_BUILD
 #define DFUARGS \
 	DFU_ALT_INFO_EMMC \
 	DFU_ALT_INFO_MMC \
 	DFU_ALT_INFO_RAM \
 	DFU_ALT_INFO_NAND
 #endif
-
-/*
- * Default to using SPI for environment, etc.
- * 0x000000 - 0x020000 : SPL (128KiB)
- * 0x020000 - 0x0A0000 : U-Boot (512KiB)
- * 0x0A0000 - 0x0BFFFF : First copy of U-Boot Environment (128KiB)
- * 0x0C0000 - 0x0DFFFF : Second copy of U-Boot Environment (128KiB)
- * 0x0E0000 - 0x442000 : Linux Kernel
- * 0x442000 - 0x800000 : Userland
- */
-#if defined(CONFIG_SPI_BOOT)
-/* SPL related */
-#elif defined(CONFIG_EMMC_BOOT)
-#define CONFIG_SYS_MMC_MAX_DEVICE	2
-#endif
-
-/* Network. */
-/* Enable Atheros phy driver */
 
 /*
  * NOR Size = 16 MiB
@@ -272,16 +203,8 @@
  * 0x4C0000 - 0xFFFFFF : Userland (11 MiB + 256 KiB)
  */
 #if defined(CONFIG_NOR)
-#define CONFIG_SYS_MAX_FLASH_SECT	128
-#define CONFIG_SYS_FLASH_BASE		(0x08000000)
-#define CONFIG_SYS_FLASH_CFI_WIDTH	FLASH_CFI_16BIT
-#define CONFIG_SYS_FLASH_SIZE		0x01000000
-#define CONFIG_SYS_MONITOR_BASE		CONFIG_SYS_FLASH_BASE
+#define CFG_SYS_FLASH_BASE		(0x08000000)
+#define CFG_SYS_FLASH_SIZE		0x01000000
 #endif  /* NOR support */
-
-#ifdef CONFIG_DRIVER_TI_CPSW
-#define CONFIG_CLOCK_SYNTHESIZER
-#define CLK_SYNTHESIZER_I2C_ADDR 0x65
-#endif
 
 #endif	/* ! __CONFIG_AM335X_EVM_H */

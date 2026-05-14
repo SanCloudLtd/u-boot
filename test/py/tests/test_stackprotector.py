@@ -5,10 +5,11 @@ import pytest
 import signal
 
 @pytest.mark.buildconfigspec('cmd_stackprotector_test')
-def test_stackprotector(u_boot_console):
+@pytest.mark.notbuildconfigspec('asan')
+def test_stackprotector(ubman):
     """Test that the stackprotector function works."""
 
-    u_boot_console.run_command('stackprot_test',wait_for_prompt=False)
+    ubman.run_command('stackprot_test',wait_for_prompt=False)
     expected_response = 'Stack smashing detected'
-    u_boot_console.wait_for(expected_response)
-    u_boot_console.restart_uboot()
+    ubman.wait_for(expected_response)
+    ubman.restart_uboot()

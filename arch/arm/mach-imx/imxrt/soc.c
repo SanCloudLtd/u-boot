@@ -4,7 +4,6 @@
  * Author(s): Giulio Benetti <giulio.benetti@benettiengineering.com>
  */
 
-#include <common.h>
 #include <init.h>
 #include <asm/io.h>
 #include <asm/armv7_mpu.h>
@@ -43,6 +42,8 @@ u32 get_cpu_rev(void)
 	return MXC_CPU_IMXRT1020 << 12;
 #elif defined(CONFIG_IMXRT1050)
 	return MXC_CPU_IMXRT1050 << 12;
+#elif defined(CONFIG_IMXRT1170)
+	return MXC_CPU_IMXRT1170 << 12;
 #else
 #error This IMXRT SoC is not supported
 #endif

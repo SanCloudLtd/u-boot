@@ -25,7 +25,13 @@
  */
 unsigned int crc8(unsigned int crc_start, const unsigned char *vptr, int len);
 
-/* lib/crc16.c - 16 bit CRC with polynomial x^16+x^12+x^5+1 (CRC-CCITT) */
+void crc8_wd_buf(const unsigned char *input, unsigned int len,
+		 unsigned char output[1], unsigned int chunk_sz);
+
+/* lib/crc16.c - 16 bit CRC with polynomial x^16 + x^15 + x^2 + 1 */
+uint16_t crc16(uint16_t crc, const unsigned char *buffer, size_t len);
+
+/* lib/crc16-ccitt.c - 16 bit CRC with polynomial x^16+x^12+x^5+1 (CRC-CCITT) */
 uint16_t crc16_ccitt(uint16_t crc_start, const unsigned char *s, int len);
 /**
  * crc16_ccitt_wd_buf - Perform CRC16-CCIT on an input buffer and return the

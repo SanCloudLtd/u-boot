@@ -6,11 +6,9 @@
  *	Add support for a CRAMFS located in RAM
  */
 
-
 /*
  * CRAMFS support
  */
-#include <common.h>
 #include <command.h>
 #include <env.h>
 #include <image.h>
@@ -33,11 +31,10 @@
 # define DEBUGF(fmt, args...)
 #endif
 
-#include <flash.h>
-
 #ifndef CONFIG_MTD_NOR_FLASH
 # define OFFSET_ADJUSTMENT	0
 #else
+#include <flash.h>
 # define OFFSET_ADJUSTMENT	(flash_info[id.num].start[0])
 #endif
 

@@ -11,8 +11,8 @@
  * CPLD_BASE - The virtual address of the base of the CPLD register map
  */
 
-#include <common.h>
 #include <command.h>
+#include <linux/string.h>
 #include <asm/io.h>
 
 #include "cpld.h"

@@ -7,14 +7,19 @@
 
 #define LOG_CATEGORY LOGC_EFI
 
-#include <common.h>
 #include <efi_loader.h>
 #include <efi_variable.h>
 #include <log.h>
+#include <asm-generic/unaligned.h>
+#include <net.h>
 
+#define OBJ_LIST_INITIALIZED 0
 #define OBJ_LIST_NOT_INITIALIZED 1
 
 efi_status_t efi_obj_list_initialized = OBJ_LIST_NOT_INITIALIZED;
+
+const efi_guid_t efi_debug_image_info_table_guid =
+	EFI_DEBUG_IMAGE_INFO_TABLE_GUID;
 
 /*
  * Allow unaligned memory access.
@@ -86,7 +91,6 @@ out:
 	return ret;
 }
 
-#ifdef CONFIG_EFI_SECURE_BOOT
 /**
  * efi_init_secure_boot - initialize secure boot state
  *
@@ -112,12 +116,6 @@ static efi_status_t efi_init_secure_boot(void)
 
 	return ret;
 }
-#else
-static efi_status_t efi_init_secure_boot(void)
-{
-	return EFI_SUCCESS;
-}
-#endif /* CONFIG_EFI_SECURE_BOOT */
 
 /**
  * efi_init_capsule - initialize capsule update state
@@ -128,13 +126,18 @@ static efi_status_t efi_init_capsule(void)
 {
 	efi_status_t ret = EFI_SUCCESS;
 
-	if (IS_ENABLED(CONFIG_EFI_HAVE_CAPSULE_UPDATE)) {
+	if (IS_ENABLED(CONFIG_EFI_HAVE_CAPSULE_SUPPORT)) {
+		u16 var_name16[12];
+
+		efi_create_indexed_name(var_name16, sizeof(var_name16),
+					"Capsule", CONFIG_EFI_CAPSULE_MAX);
+
 		ret = efi_set_variable_int(u"CapsuleMax",
 					   &efi_guid_capsule_report,
 					   EFI_VARIABLE_READ_ONLY |
 					   EFI_VARIABLE_BOOTSERVICE_ACCESS |
 					   EFI_VARIABLE_RUNTIME_ACCESS,
-					   22, u"CapsuleFFFF", false);
+					   22, var_name16, false);
 		if (ret != EFI_SUCCESS)
 			printf("EFI: cannot initialize CapsuleMax variable\n");
 	}
@@ -174,19 +177,16 @@ static efi_status_t efi_init_os_indications(void)
 				    &os_indications_supported, false);
 }
 
-
 /**
- * efi_init_obj_list() - Initialize and populate EFI object list
+ * efi_init_early() - handle initialization at early stage
+ *
+ * expected to be called in board_init_r().
  *
  * Return:	status code
  */
-efi_status_t efi_init_obj_list(void)
+int efi_init_early(void)
 {
-	efi_status_t ret = EFI_SUCCESS;
-
-	/* Initialize once only */
-	if (efi_obj_list_initialized != OBJ_LIST_NOT_INITIALIZED)
-		return efi_obj_list_initialized;
+	efi_status_t ret;
 
 	/* Allow unaligned memory access */
 	allow_unaligned();
@@ -200,21 +200,71 @@ efi_status_t efi_init_obj_list(void)
 	if (ret != EFI_SUCCESS)
 		goto out;
 
-#ifdef CONFIG_PARTITIONS
-	ret = efi_disk_register();
+	/* Initialize EFI driver uclass */
+	ret = efi_driver_init();
 	if (ret != EFI_SUCCESS)
 		goto out;
-#endif
-	if (IS_ENABLED(CONFIG_EFI_RNG_PROTOCOL)) {
-		ret = efi_rng_register();
-		if (ret != EFI_SUCCESS)
-			goto out;
-	}
+
+	return 0;
+out:
+	/* never re-init UEFI subsystem */
+	efi_obj_list_initialized = ret;
+
+	return -1;
+}
+
+/**
+ * efi_start_obj_list() - Start EFI object list
+ *
+ * Return:	status code
+ */
+static efi_status_t efi_start_obj_list(void)
+{
+	efi_status_t ret = EFI_SUCCESS;
+
+	if (IS_ENABLED(CONFIG_NETDEVICES))
+		ret = efi_net_do_start(eth_get_dev());
+
+	return ret;
+}
+
+/**
+ * efi_init_obj_list() - Initialize and populate EFI object list
+ *
+ * Return:	status code
+ */
+efi_status_t efi_init_obj_list(void)
+{
+	efi_status_t ret = EFI_SUCCESS;
+
+	/* Initialize only once, but start every time if correctly initialized*/
+	if (efi_obj_list_initialized == OBJ_LIST_INITIALIZED)
+		return efi_start_obj_list();
+	if (efi_obj_list_initialized != OBJ_LIST_NOT_INITIALIZED)
+		return efi_obj_list_initialized;
+
+	/* Set up console modes */
+	efi_setup_console_size();
+
+	/*
+	 * Probe block devices to find the ESP.
+	 * efi_disks_register() must be called before efi_init_variables().
+	 */
+	ret = efi_disks_register();
+	if (ret != EFI_SUCCESS)
+		goto out;
 
 	/* Initialize variable services */
 	ret = efi_init_variables();
 	if (ret != EFI_SUCCESS)
 		goto out;
+
+	if (IS_ENABLED(CONFIG_CMD_BOOTEFI_BOOTMGR)) {
+		/* update boot option after variable service initialized */
+		ret = efi_bootmgr_update_media_device_boot_option();
+		if (ret != EFI_SUCCESS)
+			goto out;
+	}
 
 	/* Define supported languages */
 	ret = efi_init_platform_lang();
@@ -230,6 +280,27 @@ efi_status_t efi_init_obj_list(void)
 	ret = efi_initialize_system_table();
 	if (ret != EFI_SUCCESS)
 		goto out;
+
+	/* Initialize system table pointer */
+	if (IS_ENABLED(CONFIG_EFI_DEBUG_SUPPORT)) {
+		efi_guid_t debug_image_info_table_guid =
+			efi_debug_image_info_table_guid;
+
+		ret = efi_initialize_system_table_pointer();
+		if (ret != EFI_SUCCESS)
+			goto out;
+
+		ret = efi_install_configuration_table(&debug_image_info_table_guid,
+						      &efi_m_debug_info_table_header);
+		if (ret != EFI_SUCCESS)
+			goto out;
+	}
+
+	if (IS_ENABLED(CONFIG_EFI_ECPT)) {
+		ret = efi_ecpt_register();
+		if (ret != EFI_SUCCESS)
+			goto out;
+	}
 
 	if (IS_ENABLED(CONFIG_EFI_ESRT)) {
 		ret = efi_esrt_register();
@@ -247,6 +318,13 @@ efi_status_t efi_init_obj_list(void)
 			goto out;
 	}
 
+	/* Install EFI_RNG_PROTOCOL */
+	if (IS_ENABLED(CONFIG_EFI_RNG_PROTOCOL)) {
+		ret = efi_rng_register();
+		if (ret != EFI_SUCCESS)
+			goto out;
+	}
+
 	if (IS_ENABLED(CONFIG_EFI_RISCV_BOOT_PROTOCOL)) {
 		ret = efi_riscv_register();
 		if (ret != EFI_SUCCESS)
@@ -254,17 +332,14 @@ efi_status_t efi_init_obj_list(void)
 	}
 
 	/* Secure boot */
-	ret = efi_init_secure_boot();
-	if (ret != EFI_SUCCESS)
-		goto out;
+	if (IS_ENABLED(CONFIG_EFI_SECURE_BOOT)) {
+		ret = efi_init_secure_boot();
+		if (ret != EFI_SUCCESS)
+			goto out;
+	}
 
 	/* Indicate supported runtime services */
 	ret = efi_init_runtime_supported();
-	if (ret != EFI_SUCCESS)
-		goto out;
-
-	/* Initialize EFI driver uclass */
-	ret = efi_driver_init();
 	if (ret != EFI_SUCCESS)
 		goto out;
 
@@ -274,26 +349,26 @@ efi_status_t efi_init_obj_list(void)
 			goto out;
 	}
 
-#if defined(CONFIG_LCD) || defined(CONFIG_DM_VIDEO)
-	ret = efi_gop_register();
-	if (ret != EFI_SUCCESS)
-		goto out;
-#endif
-#ifdef CONFIG_NET
-	ret = efi_net_register();
-	if (ret != EFI_SUCCESS)
-		goto out;
-#endif
-#ifdef CONFIG_GENERATE_ACPI_TABLE
-	ret = efi_acpi_register();
-	if (ret != EFI_SUCCESS)
-		goto out;
-#endif
-#ifdef CONFIG_GENERATE_SMBIOS_TABLE
-	ret = efi_smbios_register();
-	if (ret != EFI_SUCCESS)
-		goto out;
-#endif
+	if (IS_ENABLED(CONFIG_VIDEO)) {
+		ret = efi_gop_register();
+		if (ret != EFI_SUCCESS)
+			goto out;
+	}
+	if (IS_ENABLED(CONFIG_NETDEVICES)) {
+		ret = efi_net_register(eth_get_dev());
+		if (ret != EFI_SUCCESS)
+			goto out;
+	}
+	if (IS_ENABLED(CONFIG_ACPI)) {
+		ret = efi_acpi_register();
+		if (ret != EFI_SUCCESS)
+			goto out;
+	}
+	if (IS_ENABLED(CONFIG_SMBIOS)) {
+		ret = efi_smbios_register();
+		if (ret != EFI_SUCCESS)
+			goto out;
+	}
 	ret = efi_watchdog_register();
 	if (ret != EFI_SUCCESS)
 		goto out;
@@ -311,6 +386,10 @@ efi_status_t efi_init_obj_list(void)
 	if (IS_ENABLED(CONFIG_EFI_CAPSULE_ON_DISK) &&
 	    !IS_ENABLED(CONFIG_EFI_CAPSULE_ON_DISK_EARLY))
 		ret = efi_launch_capsules();
+	if (ret != EFI_SUCCESS)
+		goto out;
+
+	ret = efi_start_obj_list();
 out:
 	efi_obj_list_initialized = ret;
 	return ret;

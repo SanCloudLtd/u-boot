@@ -2,11 +2,10 @@
 /*
  * Texas Instruments' K3 System Controller Driver
  *
- * Copyright (C) 2017-2018 Texas Instruments Incorporated - http://www.ti.com/
+ * Copyright (C) 2017-2018 Texas Instruments Incorporated - https://www.ti.com/
  *	Lokesh Vutla <lokeshvutla@ti.com>
  */
 
-#include <common.h>
 #include <dm.h>
 #include <log.h>
 #include <remoteproc.h>
@@ -328,7 +327,7 @@ static const struct k3_sysctrler_desc k3_sysctrler_am654_desc = {
 
 static const struct udevice_id k3_sysctrler_ids[] = {
 	{
-		.compatible = "ti,am654-system-controller",
+		.compatible = "ti,am654-tisci-rproc-r5",
 		.data = (ulong)&k3_sysctrler_am654_desc,
 	},
 	{}

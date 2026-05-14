@@ -6,6 +6,8 @@
 #ifndef __DM_TEST_H
 #define __DM_TEST_H
 
+#include <linux/types.h>
+
 struct udevice;
 
 /**
@@ -93,6 +95,13 @@ struct dm_test_uclass_priv {
 };
 
 /**
+ * struct dm_test_uclass_plat - private plat data for test uclass
+ */
+struct dm_test_uclass_plat {
+	char dummy[32];
+};
+
+/**
  * struct dm_test_parent_data - parent's information on each child
  *
  * @sum: Test value used to check parent data works correctly
@@ -134,7 +143,7 @@ extern struct unit_test_state global_dm_test_state;
 
 /* Declare a new driver model test */
 #define DM_TEST(_name, _flags) \
-	UNIT_TEST(_name, UT_TESTF_DM | UT_TESTF_CONSOLE_REC | (_flags), dm_test)
+	UNIT_TEST(_name, UTF_DM | UTF_CONSOLE | (_flags), dm)
 
 /*
  * struct sandbox_sdl_plat - Platform data for the SDL video driver

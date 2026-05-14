@@ -9,10 +9,48 @@
 #ifndef _DM_ROOT_H_
 #define _DM_ROOT_H_
 
+#include <dm/tag.h>
+
 struct udevice;
 
 /* Head of the uclass list if CONFIG_OF_PLATDATA_INST is enabled */
 extern struct list_head uclass_head;
+
+/**
+ * struct dm_stats - Information about driver model memory usage
+ *
+ * @total_size: All data
+ * @dev_count: Number of devices
+ * @dev_size: Size of all devices (just the struct udevice)
+ * @dev_name_size: Bytes used by device names
+ * @uc_count: Number of uclasses
+ * @uc_size: Size of all uclasses (just the struct uclass)
+ * @tag_count: Number of tags
+ * @tag_size: Bytes used by all tags
+ * @uc_attach_count: Number of uclasses with attached data (priv)
+ * @uc_attach_size: Total size of that attached data
+ * @attach_count_total: Total number of attached data items for all udevices and
+ *	uclasses
+ * @attach_size_total: Total number of bytes of attached data
+ * @attach_count: Number of devices with attached, for each type
+ * @attach_size: Total number of bytes of attached data, for each type
+ */
+struct dm_stats {
+	int total_size;
+	int dev_count;
+	int dev_size;
+	int dev_name_size;
+	int uc_count;
+	int uc_size;
+	int tag_count;
+	int tag_size;
+	int uc_attach_count;
+	int uc_attach_size;
+	int attach_count_total;
+	int attach_size_total;
+	int attach_count[DM_TAG_ATTACH_COUNT];
+	int attach_size[DM_TAG_ATTACH_COUNT];
+};
 
 /**
  * dm_root() - Return pointer to the top of the driver tree
@@ -99,6 +137,21 @@ int dm_scan_other(bool pre_reloc_only);
 int dm_init_and_scan(bool pre_reloc_only);
 
 /**
+ * dm_autoprobe() - Probe devices which are marked for probe-after-bind
+ *
+ * This probes all devices with a DM_FLAG_PROBE_AFTER_BIND flag. It checks the
+ * entire tree, so parent nodes need not have the flag set.
+ *
+ * It recursively probes parent nodes, so they do not need to have the flag
+ * set themselves. Since parents are always probed before children, if a child
+ * has the flag set, then its parent (and any devices up the chain to the root
+ * device) will be probed too.
+ *
+ * Return: 0 if OK, -ve on error
+ */
+int dm_autoprobe(void);
+
+/**
  * dm_init() - Initialise Driver Model structures
  *
  * This function will initialize roots of driver tree and class tree.
@@ -129,8 +182,18 @@ int dm_uninit(void);
  * Return: 0 if OK, -ve on error
  */
 int dm_remove_devices_flags(uint flags);
+
+/**
+ * dm_remove_devices_active - Call remove function of all active drivers heeding
+ *                            device dependencies as far as know, i.e. removing
+ *                            devices marked with DM_FLAG_VITAL last.
+ *
+ * All active devices will be removed
+ */
+void dm_remove_devices_active(void);
 #else
 static inline int dm_remove_devices_flags(uint flags) { return 0; }
+static inline void dm_remove_devices_active(void) { }
 #endif
 
 /**
@@ -140,5 +203,12 @@ static inline int dm_remove_devices_flags(uint flags) { return 0; }
  * @uclass_countp: Returns total number of uclasses in use
  */
 void dm_get_stats(int *device_countp, int *uclass_countp);
+
+/**
+ * dm_get_mem() - Get stats on memory usage in driver model
+ *
+ * @stats: Place to put the information
+ */
+void dm_get_mem(struct dm_stats *stats);
 
 #endif

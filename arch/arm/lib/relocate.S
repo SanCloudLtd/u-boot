@@ -23,9 +23,8 @@
  */
 
 	.section	.text.relocate_vectors,"ax",%progbits
-	.weak		relocate_vectors
 
-ENTRY(relocate_vectors)
+WEAK(relocate_vectors)
 
 #ifdef CONFIG_CPU_V7M
 	/*
@@ -61,7 +60,7 @@ ENTRY(relocate_vectors)
 	stmia	r1!, {r2-r8,r10}
 #endif
 #endif
-	bx	lr
+	ret	lr
 
 ENDPROC(relocate_vectors)
 
@@ -78,13 +77,12 @@ ENDPROC(relocate_vectors)
  */
 
 ENTRY(relocate_code)
-	adr	r3, relocate_code
+relocate_base:
+	adr	r3, relocate_base
 	ldr	r1, _image_copy_start_ofs
 	add	r1, r3			/* r1 <- Run &__image_copy_start */
 	subs	r4, r0, r1		/* r4 <- Run to copy offset      */
 	beq	relocate_done		/* skip relocation               */
-	ldr	r1, _image_copy_start_ofs
-	add	r1, r3			/* r1 <- Run &__image_copy_start */
 	ldr	r2, _image_copy_end_ofs
 	add	r2, r3			/* r2 <- Run &__image_copy_end   */
 copy_loop:
@@ -126,13 +124,7 @@ relocate_done:
 	mcr	p15, 0, r0, c7, c10, 4	/* drain write buffer */
 #endif
 
-	/* ARMv4- don't know bx lr but the assembler fails to see that */
-
-#ifdef __ARM_ARCH_4__
-	mov	pc, lr
-#else
-	bx	lr
-#endif
+	ret	lr
 
 ENDPROC(relocate_code)
 

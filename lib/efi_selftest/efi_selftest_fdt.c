@@ -144,23 +144,6 @@ static char *get_property(const u16 *property, const u16 *node)
 	return NULL;
 }
 
-/**
- * efi_st_get_config_table() - get configuration table
- *
- * @guid:	GUID of the configuration table
- * Return:	pointer to configuration table or NULL
- */
-static void *efi_st_get_config_table(const efi_guid_t *guid)
-{
-	size_t i;
-
-	for (i = 0; i < systab.nr_tables; i++) {
-		if (!guidcmp(guid, &systemtab->tables[i].guid))
-			return systemtab->tables[i].table;
-	}
-	return NULL;
-}
-
 /*
  * Setup unit test.
  *
@@ -241,6 +224,13 @@ static int execute(void)
 		ret = boottime->free_pool(str);
 		if (ret != EFI_SUCCESS) {
 			efi_st_error("FreePool failed\n");
+			return EFI_ST_FAILURE;
+		}
+	}
+	if (IS_ENABLED(CONFIG_EFI_TCG2_PROTOCOL_MEASURE_DTB)) {
+		str = get_property(u"kaslr-seed", u"chosen");
+		if (str) {
+			efi_st_error("kaslr-seed with measured fdt\n");
 			return EFI_ST_FAILURE;
 		}
 	}

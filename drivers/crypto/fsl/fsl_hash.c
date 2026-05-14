@@ -4,7 +4,6 @@
  * Copyright 2021 NXP
  */
 
-#include <common.h>
 #include <cpu_func.h>
 #include <log.h>
 #include <malloc.h>
@@ -131,23 +130,39 @@ static int caam_hash_update(void *hash_ctx, const void *buf,
 static int caam_hash_finish(void *hash_ctx, void *dest_buf,
 			    int size, enum caam_hash_algos caam_algo)
 {
-	uint32_t len = 0;
+	uint32_t len = 0, sg_entry_len;
 	struct sha_ctx *ctx = hash_ctx;
 	int i = 0, ret = 0;
+	caam_dma_addr_t addr;
 
 	if (size < driver_hash[caam_algo].digestsize) {
 		return -EINVAL;
 	}
 
-	for (i = 0; i < ctx->sg_num; i++)
-		len += (sec_in32(&ctx->sg_tbl[i].len_flag) &
-			SG_ENTRY_LENGTH_MASK);
-
+	flush_dcache_range((ulong)ctx->sg_tbl,
+			   (ulong)(ctx->sg_tbl) + (ctx->sg_num * sizeof(struct sg_entry)));
+	for (i = 0; i < ctx->sg_num; i++) {
+		sg_entry_len = (sec_in32(&ctx->sg_tbl[i].len_flag) &
+				SG_ENTRY_LENGTH_MASK);
+		len += sg_entry_len;
+#ifdef CONFIG_CAAM_64BIT
+		addr = sec_in32(&ctx->sg_tbl[i].addr_hi);
+		addr = (addr << 32) | sec_in32(&ctx->sg_tbl[i].addr_lo);
+#else
+		addr = sec_in32(&ctx->sg_tbl[i].addr_lo);
+#endif
+		flush_dcache_range(addr, addr + sg_entry_len);
+	}
 	inline_cnstr_jobdesc_hash(ctx->sha_desc, (uint8_t *)ctx->sg_tbl, len,
 				  ctx->hash,
 				  driver_hash[caam_algo].alg_type,
 				  driver_hash[caam_algo].digestsize,
 				  1);
+
+	flush_dcache_range((ulong)ctx->sha_desc,
+			   (ulong)(ctx->sha_desc) + (sizeof(uint32_t) * MAX_CAAM_DESCSIZE));
+	flush_dcache_range((ulong)ctx->hash,
+			   (ulong)(ctx->hash) + driver_hash[caam_algo].digestsize);
 
 	ret = run_descriptor_jr(ctx->sha_desc);
 
@@ -155,6 +170,8 @@ static int caam_hash_finish(void *hash_ctx, void *dest_buf,
 		debug("Error %x\n", ret);
 		return ret;
 	} else {
+		invalidate_dcache_range((ulong)ctx->hash,
+					(ulong)(ctx->hash) + driver_hash[caam_algo].digestsize);
 		memcpy(dest_buf, ctx->hash, sizeof(ctx->hash));
 	}
 	free(ctx);
@@ -166,6 +183,7 @@ int caam_hash(const unsigned char *pbuf, unsigned int buf_len,
 {
 	int ret = 0;
 	uint32_t *desc;
+	unsigned long pbuf_aligned;
 	unsigned int size;
 
 	desc = malloc_cache_aligned(sizeof(int) * MAX_CAAM_DESCSIZE);
@@ -174,14 +192,9 @@ int caam_hash(const unsigned char *pbuf, unsigned int buf_len,
 		return -ENOMEM;
 	}
 
-	if (!IS_ALIGNED((uintptr_t)pbuf, ARCH_DMA_MINALIGN) ||
-	    !IS_ALIGNED((uintptr_t)pout, ARCH_DMA_MINALIGN)) {
-		puts("Error: Address arguments are not aligned\n");
-		return -EINVAL;
-	}
-
-	size = ALIGN(buf_len, ARCH_DMA_MINALIGN);
-	flush_dcache_range((unsigned long)pbuf, (unsigned long)pbuf + size);
+	pbuf_aligned = ALIGN_DOWN((unsigned long)pbuf, ARCH_DMA_MINALIGN);
+	size = ALIGN(buf_len + ((unsigned long)pbuf - pbuf_aligned), ARCH_DMA_MINALIGN);
+	flush_dcache_range(pbuf_aligned, pbuf_aligned + size);
 
 	inline_cnstr_jobdesc_hash(desc, pbuf, buf_len, pout,
 				  driver_hash[algo].alg_type,
@@ -190,6 +203,8 @@ int caam_hash(const unsigned char *pbuf, unsigned int buf_len,
 
 	size = ALIGN(sizeof(int) * MAX_CAAM_DESCSIZE, ARCH_DMA_MINALIGN);
 	flush_dcache_range((unsigned long)desc, (unsigned long)desc + size);
+	size = ALIGN(driver_hash[algo].digestsize, ARCH_DMA_MINALIGN);
+	invalidate_dcache_range((unsigned long)pout, (unsigned long)pout + size);
 
 	ret = run_descriptor_jr(desc);
 

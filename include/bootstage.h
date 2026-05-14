@@ -11,7 +11,10 @@
 #ifndef _BOOTSTAGE_H
 #define _BOOTSTAGE_H
 
+#include <linux/types.h>
+#ifdef USE_HOSTCC
 #include <linux/kconfig.h>
+#endif
 
 /* Flags for each bootstage record */
 enum bootstage_flags {
@@ -70,7 +73,7 @@ enum bootstage_id {
 	BOOTSTAGE_ID_CHECK_RAMDISK = 9,	/* Checking ram disk */
 
 	BOOTSTAGE_ID_RD_MAGIC,		/* Checking ram disk magic */
-	BOOTSTAGE_ID_RD_HDR_CHECKSUM,	/* Checking ram disk heder checksum */
+	BOOTSTAGE_ID_RD_HDR_CHECKSUM,	/* Checking ram disk header checksum */
 	BOOTSTAGE_ID_RD_CHECKSUM,	/* Checking ram disk checksum */
 	BOOTSTAGE_ID_COPY_RAMDISK = 12,	/* Copying ram disk into place */
 	BOOTSTAGE_ID_RAMDISK,		/* Checking for valid ramdisk */
@@ -146,7 +149,6 @@ enum bootstage_id {
 
 	BOOTSTAGE_ID_FIT_CONFIG = 110,
 	BOOTSTAGE_ID_FIT_TYPE,
-	BOOTSTAGE_ID_FIT_KERNEL_INFO,
 
 	BOOTSTAGE_ID_FIT_COMPRESSION,
 	BOOTSTAGE_ID_FIT_OS,
@@ -166,6 +168,8 @@ enum bootstage_id {
 	BOOTSTAGE_ID_NAND_FIT_READ_OK,
 
 	BOOTSTAGE_ID_FIT_LOADABLE_START = 160,	/* for Loadable Images */
+
+	BOOTSTAGE_ID_FIT_SPL_START = 170,	/* for SPL Images */
 	/*
 	 * These boot stages are new, higher level, and not directly related
 	 * to the old boot progress numbers. They are useful for recording
@@ -176,6 +180,8 @@ enum bootstage_id {
 	BOOTSTAGE_ID_END_TPL,
 	BOOTSTAGE_ID_START_SPL,
 	BOOTSTAGE_ID_END_SPL,
+	BOOTSTAGE_ID_START_VPL,
+	BOOTSTAGE_ID_END_VPL,
 	BOOTSTAGE_ID_START_UBOOT_F,
 	BOOTSTAGE_ID_START_UBOOT_R,
 	BOOTSTAGE_ID_USB_START,
@@ -240,6 +246,8 @@ void show_boot_progress(int val);
 
 #ifdef ENABLE_BOOTSTAGE
 
+#include <mapmem.h>
+
 /* This is the full bootstage implementation */
 
 /**
@@ -250,7 +258,7 @@ void show_boot_progress(int val);
  * relocation, since memory can be overwritten later.
  * Return: Always returns 0, to indicate success
  */
-int bootstage_relocate(void);
+int bootstage_relocate(void *to);
 
 /**
  * Add a new bootstage record
@@ -266,11 +274,26 @@ ulong bootstage_add_record(enum bootstage_id id, const char *name,
 /**
  * Mark a time stamp for the current boot stage.
  */
-ulong bootstage_mark(enum bootstage_id id);
+#define bootstage_mark(id)	bootstage_mark_name(id, __func__)
+#define bootstage_error(id)	bootstage_error_name(id, __func__)
 
-ulong bootstage_error(enum bootstage_id id);
-
+/**
+ * bootstage_mark_name - record bootstage with passing id and name
+ * @id: Bootstage id to record this timestamp against
+ * @name: Textual name to display for this id in the report
+ *
+ * Return: recorded time stamp
+ */
 ulong bootstage_mark_name(enum bootstage_id id, const char *name);
+
+/**
+ * bootstage_error_name - record bootstage error with passing id and name
+ * @id: Bootstage id to record this timestamp against
+ * @name: Textual name to display for this id in the report
+ *
+ * Return: recorded time stamp
+ */
+ulong bootstage_error_name(enum bootstage_id id, const char *name);
 
 /**
  * Mark a time stamp in the given function and line number
@@ -348,9 +371,10 @@ int bootstage_unstash(const void *base, int size);
 /**
  * bootstage_get_size() - Get the size of the bootstage data
  *
+ * @add_strings: true to add the size of attached strings (for stashing)
  * Return: size of boostage data in bytes
  */
-int bootstage_get_size(void);
+int bootstage_get_size(bool add_strings);
 
 /**
  * bootstage_init() - Prepare bootstage for use
@@ -372,7 +396,7 @@ static inline ulong bootstage_add_record(enum bootstage_id id,
  * and won't even do that unless CONFIG_SHOW_BOOT_PROGRESS is defined
  */
 
-static inline int bootstage_relocate(void)
+static inline int bootstage_relocate(void *to)
 {
 	return 0;
 }
@@ -421,7 +445,7 @@ static inline int bootstage_unstash(const void *base, int size)
 	return 0;	/* Pretend to succeed */
 }
 
-static inline int bootstage_get_size(void)
+static inline int bootstage_get_size(bool add_strings)
 {
 	return 0;
 }
@@ -432,6 +456,26 @@ static inline int bootstage_init(bool first)
 }
 
 #endif /* ENABLE_BOOTSTAGE */
+
+/* helpers for SPL */
+int _bootstage_stash_default(void);
+int _bootstage_unstash_default(void);
+
+static inline int bootstage_stash_default(void)
+{
+	if (CONFIG_IS_ENABLED(BOOTSTAGE) && IS_ENABLED(CONFIG_BOOTSTAGE_STASH))
+		return _bootstage_stash_default();
+
+	return 0;
+}
+
+static inline int bootstage_unstash_default(void)
+{
+	if (CONFIG_IS_ENABLED(BOOTSTAGE) && IS_ENABLED(CONFIG_BOOTSTAGE_STASH))
+		return _bootstage_unstash_default();
+
+	return 0;
+}
 
 /* Helper macro for adding a bootstage to a line of code */
 #define BOOTSTAGE_MARKER()	\

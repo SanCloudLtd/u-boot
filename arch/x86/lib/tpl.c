@@ -3,7 +3,8 @@
  * Copyright (c) 2018 Google, Inc
  */
 
-#include <common.h>
+#define LOG_CATEGORY	LOGC_BOOT
+
 #include <debug_uart.h>
 #include <dm.h>
 #include <hang.h>
@@ -18,11 +19,6 @@
 #include <asm-generic/sections.h>
 
 DECLARE_GLOBAL_DATA_PTR;
-
-__weak int arch_cpu_init_dm(void)
-{
-	return 0;
-}
 
 static int x86_tpl_init(void)
 {
@@ -42,11 +38,6 @@ static int x86_tpl_init(void)
 	ret = arch_cpu_init();
 	if (ret) {
 		debug("%s: arch_cpu_init() failed\n", __func__);
-		return ret;
-	}
-	ret = arch_cpu_init_dm();
-	if (ret) {
-		debug("%s: arch_cpu_init_dm() failed\n", __func__);
 		return ret;
 	}
 	preloader_console_init();
@@ -110,9 +101,9 @@ int spl_spi_load_image(void)
 	return -EPERM;
 }
 
-void __noreturn jump_to_image_no_args(struct spl_image_info *spl_image)
+void __noreturn jump_to_image(struct spl_image_info *spl_image)
 {
-	debug("Jumping to %s at %lx\n", spl_phase_name(spl_next_phase()),
+	debug("Jumping to %s at %lx\n", xpl_name(xpl_next_phase()),
 	      (ulong)spl_image->entry_point);
 #ifdef DEBUG
 	print_buffer(spl_image->entry_point, (void *)spl_image->entry_point, 1,

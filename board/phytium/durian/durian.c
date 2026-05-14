@@ -5,9 +5,9 @@
  * liuhao  <liuhao@phytium.com.cn>
  */
 
-#include <common.h>
 #include <command.h>
 #include <cpu_func.h>
+#include <event.h>
 #include <init.h>
 #include <log.h>
 #include <asm/armv8/mmu.h>
@@ -34,11 +34,6 @@ int dram_init_banksize(void)
 	gd->bd->bi_dram[0].start = PHYS_SDRAM_1;
 	gd->bd->bi_dram[0].size =  PHYS_SDRAM_1_SIZE;
 
-	return 0;
-}
-
-int board_init(void)
-{
 	return 0;
 }
 
@@ -99,7 +94,7 @@ int __asm_flush_l3_dcache(void)
 	return 0;
 }
 
-int last_stage_init(void)
+static int last_stage_init(void)
 {
 	int ret;
 
@@ -113,3 +108,4 @@ int last_stage_init(void)
 	}
 	return ret;
 }
+EVENT_SPY_SIMPLE(EVT_LAST_STAGE_INIT, last_stage_init);

@@ -6,11 +6,9 @@
  * Copyright (c) 2016 National Instruments Corp
  */
 
-#include <common.h>
 #include <command.h>
 #include <cros_ec.h>
 #include <dm.h>
-#include <flash.h>
 #include <log.h>
 #include <dm/device-internal.h>
 #include <dm/uclass-internal.h>

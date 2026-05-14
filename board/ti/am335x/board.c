@@ -4,10 +4,10 @@
  *
  * Board functions for TI AM335X based boards
  *
- * Copyright (C) 2011, Texas Instruments, Incorporated - http://www.ti.com/
+ * Copyright (C) 2011, Texas Instruments, Incorporated - https://www.ti.com/
  */
 
-#include <common.h>
+#include <config.h>
 #include <dm.h>
 #include <env.h>
 #include <errno.h>
@@ -33,7 +33,6 @@
 #include <asm/emif.h>
 #include <asm/gpio.h>
 #include <asm/omap_common.h>
-#include <asm/omap_sec_common.h>
 #include <asm/omap_mmc.h>
 #include <i2c.h>
 #include <miiphy.h>
@@ -309,6 +308,9 @@ const struct dpll_params *get_dpll_mpu_params(void)
 	if (board_is_pb() || board_is_bone_lt())
 		freq = MPUPLL_M_1000;
 
+	if (board_is_bbge())
+		freq = MPUPLL_M_600;
+
 	switch (freq) {
 	case MPUPLL_M_1000:
 		return &dpll_mpu_opp[ind][5];
@@ -340,7 +342,6 @@ static void scale_vcores_bone(int freq)
 
 	if (power_tps65217_init(0))
 		return;
-
 
 	/*
 	 * On Beaglebone White we need to ensure we have AC power
@@ -572,8 +573,8 @@ void sdram_init(void)
 }
 #endif
 
-#if defined(CONFIG_CLOCK_SYNTHESIZER) && (!defined(CONFIG_SPL_BUILD) || \
-	(defined(CONFIG_SPL_ETH) && defined(CONFIG_SPL_BUILD)))
+#if defined(CONFIG_CLOCK_SYNTHESIZER) && (!defined(CONFIG_XPL_BUILD) || \
+	(defined(CONFIG_SPL_ETH) && defined(CONFIG_XPL_BUILD)))
 static void request_and_set_gpio(int gpio, char *name, int val)
 {
 	int ret;
@@ -705,13 +706,13 @@ int board_init(void)
 	hw_watchdog_init();
 #endif
 
-	gd->bd->bi_boot_params = CONFIG_SYS_SDRAM_BASE + 0x100;
+	gd->bd->bi_boot_params = CFG_SYS_SDRAM_BASE + 0x100;
 #if defined(CONFIG_NOR) || defined(CONFIG_MTD_RAW_NAND)
 	gpmc_init();
 #endif
 
-#if defined(CONFIG_CLOCK_SYNTHESIZER) && (!defined(CONFIG_SPL_BUILD) || \
-	(defined(CONFIG_SPL_ETH) && defined(CONFIG_SPL_BUILD)))
+#if defined(CONFIG_CLOCK_SYNTHESIZER) && (!defined(CONFIG_XPL_BUILD) || \
+	(defined(CONFIG_SPL_ETH) && defined(CONFIG_XPL_BUILD)))
 	if (board_is_icev2()) {
 		int rv;
 		u32 reg;
@@ -801,7 +802,7 @@ int board_init(void)
 int board_late_init(void)
 {
 	struct udevice *dev;
-#if !defined(CONFIG_SPL_BUILD)
+#if !defined(CONFIG_XPL_BUILD)
 	uint8_t mac_addr[6];
 	uint32_t mac_hi, mac_lo;
 #endif
@@ -826,17 +827,20 @@ int board_late_init(void)
 
 	if (board_is_bbg1())
 		name = "BBG1";
+	if (board_is_bbge())
+		name = "BBGE";
 	if (board_is_bben()) {
 		char subtype_id = board_ti_get_config()[1];
+
 		switch (subtype_id) {
-			case 'L':
-				name = "BBELITE";
-				break;
-			case 'I':
-				name = "BBE_EX_WIFI";
-				break;
-			default:
-				name = "BBEN";
+		case 'L':
+			name = "BBELITE";
+			break;
+		case 'I':
+			name = "BBE_EX_WIFI";
+			break;
+		default:
+			name = "BBEN";
 		}
 	}
 	set_board_info_env(name);
@@ -849,7 +853,7 @@ int board_late_init(void)
 		env_set("boot_fit", "1");
 #endif
 
-#if !defined(CONFIG_SPL_BUILD)
+#if !defined(CONFIG_XPL_BUILD)
 	/* try reading mac address from efuse */
 	mac_lo = readl(&cdev->macid0l);
 	mac_hi = readl(&cdev->macid0h);
@@ -902,7 +906,8 @@ int board_late_init(void)
 #endif
 
 /* CPSW plat */
-#if !CONFIG_IS_ENABLED(OF_CONTROL)
+#if (CONFIG_IS_ENABLED(NET) || CONFIG_IS_ENABLED(NET_LWIP)) && \
+    !CONFIG_IS_ENABLED(OF_CONTROL)
 struct cpsw_slave_data slave_data[] = {
 	{
 		.slave_reg_ofs  = CPSW_SLAVE0_OFFSET,
@@ -956,7 +961,8 @@ int board_fit_config_name_match(const char *name)
 		return 0;
 	else if (board_is_bone() && !strcmp(name, "am335x-bone"))
 		return 0;
-	else if (board_is_bone_lt() && !strcmp(name, "am335x-boneblack"))
+	else if (board_is_bone_lt() && !board_is_bbg1() && !board_is_bbge() &&
+		 !strcmp(name, "am335x-boneblack"))
 		return 0;
 	else if (board_is_pb() && !strcmp(name, "am335x-pocketbeagle"))
 		return 0;
@@ -964,20 +970,24 @@ int board_fit_config_name_match(const char *name)
 		return 0;
 	else if (board_is_bbg1() && !strcmp(name, "am335x-bonegreen"))
 		return 0;
+	else if (board_is_bbge() && !strcmp(name, "am335x-bonegreen-eco"))
+		return 0;
 	else if (board_is_icev2() && !strcmp(name, "am335x-icev2"))
 		return 0;
-	else if (board_is_bben() && !strcmp(name, "am335x-sancloud-bbe"))
-		return 0;
-	else
-		return -1;
-}
-#endif
+	else if (board_is_bben()) {
+		char subtype_id = board_ti_get_config()[1];
 
-#ifdef CONFIG_TI_SECURE_DEVICE
-void board_fit_image_post_process(const void *fit, int node, void **p_image,
-				  size_t *p_size)
-{
-	secure_boot_verify_image(p_image, p_size);
+		if (subtype_id == 'L') {
+			if (!strcmp(name, "am335x-sancloud-bbe-lite"))
+				return 0;
+		} else if (subtype_id == 'I') {
+			if (!strcmp(name, "am335x-sancloud-bbe-extended-wifi"))
+				return 0;
+		} else if (!strcmp(name, "am335x-sancloud-bbe")) {
+			return 0;
+		}
+	}
+	return -1;
 }
 #endif
 

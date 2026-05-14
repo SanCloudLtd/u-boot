@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
  * Copyright (C) 2015 Freescale Semiconductor, Inc.
+ * Copyright 2021 NXP
  */
 
-#include <common.h>
 #include <init.h>
 #include <asm/io.h>
 #include <asm/arch/imx-regs.h>
@@ -20,7 +20,6 @@
 #include <dm.h>
 #include <env.h>
 #include <imx_thermal.h>
-#include <fsl_sec.h>
 #include <asm/setup.h>
 #include <linux/delay.h>
 
@@ -128,8 +127,13 @@ static void isolate_resource(void)
 #endif
 
 #if defined(CONFIG_IMX_HAB)
-struct imx_sec_config_fuse_t const imx_sec_config_fuse = {
+struct imx_fuse const imx_sec_config_fuse = {
 	.bank = 1,
+	.word = 3,
+};
+
+struct imx_fuse const imx_field_return_fuse = {
+	.bank = 8,
 	.word = 3,
 };
 #endif
@@ -224,6 +228,11 @@ const struct rproc_att hostmap[] = {
 	{ 0x80000000, 0x80000000, 0x60000000 }, /* DDRC */
 	{ /* sentinel */ }
 };
+
+const struct rproc_att *imx_bootaux_get_hostmap(void)
+{
+	return hostmap;
+}
 #endif
 
 #if !CONFIG_IS_ENABLED(SKIP_LOWLEVEL_INIT)
@@ -356,9 +365,13 @@ int arch_misc_init(void)
 	env_set("serial#", serial_string);
 #endif
 
-#ifdef CONFIG_FSL_CAAM
-	sec_init();
-#endif
+	if (IS_ENABLED(CONFIG_FSL_CAAM)) {
+		struct udevice *dev;
+		int ret;
+		ret = uclass_get_device_by_driver(UCLASS_MISC, DM_DRIVER_GET(caam_jr), &dev);
+		if (ret)
+			printf("Failed to initialize caam_jr: %d\n", ret);
+	}
 
 	return 0;
 }
@@ -424,7 +437,7 @@ void s_init(void)
 	return;
 }
 
-#ifndef CONFIG_SPL_BUILD
+#ifndef CONFIG_XPL_BUILD
 const struct boot_mode soc_boot_modes[] = {
 	{"normal",	MAKE_CFGVAL(0x00, 0x00, 0x00, 0x00)},
 	{"primary",	MAKE_CFGVAL_PRIMARY_BOOT},
@@ -442,8 +455,8 @@ int boot_mode_getprisec(void)
 
 void reset_misc(void)
 {
-#ifndef CONFIG_SPL_BUILD
-#if defined(CONFIG_VIDEO_MXS) && !defined(CONFIG_DM_VIDEO)
+#ifndef CONFIG_XPL_BUILD
+#if defined(CONFIG_VIDEO_MXS) && !defined(CONFIG_VIDEO)
 	lcdif_power_down();
 #endif
 #endif

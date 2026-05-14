@@ -8,43 +8,28 @@
 
 #include "rockchip-common.h"
 
-#define CONFIG_SYS_CBSIZE		1024
-#define CONFIG_SPL_MAX_SIZE		0x20000
-#define CONFIG_SPL_BSS_START_ADDR	0x00400000
-#define CONFIG_SPL_BSS_MAX_SIZE		0x2000
+#define CFG_IRAM_BASE			0xfff80000
 
-#define CONFIG_SYS_NS16550_MEM32
-
-#define CONFIG_ROCKCHIP_STIMER_BASE	0xff1b00a0
-#define CONFIG_IRAM_BASE		0xfff80000
-#define CONFIG_SYS_INIT_SP_ADDR		0x00800000
-#define CONFIG_SPL_STACK		0x00400000
-#define CONFIG_SYS_BOOTM_LEN		(64 << 20)	/* 64M */
-
-#define COUNTER_FREQUENCY		24000000
-
-#define CONFIG_SYS_BOOTM_LEN	(64 << 20)	/* 64M */
-
-#define CONFIG_SYS_SDRAM_BASE		0
+#define CFG_SYS_SDRAM_BASE		0
 #define SDRAM_MAX_SIZE			0xff000000
-#define SDRAM_BANK_SIZE			(2UL << 30)
 
-#ifndef CONFIG_SPL_BUILD
+#define ENV_MEM_LAYOUT_SETTINGS		\
+	"scriptaddr=0x00500000\0"	\
+	"script_offset_f=0xffe000\0"	\
+	"script_size_f=0x2000\0"	\
+	"pxefile_addr_r=0x00600000\0"	\
+	"fdt_addr_r=0x01e00000\0"	\
+	"fdtoverlay_addr_r=0x01f00000\0"	\
+	"kernel_addr_r=0x02080000\0"	\
+	"ramdisk_addr_r=0x06000000\0"	\
+	"kernel_comp_addr_r=0x08000000\0"	\
+	"kernel_comp_size=0x2000000\0"
 
-#define ENV_MEM_LAYOUT_SETTINGS \
-	"scriptaddr=0x00500000\0" \
-	"pxefile_addr_r=0x00600000\0" \
-	"fdt_addr_r=0x02800000\0" \
-	"kernel_addr_r=0x00680000\0" \
-	"ramdisk_addr_r=0x04000000\0"
+#define CFG_EXTRA_ENV_SETTINGS		\
+	"fdtfile=" CONFIG_DEFAULT_FDT_FILE "\0"	\
+	"partitions=" PARTS_DEFAULT	\
+	ENV_MEM_LAYOUT_SETTINGS		\
+	ROCKCHIP_DEVICE_SETTINGS	\
+	"boot_targets=" BOOT_TARGETS "\0"
 
-#include <config_distro_bootcmd.h>
-#define CONFIG_EXTRA_ENV_SETTINGS \
-	ENV_MEM_LAYOUT_SETTINGS \
-	"partitions=" PARTS_DEFAULT \
-	ROCKCHIP_DEVICE_SETTINGS \
-	BOOTENV
-
-#endif
-
-#endif
+#endif /* __CONFIG_RK3308_COMMON_H */

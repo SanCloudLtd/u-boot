@@ -42,6 +42,23 @@ use the configurations qemu-riscv32_smode_defconfig and
 qemu-riscv64_smode_defconfig instead. Note that U-Boot running in supervisor
 mode requires a supervisor binary interface (SBI), such as RISC-V OpenSBI.
 
+To create a U-Boot binary that can be utilized with a pflash device in QEMU
+apply these addtional settings to qemu-riscv64_smode_defconfig:
+
+::
+
+    CONFIG_TEXT_BASE=0x20000000
+    CONFIG_XIP=y
+    # CONFIG_AVAILABLE_HARTS is not set
+    CONFIG_SYS_MONITOR_BASE=0x80200000
+
+Truncate the resulting u-boot.bin to 32 MiB. Add the following to your
+qemu-system-riscv64 command:
+
+.. code-block:: bash
+
+    -drive if=pflash,format=raw,unit=0,file=u-boot.bin
+
 Running U-Boot
 --------------
 The minimal QEMU command line to get U-Boot up and running is:
@@ -131,4 +148,74 @@ An attached disk can be emulated in RISC-V virt machine by adding::
     -drive if=none,file=riscv64.img,format=raw,id=mydisk \
     -device ide-hd,drive=mydisk,bus=ahci.0
 
-You will have to run 'scsi scan' to use it.
+or alternatively attach an emulated UFS::
+
+    -device ufs,id=ufs0 \
+    -drive if=none,file=test.img,format=raw,id=lun0 \
+    -device ufs-lu,drive=lun0,bus=ufs0
+
+You will have to run 'scsi scan' to use them.
+
+A video console can be emulated in RISC-V virt machine by removing "-nographic"
+and adding::
+
+    -serial stdio -device VGA
+
+In addition, a usb keyboard can be attached to an emulated xHCI controller in
+RISC-V virt machine as an option of input devices by adding::
+
+    -device qemu-xhci,id=xhci -device usb-kbd,bus=xhci.0
+
+Running with KVM
+----------------
+
+Running with QEMU using KVM requires an S-mode U-Boot binary as created by
+qemu-riscv64_smode_defconfig.
+
+Provide the U-Boot S-mode ELF image as *-kernel* parameter and do not add a
+*-bios* parameter, e.g.
+
+.. code-block:: bash
+
+    qemu-system-riscv64 -accel kvm -nographic -machine virt -kernel u-boot
+
+Running as flash binary
+-----------------------
+
+U-Boot can be provided to QEMU as an emulated flash drive.
+This can for instance be used to test capsule updates.
+
+Build qemu-riscv64_smode_defconfig with::
+
+    CONFIG_XIP=y
+    CONFIG_TEXT_BASE=0x20000000
+    CONFIG_CMD_MTD=y
+    CONFIG_FLASH_CFI_MTD=y
+
+Pad u-boot.bin to 32 MiB size:
+
+.. code-block:: bash
+
+    truncate -s 32M u-boot.bin
+
+Invoke QEMU with:
+
+.. code-block:: bash
+
+    qemu-system-riscv64 -M virt -nographic \
+    -drive if=pflash,format=raw,unit=0,file=u-boot.bin,readonly=off
+
+Debug UART
+----------
+
+The following settings provide a debug UART for the virt machine::
+
+    CONFIG_DEBUG_UART=y
+    CONFIG_DEBUG_UART_NS16550=y
+    CONFIG_DEBUG_UART_BASE=0x10000000
+    CONFIG_DEBUG_UART_CLOCK=3686400
+
+To provide a debug UART in main U-Boot the SBI DBCN extension can be used
+instead::
+
+    CONFIG_DEBUG_SBI_CONSOLE=y

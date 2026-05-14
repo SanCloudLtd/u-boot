@@ -9,21 +9,20 @@
 #include <linux/types.h>
 #endif
 
-#define CONFIG_EXTRA_ENV_SETTINGS
+#define CFG_EXTRA_ENV_SETTINGS
 
-#undef CONFIG_SYS_SDRAM_BASE
+#undef CFG_SYS_SDRAM_BASE
 
-/* Monitor Command Prompt */
-#define CONFIG_SYS_CBSIZE             1024
-#define CONFIG_SYS_MAXARGS            64
-#define CONFIG_SYS_BARGSIZE           CONFIG_SYS_CBSIZE
-#define CONFIG_SYS_PBSIZE             (CONFIG_SYS_CBSIZE + \
-				      sizeof(CONFIG_SYS_PROMPT) + 16)
+#undef CFG_EXTRA_ENV_SETTINGS
 
-#undef CONFIG_EXTRA_ENV_SETTINGS
-#define CONFIG_EXTRA_ENV_SETTINGS	\
-	"loadimage=ext4load pvblock 0 0x90000000 /boot/Image;\0" \
-	"pvblockboot=run loadimage;" \
+#ifdef CONFIG_VIRTIO_BLK
+#define CFG_EXTRA_ENV_SETTINGS	\
+	"virtioboot=virtio scan; ext4load virtio 0 0x90000000 /boot/Image;" \
+		"booti 0x90000000 - ${fdtcontroladdr};\0"
+#else
+#define CFG_EXTRA_ENV_SETTINGS	\
+	"pvblockboot=ext4load pvblock 0 0x90000000 /boot/Image;" \
 		"booti 0x90000000 - 0x88000000;\0"
+#endif
 
 #endif /* __XENGUEST_ARM64_H */

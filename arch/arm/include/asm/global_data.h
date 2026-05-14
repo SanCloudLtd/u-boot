@@ -11,15 +11,20 @@
 
 #include <config.h>
 
-#include <asm/types.h>
 #include <linux/types.h>
+#include <asm/u-boot.h>
 
 /* Architecture-specific global data */
 struct arch_global_data {
 #if defined(CONFIG_FSL_ESDHC) || defined(CONFIG_FSL_ESDHC_IMX)
 	u32 sdhc_clk;
 #endif
-
+#if CONFIG_IS_ENABLED(ACPI)
+	ulong table_start;		/* Start address of ACPI tables */
+	ulong table_end;		/* End address of ACPI tables */
+	ulong table_start_high;		/* Start address of high ACPI tables */
+	ulong table_end_high;		/* End address of high ACPI tables */
+#endif
 #if defined(CONFIG_FSL_ESDHC)
 	u32 sdhc_per_clk;
 #endif
@@ -54,7 +59,7 @@ struct arch_global_data {
 	unsigned long tlb_emerg;
 #endif
 #endif
-#ifdef CONFIG_SYS_MEM_RESERVE_SECURE
+#ifdef CFG_SYS_MEM_RESERVE_SECURE
 #define MEM_RESERVE_SECURE_SECURED	0x1
 #define MEM_RESERVE_SECURE_MAINTAINED	0x2
 #define MEM_RESERVE_SECURE_ADDR_MASK	(~0x3)
@@ -90,15 +95,24 @@ struct arch_global_data {
 	struct udevice *scu_dev;
 #endif
 
-#ifdef CONFIG_ARCH_IMX8ULP
-	struct udevice *s400_dev;
+#ifdef CONFIG_IMX_ELE
+	struct udevice *ele_dev;
+	u32 soc_rev;
+	u32 lifecycle;
+	u32 uid[4];
 #endif
 
+#ifdef CONFIG_ARCH_IMX8ULP
+	bool m33_handshake_done;
+#endif
+#ifdef CONFIG_SMBIOS
+	ulong smbios_start;		/* Start address of SMBIOS table */
+#endif
 };
 
 #include <asm-generic/global_data.h>
 
-#if defined(__clang__) || defined(CONFIG_LTO)
+#if defined(__clang__) || defined(LTO_ENABLE)
 
 #define DECLARE_GLOBAL_DATA_PTR
 #define gd	get_gd()
@@ -119,13 +133,13 @@ static inline gd_t *get_gd(void)
 #else
 
 #ifdef CONFIG_ARM64
-#define DECLARE_GLOBAL_DATA_PTR		register volatile gd_t *gd asm ("x18")
+#define DECLARE_GLOBAL_DATA_PTR		register gd_t *gd asm ("x18")
 #else
-#define DECLARE_GLOBAL_DATA_PTR		register volatile gd_t *gd asm ("r9")
+#define DECLARE_GLOBAL_DATA_PTR		register gd_t *gd asm ("r9")
 #endif
 #endif
 
-static inline void set_gd(volatile gd_t *gd_ptr)
+static inline void set_gd(gd_t *gd_ptr)
 {
 #ifdef CONFIG_ARM64
 	__asm__ volatile("ldr x18, %0\n" : : "m"(gd_ptr));

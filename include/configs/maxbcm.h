@@ -19,13 +19,11 @@
  */
 
 /* I2C */
-#define CONFIG_I2C_MVTWSI_BASE0		MVEBU_TWSI_BASE
+#define CFG_I2C_MVTWSI_BASE0		MVEBU_TWSI_BASE
 
 /* SPI NOR flash default params, used by sf commands */
 
 /* Environment in SPI NOR flash */
-
-#define PHY_ANEG_TIMEOUT	8000	/* PHY needs a longer aneg time */
 
 /*
  * mv-common.h should be defined after CMD configs since it used them
@@ -46,24 +44,7 @@
  * L2 cache thus cannot be used.
  */
 
-/* SPL */
-/* Defines for SPL */
-#define CONFIG_SPL_MAX_SIZE		((128 << 10) - (CONFIG_SPL_TEXT_BASE - 0x40000000))
-
-#define CONFIG_SPL_BSS_START_ADDR	(0x40000000 + (128 << 10))
-#define CONFIG_SPL_BSS_MAX_SIZE		(16 << 10)
-
-#ifdef CONFIG_SPL_BUILD
-#define CONFIG_SYS_MALLOC_SIMPLE
-#endif
-
-#define CONFIG_SPL_STACK		(0x40000000 + ((192 - 16) << 10))
-#define CONFIG_SPL_BOOTROM_SAVE		(CONFIG_SPL_STACK + 4)
-
-/* SPL related SPI defines */
-
 /* Enable DDR support in SPL (DDR3 training from Marvell bin_hdr) */
-#define CONFIG_SYS_SDRAM_SIZE		SZ_1G
-#define CONFIG_BOARD_ECC_SUPPORT	/* this board supports ECC */
+#define CFG_SYS_SDRAM_SIZE		SZ_1G
 
 #endif /* _CONFIG_DB_MV7846MP_GP_H */

@@ -10,7 +10,7 @@ from collections import OrderedDict
 from binman.entry import Entry
 from binman.etype.blob_ext import Entry_blob_ext
 from dtoc import fdt_util
-from patman import tools
+from u_boot_pylib import tools
 
 class Entry_intel_ifwi(Entry_blob_ext):
     """Intel Integrated Firmware Image (IFWI) file
@@ -143,5 +143,6 @@ class Entry_intel_ifwi(Entry_blob_ext):
             for entry in self._ifwi_entries.values():
                 entry.WriteSymbols(self)
 
-    def AddBintools(self, tools):
-        self.ifwitool = self.AddBintool(tools, 'ifwitool')
+    def AddBintools(self, btools):
+        super().AddBintools(btools)
+        self.ifwitool = self.AddBintool(btools, 'ifwitool')

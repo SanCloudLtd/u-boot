@@ -4,7 +4,10 @@
  * (C) Copyright 2013 - 2018 Xilinx, Inc.
  */
 
-#include <common.h>
+#include <config.h>
+#include <debug_uart.h>
+#include <dfu.h>
+#include <efi_loader.h>
 #include <init.h>
 #include <log.h>
 #include <dm/uclass.h>
@@ -25,7 +28,7 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
-#if !defined(CONFIG_SPL_BUILD) && defined(CONFIG_DEBUG_UART_BOARD_INIT)
+#if !defined(CONFIG_XPL_BUILD) && defined(CONFIG_DEBUG_UART_BOARD_INIT)
 void board_debug_uart_init(void)
 {
 	/* Add initialization sequence if UART is not configured */
@@ -34,8 +37,11 @@ void board_debug_uart_init(void)
 
 int board_init(void)
 {
-	if (IS_ENABLED(CONFIG_SPL_BUILD))
+	if (IS_ENABLED(CONFIG_XPL_BUILD))
 		printf("Silicon version:\t%d\n", zynq_get_silicon_version());
+
+	if (CONFIG_IS_ENABLED(DM_I2C) && CONFIG_IS_ENABLED(I2C_EEPROM))
+		xilinx_read_eeprom();
 
 	return 0;
 }
@@ -47,12 +53,15 @@ int board_late_init(void)
 	char *new_targets;
 	char *env_targets;
 
+	if (IS_ENABLED(CONFIG_EFI_HAVE_CAPSULE_SUPPORT))
+		configure_capsule_updates();
+
 	if (!(gd->flags & GD_FLG_ENV_DEFAULT)) {
 		debug("Saved variables - Skipping\n");
 		return 0;
 	}
 
-	if (!CONFIG_IS_ENABLED(ENV_VARS_UBOOT_RUNTIME_CONFIG))
+	if (!IS_ENABLED(CONFIG_ENV_VARS_UBOOT_RUNTIME_CONFIG))
 		return 0;
 
 	switch ((zynq_slcr_get_boot_mode()) & ZYNQ_BM_MASK) {
@@ -102,7 +111,7 @@ int board_late_init(void)
 	return board_late_init_xilinx();
 }
 
-#if !defined(CONFIG_SYS_SDRAM_BASE) && !defined(CONFIG_SYS_SDRAM_SIZE)
+#if !defined(CFG_SYS_SDRAM_BASE) && !defined(CFG_SYS_SDRAM_SIZE)
 int dram_init_banksize(void)
 {
 	return fdtdec_setup_memory_banksize();
@@ -120,8 +129,8 @@ int dram_init(void)
 #else
 int dram_init(void)
 {
-	gd->ram_size = get_ram_size((void *)CONFIG_SYS_SDRAM_BASE,
-				    CONFIG_SYS_SDRAM_SIZE);
+	gd->ram_size = get_ram_size((void *)CFG_SYS_SDRAM_BASE,
+				    CFG_SYS_SDRAM_SIZE);
 
 	zynq_ddrc_init();
 
@@ -160,36 +169,35 @@ enum env_location env_get_location(enum env_operation op, int prio)
 	}
 }
 
-#if defined(CONFIG_SET_DFU_ALT_INFO)
-
 #define DFU_ALT_BUF_LEN                SZ_1K
 
-void set_dfu_alt_info(char *interface, char *devstr)
+void configure_capsule_updates(void)
 {
 	ALLOC_CACHE_ALIGN_BUFFER(char, buf, DFU_ALT_BUF_LEN);
 
-	if (env_get("dfu_alt_info"))
-		return;
-
-	memset(buf, 0, sizeof(buf));
+	memset(buf, 0, DFU_ALT_BUF_LEN);
 
 	switch ((zynq_slcr_get_boot_mode()) & ZYNQ_BM_MASK) {
+#if defined(CONFIG_SPL_FS_LOAD_PAYLOAD_NAME)
 	case ZYNQ_BM_SD:
 		snprintf(buf, DFU_ALT_BUF_LEN,
-			 "mmc 0:1=boot.bin fat 0 1;"
-			 "u-boot.img fat 0 1");
+			 "mmc 0=boot.bin fat 0 1;"
+			 "%s fat 0 1", CONFIG_SPL_FS_LOAD_PAYLOAD_NAME);
 		break;
+#if defined(CONFIG_SPL_SPI_LOAD)
 	case ZYNQ_BM_QSPI:
 		snprintf(buf, DFU_ALT_BUF_LEN,
 			 "sf 0:0=boot.bin raw 0 0x1500000;"
-			 "u-boot.img raw 0x%x 0x500000",
+			 "%s raw 0x%x 0x500000",
+			 CONFIG_SPL_FS_LOAD_PAYLOAD_NAME,
 			 CONFIG_SYS_SPI_U_BOOT_OFFS);
 		break;
+#endif
+#endif
 	default:
 		return;
 	}
 
-	env_set("dfu_alt_info", buf);
-	puts("DFU alt info setting: done\n");
+	update_info.dfu_string = strdup(buf);
+	debug("Capsule DFU: %s\n", update_info.dfu_string);
 }
-#endif

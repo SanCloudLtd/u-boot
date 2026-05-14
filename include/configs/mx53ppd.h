@@ -12,9 +12,7 @@
 #include <asm/arch/imx-regs.h>
 
 /* USB Configs */
-#define CONFIG_MXC_USB_PORT	1
-#define CONFIG_MXC_USB_PORTSC	(PORT_PTS_UTMI | PORT_PTS_PTW)
-#define CONFIG_MXC_USB_FLAGS	0
+#define CFG_MXC_USB_FLAGS	0
 
 /* Command definition */
 
@@ -35,7 +33,7 @@
 	"nfs=run choose_ip setargs bootargs_nfs; ${getcmd} ${loadaddr} " \
 		"${nfsserver}:${image}; bootm ${loadaddr}\0" \
 
-#define CONFIG_EXTRA_ENV_SETTINGS \
+#define CFG_EXTRA_ENV_SETTINGS \
 	PPD_CONFIG_NFS \
 	"image=/boot/fitImage\0" \
 	"dev=mmc\0" \
@@ -61,14 +59,6 @@
 		"Try again, or contact GE Service for support.\"; " \
 		"bootcount reset; " \
 		"while true; do sleep 1; done; \0" \
-	"altbootcmd=" \
-		"run doquiet; " \
-		"setenv partnum 1; run hasfirstboot || setenv partnum 2; " \
-		"run hasfirstboot || setenv partnum 0; " \
-		"if test ${partnum} != 0; then " \
-			"run swappartitions loadimage doboot; " \
-		"fi; " \
-		"run failbootcmd\0" \
 	"loadimage=" \
 		"ext2load ${dev} ${devnum}:${partnum} ${loadaddr} ${image}\0" \
 	"doboot=" \
@@ -85,15 +75,9 @@
 	"video-mode=" \
 		"lcd:800x480-24@60,monitor=lcd\0" \
 
-#define CONFIG_ARP_TIMEOUT	200UL
-
 /* Miscellaneous configurable options */
-#define CONFIG_SYS_CBSIZE		1024	/* Console I/O Buffer Size */
 
-#define CONFIG_SYS_MAXARGS	48	/* max number of command args */
-#define CONFIG_SYS_BARGSIZE CONFIG_SYS_CBSIZE /* Boot Argument Buffer Size */
-
-#define CONFIG_SYS_BOOTMAPSZ (256 << 20)     /* 256M */
+#define CFG_SYS_BOOTMAPSZ (256 << 20)     /* 256M */
 
 /* Physical Memory Map */
 #define PHYS_SDRAM_1			CSD0_BASE_ADDR
@@ -102,22 +86,10 @@
 #define PHYS_SDRAM_2_SIZE		(gd->bd->bi_dram[1].size)
 #define PHYS_SDRAM_SIZE			(gd->ram_size)
 
-#define CONFIG_SYS_SDRAM_BASE		(PHYS_SDRAM_1)
-#define CONFIG_SYS_INIT_RAM_ADDR	(IRAM_BASE_ADDR)
-#define CONFIG_SYS_INIT_RAM_SIZE	(IRAM_SIZE)
-
-#define CONFIG_SYS_INIT_SP_OFFSET \
-	(CONFIG_SYS_INIT_RAM_SIZE - GENERATED_GBL_DATA_SIZE)
-#define CONFIG_SYS_INIT_SP_ADDR \
-	(CONFIG_SYS_INIT_RAM_ADDR + CONFIG_SYS_INIT_SP_OFFSET)
+#define CFG_SYS_SDRAM_BASE		(PHYS_SDRAM_1)
+#define CFG_SYS_INIT_RAM_ADDR	(IRAM_BASE_ADDR)
+#define CFG_SYS_INIT_RAM_SIZE	(IRAM_SIZE)
 
 /* FLASH and environment organization */
-
-#define CONFIG_FSL_IIM
-
-/* Backlight Control */
-#define CONFIG_IMX6_PWM_PER_CLK 66666000
-
-#define CONFIG_IMX_VIDEO_SKIP
 
 #endif				/* __CONFIG_H */

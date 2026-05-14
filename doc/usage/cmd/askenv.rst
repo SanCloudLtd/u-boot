@@ -1,7 +1,10 @@
 .. SPDX-License-Identifier: GPL-2.0+:
 
+.. index::
+   single: askenv (command)
+
 askenv command
-===============
+==============
 
 Synopsis
 --------
@@ -15,6 +18,8 @@ Description
 
 Display message and get environment variable name of max size characters
 from stdin.
+
+See also *env ask* in :doc:`env`.
 
 name
     name of the environment variable

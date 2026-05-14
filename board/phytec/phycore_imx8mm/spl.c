@@ -4,7 +4,6 @@
  * Author: Teresa Remmet <t.remmet@phytec.de>
  */
 
-#include <common.h>
 #include <asm/arch/clock.h>
 #include <asm/arch/ddr.h>
 #include <asm/arch/imx8mm_pins.h>
@@ -12,12 +11,18 @@
 #include <asm/global_data.h>
 #include <asm/mach-imx/boot_mode.h>
 #include <asm/mach-imx/iomux-v3.h>
+#include <asm/sections.h>
 #include <hang.h>
 #include <init.h>
 #include <log.h>
 #include <spl.h>
 
+#include "../common/imx8m_som_detection.h"
+
 DECLARE_GLOBAL_DATA_PTR;
+
+#define EEPROM_ADDR		0x51
+#define EEPROM_ADDR_FALLBACK	0x59
 
 int spl_board_boot_device(enum boot_device boot_dev_spl)
 {
@@ -39,46 +44,23 @@ int spl_board_boot_device(enum boot_device boot_dev_spl)
 
 static void spl_dram_init(void)
 {
-	ddr_init(&dram_timing);
-}
+	int ret;
 
-void spl_board_init(void)
-{
-	/* Serial download mode */
-	if (is_usb_boot()) {
-		puts("Back to ROM, SDP\n");
-		restore_boot_params();
-	}
-	puts("Normal Boot\n");
+	ret = phytec_eeprom_data_setup_fallback(NULL, 0, EEPROM_ADDR,
+			EEPROM_ADDR_FALLBACK);
+	if (ret)
+		goto out;
+
+	ret = phytec_imx8m_detect(NULL);
+	if (!ret)
+		phytec_print_som_info(NULL);
+
+out:
+	ddr_init(&dram_timing);
 }
 
 int board_fit_config_name_match(const char *name)
 {
-	return 0;
-}
-
-#define UART_PAD_CTRL	(PAD_CTL_DSE6 | PAD_CTL_FSEL1)
-#define WDOG_PAD_CTRL	(PAD_CTL_DSE6 | PAD_CTL_ODE)
-
-static iomux_v3_cfg_t const uart_pads[] = {
-	IMX8MM_PAD_UART3_RXD_UART3_RX | MUX_PAD_CTRL(UART_PAD_CTRL),
-	IMX8MM_PAD_UART3_TXD_UART3_TX | MUX_PAD_CTRL(UART_PAD_CTRL),
-};
-
-static iomux_v3_cfg_t const wdog_pads[] = {
-	IMX8MM_PAD_GPIO1_IO02_WDOG1_WDOG_B  | MUX_PAD_CTRL(WDOG_PAD_CTRL),
-};
-
-int board_early_init_f(void)
-{
-	struct wdog_regs *wdog = (struct wdog_regs *)WDOG1_BASE_ADDR;
-
-	imx_iomux_v3_setup_multiple_pads(wdog_pads, ARRAY_SIZE(wdog_pads));
-
-	set_wdog_reset(wdog);
-
-	imx_iomux_v3_setup_multiple_pads(uart_pads, ARRAY_SIZE(uart_pads));
-
 	return 0;
 }
 
@@ -90,10 +72,6 @@ void board_init_f(ulong dummy)
 
 	init_uart_clk(2);
 
-	board_early_init_f();
-
-	preloader_console_init();
-
 	/* Clear the BSS. */
 	memset(__bss_start, 0, __bss_end - __bss_start);
 
@@ -102,6 +80,8 @@ void board_init_f(ulong dummy)
 		debug("spl_early_init() failed: %d\n", ret);
 		hang();
 	}
+
+	preloader_console_init();
 
 	enable_tzc380();
 

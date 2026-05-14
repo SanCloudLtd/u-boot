@@ -10,7 +10,6 @@
  */
 
 #ifndef USE_HOSTCC
-#include <common.h>
 #include <command.h>
 #include <env.h>
 #include <log.h>
@@ -21,7 +20,6 @@
 #include <asm/global_data.h>
 #include <asm/io.h>
 #include <linux/errno.h>
-#include <u-boot/crc.h>
 #else
 #include "mkimage.h"
 #include <linux/compiler_attributes.h>
@@ -36,12 +34,6 @@
 #include <u-boot/sha256.h>
 #include <u-boot/sha512.h>
 #include <u-boot/md5.h>
-
-#if !defined(USE_HOSTCC) && defined(CONFIG_NEEDS_MANUAL_RELOC)
-DECLARE_GLOBAL_DATA_PTR;
-#endif
-
-static void reloc_update(void);
 
 static int __maybe_unused hash_init_sha1(struct hash_algo *algo, void **ctxp)
 {
@@ -151,7 +143,8 @@ static int __maybe_unused hash_finish_sha512(struct hash_algo *algo, void *ctx,
 	return 0;
 }
 
-static int hash_init_crc16_ccitt(struct hash_algo *algo, void **ctxp)
+static int __maybe_unused hash_init_crc16_ccitt(struct hash_algo *algo,
+						void **ctxp)
 {
 	uint16_t *ctx = malloc(sizeof(uint16_t));
 	*ctx = 0;
@@ -159,16 +152,18 @@ static int hash_init_crc16_ccitt(struct hash_algo *algo, void **ctxp)
 	return 0;
 }
 
-static int hash_update_crc16_ccitt(struct hash_algo *algo, void *ctx,
-				   const void *buf, unsigned int size,
-				   int is_last)
+static int __maybe_unused hash_update_crc16_ccitt(struct hash_algo *algo,
+						  void *ctx, const void *buf,
+						  unsigned int size,
+						  int is_last)
 {
 	*((uint16_t *)ctx) = crc16_ccitt(*((uint16_t *)ctx), buf, size);
 	return 0;
 }
 
-static int hash_finish_crc16_ccitt(struct hash_algo *algo, void *ctx,
-				   void *dest_buf, int size)
+static int __maybe_unused hash_finish_crc16_ccitt(struct hash_algo *algo,
+						  void *ctx, void *dest_buf,
+						  int size)
 {
 	if (size < algo->digest_size)
 		return -1;
@@ -303,6 +298,7 @@ static struct hash_algo hash_algo[] = {
 #endif
 	},
 #endif
+#if CONFIG_IS_ENABLED(CRC16)
 	{
 		.name		= "crc16-ccitt",
 		.digest_size	= 2,
@@ -312,6 +308,15 @@ static struct hash_algo hash_algo[] = {
 		.hash_update	= hash_update_crc16_ccitt,
 		.hash_finish	= hash_finish_crc16_ccitt,
 	},
+#endif
+#if CONFIG_IS_ENABLED(CRC8) && IS_ENABLED(CONFIG_HASH_CRC8)
+	{
+		.name		= "crc8",
+		.digest_size	= 1,
+		.chunk_size	= CHUNKSZ_CRC32,
+		.hash_func_ws	= crc8_wd_buf,
+	},
+#endif
 #if CONFIG_IS_ENABLED(CRC32)
 	{
 		.name		= "crc32",
@@ -326,38 +331,18 @@ static struct hash_algo hash_algo[] = {
 };
 
 /* Try to minimize code size for boards that don't want much hashing */
-#if CONFIG_IS_ENABLED(SHA256) || CONFIG_IS_ENABLED(CMD_SHA1SUM) || \
-	CONFIG_IS_ENABLED(CRC32_VERIFY) || CONFIG_IS_ENABLED(CMD_HASH) || \
-	CONFIG_IS_ENABLED(SHA384) || CONFIG_IS_ENABLED(SHA512)
+#if CONFIG_IS_ENABLED(SHA256) || IS_ENABLED(CONFIG_CMD_SHA1SUM) || \
+	CONFIG_IS_ENABLED(CRC32_VERIFY) || IS_ENABLED(CONFIG_CMD_HASH) || \
+	CONFIG_IS_ENABLED(SHA384) || CONFIG_IS_ENABLED(SHA512) || \
+	IS_ENABLED(CONFIG_CMD_MD5SUM)
 #define multi_hash()	1
 #else
 #define multi_hash()	0
 #endif
 
-static void reloc_update(void)
-{
-#if !defined(USE_HOSTCC) && defined(CONFIG_NEEDS_MANUAL_RELOC)
-	int i;
-	static bool done;
-
-	if (!done) {
-		done = true;
-		for (i = 0; i < ARRAY_SIZE(hash_algo); i++) {
-			hash_algo[i].name += gd->reloc_off;
-			hash_algo[i].hash_func_ws += gd->reloc_off;
-			hash_algo[i].hash_init += gd->reloc_off;
-			hash_algo[i].hash_update += gd->reloc_off;
-			hash_algo[i].hash_finish += gd->reloc_off;
-		}
-	}
-#endif
-}
-
 int hash_lookup_algo(const char *algo_name, struct hash_algo **algop)
 {
 	int i;
-
-	reloc_update();
 
 	for (i = 0; i < ARRAY_SIZE(hash_algo); i++) {
 		if (!strcmp(algo_name, hash_algo[i].name)) {
@@ -374,8 +359,6 @@ int hash_progressive_lookup_algo(const char *algo_name,
 				 struct hash_algo **algop)
 {
 	int i;
-
-	reloc_update();
 
 	for (i = 0; i < ARRAY_SIZE(hash_algo); i++) {
 		if (!strcmp(algo_name, hash_algo[i].name)) {
@@ -433,8 +416,9 @@ int hash_block(const char *algo_name, const void *data, unsigned int len,
 	return 0;
 }
 
-#if !defined(CONFIG_SPL_BUILD) && (defined(CONFIG_CMD_HASH) || \
-	defined(CONFIG_CMD_SHA1SUM) || defined(CONFIG_CMD_CRC32))
+#if !defined(CONFIG_XPL_BUILD) && (defined(CONFIG_CMD_HASH) || \
+	defined(CONFIG_CMD_SHA1SUM) || defined(CONFIG_CMD_CRC32)) || \
+	defined(CONFIG_CMD_MD5SUM)
 /**
  * store_result: Store the resulting sum to an address or variable
  *
@@ -586,6 +570,8 @@ int hash_command(const char *algo_name, int flags, struct cmd_tbl *cmdtp,
 
 		output = memalign(ARCH_DMA_MINALIGN,
 				  sizeof(uint32_t) * HASH_MAX_DIGEST_SIZE);
+		if (!output)
+			return CMD_RET_FAILURE;
 
 		buf = map_sysmem(addr, len);
 		algo->hash_func_ws(buf, len, output, algo->chunk_size);
@@ -593,7 +579,7 @@ int hash_command(const char *algo_name, int flags, struct cmd_tbl *cmdtp,
 
 		/* Try to avoid code bloat when verify is not needed */
 #if defined(CONFIG_CRC32_VERIFY) || defined(CONFIG_SHA1SUM_VERIFY) || \
-	defined(CONFIG_HASH_VERIFY)
+	defined(CONFIG_MD5SUM_VERIFY) || defined(CONFIG_HASH_VERIFY)
 		if (flags & HASH_FLAG_VERIFY) {
 #else
 		if (0) {
@@ -602,6 +588,7 @@ int hash_command(const char *algo_name, int flags, struct cmd_tbl *cmdtp,
 					flags & HASH_FLAG_ENV)) {
 				printf("ERROR: %s does not contain a valid "
 					"%s sum\n", *argv, algo->name);
+				free(output);
 				return 1;
 			}
 			if (memcmp(output, vsum, algo->digest_size) != 0) {
@@ -612,6 +599,7 @@ int hash_command(const char *algo_name, int flags, struct cmd_tbl *cmdtp,
 				for (i = 0; i < algo->digest_size; i++)
 					printf("%02x", vsum[i]);
 				puts(" ** ERROR **\n");
+				free(output);
 				return 1;
 			}
 		} else {
@@ -622,9 +610,9 @@ int hash_command(const char *algo_name, int flags, struct cmd_tbl *cmdtp,
 				store_result(algo, output, *argv,
 					flags & HASH_FLAG_ENV);
 			}
-		unmap_sysmem(output);
-
 		}
+
+		free(output);
 
 	/* Horrible code size hack for boards that just want crc32 */
 	} else {

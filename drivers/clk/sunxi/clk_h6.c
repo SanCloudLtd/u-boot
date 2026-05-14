@@ -4,7 +4,6 @@
  * Author: Jagan Teki <jagan@amarulasolutions.com>
  */
 
-#include <common.h>
 #include <clk-uclass.h>
 #include <dm.h>
 #include <errno.h>
@@ -14,6 +13,17 @@
 #include <linux/bitops.h>
 
 static struct ccu_clk_gate h6_gates[] = {
+	[CLK_PLL_PERIPH0]	= GATE(0x020, BIT(31)),
+
+	[CLK_APB1]		= GATE_DUMMY,
+
+	[CLK_DE]		= GATE(0x600, BIT(31)),
+	[CLK_BUS_DE]		= GATE(0x60c, BIT(0)),
+
+	[CLK_NAND0]		= GATE(0x810, BIT(31)),
+	[CLK_NAND1]		= GATE(0x814, BIT(31)),
+	[CLK_BUS_NAND]		= GATE(0x82c, BIT(0)),
+
 	[CLK_BUS_MMC0]		= GATE(0x84c, BIT(0)),
 	[CLK_BUS_MMC1]		= GATE(0x84c, BIT(1)),
 	[CLK_BUS_MMC2]		= GATE(0x84c, BIT(2)),
@@ -51,9 +61,22 @@ static struct ccu_clk_gate h6_gates[] = {
 	[CLK_BUS_XHCI]		= GATE(0xa8c, BIT(5)),
 	[CLK_BUS_EHCI3]		= GATE(0xa8c, BIT(7)),
 	[CLK_BUS_OTG]		= GATE(0xa8c, BIT(8)),
+
+	[CLK_HDMI]		= GATE(0xb00, BIT(31)),
+	[CLK_HDMI_SLOW]		= GATE(0xb04, BIT(31)),
+	[CLK_HDMI_CEC]		= GATE(0xb10, BIT(31)),
+	[CLK_BUS_HDMI]		= GATE(0xb1c, BIT(0)),
+	[CLK_BUS_TCON_TOP]	= GATE(0xb5c, BIT(0)),
+	[CLK_TCON_LCD0]		= GATE(0xb60, BIT(31)),
+	[CLK_BUS_TCON_LCD0]	= GATE(0xb7c, BIT(0)),
+	[CLK_TCON_TV0]		= GATE(0xb80, BIT(31)),
+	[CLK_BUS_TCON_TV0]	= GATE(0xb9c, BIT(0)),
 };
 
 static struct ccu_reset h6_resets[] = {
+	[RST_BUS_DE]		= RESET(0x60c, BIT(16)),
+	[RST_BUS_NAND]		= RESET(0x82c, BIT(16)),
+
 	[RST_BUS_MMC0]		= RESET(0x84c, BIT(16)),
 	[RST_BUS_MMC1]		= RESET(0x84c, BIT(17)),
 	[RST_BUS_MMC2]		= RESET(0x84c, BIT(18)),
@@ -85,30 +108,17 @@ static struct ccu_reset h6_resets[] = {
 	[RST_BUS_XHCI]		= RESET(0xa8c, BIT(21)),
 	[RST_BUS_EHCI3]		= RESET(0xa8c, BIT(23)),
 	[RST_BUS_OTG]		= RESET(0xa8c, BIT(24)),
+
+	[RST_BUS_HDMI]		= RESET(0xb1c, BIT(16)),
+	[RST_BUS_HDMI_SUB]	= RESET(0xb1c, BIT(17)),
+	[RST_BUS_TCON_TOP]	= RESET(0xb5c, BIT(16)),
+	[RST_BUS_TCON_LCD0]	= RESET(0xb7c, BIT(16)),
+	[RST_BUS_TCON_TV0]	= RESET(0xb9c, BIT(16)),
 };
 
-static const struct ccu_desc h6_ccu_desc = {
+const struct ccu_desc h6_ccu_desc = {
 	.gates = h6_gates,
 	.resets = h6_resets,
-};
-
-static int h6_clk_bind(struct udevice *dev)
-{
-	return sunxi_reset_bind(dev, ARRAY_SIZE(h6_resets));
-}
-
-static const struct udevice_id h6_ccu_ids[] = {
-	{ .compatible = "allwinner,sun50i-h6-ccu",
-	  .data = (ulong)&h6_ccu_desc },
-	{ }
-};
-
-U_BOOT_DRIVER(clk_sun50i_h6) = {
-	.name		= "sun50i_h6_ccu",
-	.id		= UCLASS_CLK,
-	.of_match	= h6_ccu_ids,
-	.priv_auto	= sizeof(struct ccu_priv),
-	.ops		= &sunxi_clk_ops,
-	.probe		= sunxi_clk_probe,
-	.bind		= h6_clk_bind,
+	.num_gates = ARRAY_SIZE(h6_gates),
+	.num_resets = ARRAY_SIZE(h6_resets),
 };

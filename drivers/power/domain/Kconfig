@@ -18,6 +18,14 @@ config APPLE_PMGR_POWER_DOMAIN
 	  This driver is needed to power on parts of the SoC that have
 	  not been powered on by previous boot stages.
 
+config AGILEX5_PMGR_POWER_DOMAIN
+	bool "Enable the Agilex5 PMGR power domain driver"
+	depends on SPL_POWER_DOMAIN
+	help
+	  Enable support for power gating peripherals' SRAM specified in
+	  the handoff data values obtained from the bitstream to reduce
+	  power consumption.
+
 config BCM6328_POWER_DOMAIN
 	bool "Enable the BCM6328 power domain driver"
 	depends on POWER_DOMAIN && ARCH_BMIPS
@@ -35,9 +43,24 @@ config IMX8_POWER_DOMAIN
 config IMX8M_POWER_DOMAIN
 	bool "Enable i.MX8M power domain driver"
 	depends on POWER_DOMAIN && ARCH_IMX8M
+	select CLK
 	help
 	  Enable support for manipulating NXP i.MX8M on-SoC power domains via
 	  requests to the ATF.
+
+config IMX8MP_HSIOMIX_BLKCTRL
+	bool "Enable i.MX8MP HSIOMIX domain driver"
+	depends on POWER_DOMAIN && IMX8MP
+	select CLK
+	help
+	  Enable support for manipulating NXP i.MX8MP on-SoC HSIOMIX block controller.
+
+config IMX8MP_MEDIAMIX_BLKCTRL
+	bool "Enable i.MX8MP MEDIAMIX domain driver"
+	depends on POWER_DOMAIN && IMX8MP
+	select CLK
+	help
+	  Enable support for manipulating NXP i.MX8MP on-SoC MEDIAMIX block controller.
 
 config MTK_POWER_DOMAIN
 	bool "Enable the MediaTek power domain driver"
@@ -60,6 +83,13 @@ config MESON_EE_POWER_DOMAIN
 	  Enable support for manipulating Amlogic Meson Everything-Else power
 	  domains.
 
+config MESON_SECURE_POWER_DOMAIN
+	bool "Enable Amlogic Secure power domain driver"
+	depends on POWER_DOMAIN && ARCH_MESON && MESON_A1
+	help
+	  Enable support for manipulating Amlogic Meson Secure power domains.
+	  Support for Amlogic A1 series.
+
 config SANDBOX_POWER_DOMAIN
 	bool "Enable the sandbox power domain test driver"
 	depends on POWER_DOMAIN && SANDBOX
@@ -67,6 +97,13 @@ config SANDBOX_POWER_DOMAIN
 	  Enable support for a test power domain driver implementation, which
 	  simply accepts requests to power on/off various HW modules without
 	  actually doing anything beyond a little error checking.
+
+config SCMI_POWER_DOMAIN
+	bool "Enable SCMI power domain driver"
+	depends on POWER_DOMAIN && SCMI_FIRMWARE
+	help
+	  Enable power domain implementation based on SCMI power domain
+	  management protocol.
 
 config TEGRA186_POWER_DOMAIN
 	bool "Enable Tegra186 BPMP-based power domain driver"

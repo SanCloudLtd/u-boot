@@ -11,32 +11,14 @@
 
 #include "mx6_common.h"
 
-#include "imx6_spl.h"
-
 /* MMC Configs */
-#define CONFIG_SYS_FSL_ESDHC_ADDR	USDHC2_BASE_ADDR
-
-/* SATA Configuration */
-#ifdef CONFIG_CMD_SATA
-#define CONFIG_DWC_AHSATA_PORT_ID       0
-#define CONFIG_DWC_AHSATA_BASE_ADDR     SATA_ARB_BASE_ADDR
-#define CONFIG_LBA48
-#endif
-
-/* Framebuffer */
-#define CONFIG_VIDEO_BMP_LOGO
-#define CONFIG_IMX_HDMI
-#define CONFIG_IMX_VIDEO_SKIP
-
-/* USB */
-#define CONFIG_MXC_USB_PORTSC		(PORT_PTS_UTMI | PORT_PTS_PTW)
+#define CFG_SYS_FSL_ESDHC_ADDR	USDHC2_BASE_ADDR
 
 /* Command definition */
 
-#define CONFIG_MXC_UART_BASE	UART1_BASE
+#define CFG_MXC_UART_BASE	UART1_BASE
 
-#ifndef CONFIG_SPL_BUILD
-#define CONFIG_EXTRA_ENV_SETTINGS \
+#define CFG_EXTRA_ENV_SETTINGS \
 	"som_rev=undefined\0" \
 	"has_emmc=undefined\0" \
 	"fdtfile=undefined\0" \
@@ -51,7 +33,7 @@
 	"ip_dyn=yes\0" \
 	"console=ttymxc0\0" \
 	"bootm_size=0x10000000\0" \
-	"mmcdev=" __stringify(CONFIG_SYS_MMC_ENV_DEV) "\0" \
+	"mmcdev=" __stringify(CONFIG_ENV_MMC_DEVICE_INDEX) "\0" \
 	"finduuid=part uuid mmc 1:1 uuid\0" \
 	"update_sd_firmware=" \
 		"if test ${ip_dyn} = yes; then " \
@@ -95,19 +77,10 @@
 
 #include <config_distro_bootcmd.h>
 
-#else
-#define CONFIG_EXTRA_ENV_SETTINGS
-#endif /* CONFIG_SPL_BUILD */
-
 /* Physical Memory Map */
-#define CONFIG_SYS_SDRAM_BASE          MMDC0_ARB_BASE_ADDR
-#define CONFIG_SYS_INIT_RAM_ADDR       IRAM_BASE_ADDR
-#define CONFIG_SYS_INIT_RAM_SIZE       IRAM_SIZE
-
-#define CONFIG_SYS_INIT_SP_OFFSET \
-	(CONFIG_SYS_INIT_RAM_SIZE - GENERATED_GBL_DATA_SIZE)
-#define CONFIG_SYS_INIT_SP_ADDR \
-	(CONFIG_SYS_INIT_RAM_ADDR + CONFIG_SYS_INIT_SP_OFFSET)
+#define CFG_SYS_SDRAM_BASE          MMDC0_ARB_BASE_ADDR
+#define CFG_SYS_INIT_RAM_ADDR       IRAM_BASE_ADDR
+#define CFG_SYS_INIT_RAM_SIZE       IRAM_SIZE
 
 /* Environment organization */
 

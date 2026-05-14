@@ -12,7 +12,6 @@
  * PCI routines
  */
 
-#include <common.h>
 #include <bootretry.h>
 #include <cli.h>
 #include <command.h>
@@ -358,6 +357,9 @@ static int pci_cfg_display(struct udevice *dev, ulong addr,
 	if (length == 0)
 		length = 0x40 / byte_size; /* Standard PCI config space */
 
+	if (addr >= 4096)
+		return 1;
+
 	/* Print the lines.
 	 * once, and all accesses are with the specified bus width.
 	 */
@@ -378,7 +380,10 @@ static int pci_cfg_display(struct udevice *dev, ulong addr,
 			rc = 1;
 			break;
 		}
-	} while (nbytes > 0);
+	} while (nbytes > 0 && addr < 4096);
+
+	if (rc == 0 && nbytes > 0)
+		return 1;
 
 	return (rc);
 }
@@ -389,6 +394,9 @@ static int pci_cfg_modify(struct udevice *dev, ulong addr, ulong size,
 	ulong	i;
 	int	nbytes;
 	ulong val;
+
+	if (addr >= 4096)
+		return 1;
 
 	/* Print the address, followed by value.  Then accept input for
 	 * the next value.  A non-converted value exits.
@@ -427,7 +435,10 @@ static int pci_cfg_modify(struct udevice *dev, ulong addr, ulong size,
 					addr += size;
 			}
 		}
-	} while (nbytes);
+	} while (nbytes && addr < 4096);
+
+	if (nbytes)
+		return 1;
 
 	return 0;
 }
@@ -440,7 +451,6 @@ static const struct pci_flag_info {
 	{ PCI_REGION_PREFETCH, "prefetch" },
 	{ PCI_REGION_SYS_MEMORY, "sysmem" },
 	{ PCI_REGION_RO, "readonly" },
-	{ PCI_REGION_IO, "io" },
 };
 
 static void pci_show_regions(struct udevice *bus)
@@ -506,6 +516,7 @@ static int do_pci(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 			addr = hextoul(argv[3], NULL);
 		if (argc > 4)
 			value = hextoul(argv[4], NULL);
+		fallthrough;
 	case 'h':		/* header */
 	case 'b':		/* bars */
 		if (argc < 3)
@@ -608,8 +619,7 @@ static int do_pci(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 
 /***************************************************/
 
-#ifdef CONFIG_SYS_LONGHELP
-static char pci_help_text[] =
+U_BOOT_LONGHELP(pci,
 	"[bus|*] [long]\n"
 	"    - short or long list of PCI devices on bus 'bus'\n"
 	"pci enum\n"
@@ -627,8 +637,7 @@ static char pci_help_text[] =
 	"pci modify[.b, .w, .l] b.d.f address\n"
 	"    -  modify, auto increment CFG address\n"
 	"pci write[.b, .w, .l] b.d.f address value\n"
-	"    - write to CFG address";
-#endif
+	"    - write to CFG address");
 
 U_BOOT_CMD(
 	pci,	5,	1,	do_pci,

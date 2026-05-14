@@ -15,7 +15,7 @@
  * ARM Ltd.
  * Philippe Robin, <philippe.robin@arm.com>
  */
-#include <common.h>
+#include <config.h>
 #include <bootstage.h>
 #include <cpu_func.h>
 #include <init.h>
@@ -73,7 +73,7 @@ static void flash__init(void)
 int dram_init(void)
 {
 	gd->ram_size =
-		get_ram_size((long *)CONFIG_SYS_SDRAM_BASE, PHYS_SDRAM_1_SIZE);
+		get_ram_size((long *)CFG_SYS_SDRAM_BASE, PHYS_SDRAM_1_SIZE);
 	return 0;
 }
 
@@ -163,5 +163,13 @@ void smp_set_core_boot_addr(unsigned long addr, int corenr)
 	 */
 	writel(~0, CONFIG_SYSFLAGS_ADDR + 4);
 	writel(addr, CONFIG_SYSFLAGS_ADDR);
+}
+#endif
+
+#if !CONFIG_IS_ENABLED(SYS_DCACHE_OFF)
+void enable_caches(void)
+{
+	/* Enable D-cache. I-cache is already enabled in start.S */
+	dcache_enable();
 }
 #endif

@@ -25,7 +25,6 @@
  *
  */
 
-#include <common.h>
 #include <dm.h>
 #include <pci.h>
 #include <asm/io.h>
@@ -800,7 +799,7 @@ static int pcie_advk_setup_hw(struct pcie_advk *pcie)
 	 */
 	reg = advk_readl(pcie, ADVK_ROOT_PORT_PCI_CFG_OFF + PCI_CLASS_REVISION);
 	reg &= ~0xffffff00;
-	reg |= (PCI_CLASS_BRIDGE_PCI << 8) << 8;
+	reg |= PCI_CLASS_BRIDGE_PCI_NORMAL << 8;
 	advk_writel(pcie, reg, ADVK_ROOT_PORT_PCI_CFG_OFF + PCI_CLASS_REVISION);
 
 	/* Enable generation and checking of ECRC on PCIe Root Port */
@@ -983,8 +982,8 @@ static int pcie_advk_of_to_plat(struct udevice *dev)
 	struct pcie_advk *pcie = dev_get_priv(dev);
 
 	/* Get the register base address */
-	pcie->base = (void *)dev_read_addr(dev);
-	if ((fdt_addr_t)pcie->base == FDT_ADDR_T_NONE)
+	pcie->base = dev_read_addr_ptr(dev);
+	if (!pcie->base)
 		return -EINVAL;
 
 	return 0;

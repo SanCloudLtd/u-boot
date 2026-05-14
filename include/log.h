@@ -98,6 +98,16 @@ enum log_category_t {
 	LOGC_ACPI,
 	/** @LOGC_BOOT: Related to boot process / boot image processing */
 	LOGC_BOOT,
+	/** @LOGC_EVENT: Related to event and event handling */
+	LOGC_EVENT,
+	/** @LOGC_FS: Related to filesystems */
+	LOGC_FS,
+	/** @LOGC_EXPO: Related to expo handling */
+	LOGC_EXPO,
+	/** @LOGC_CONSOLE: Related to the console and stdio */
+	LOGC_CONSOLE,
+	/** @LOGC_TEST: Related to testing */
+	LOGC_TEST,
 	/** @LOGC_COUNT: Number of log categories */
 	LOGC_COUNT,
 	/** @LOGC_END: Sentinel value for lists of log categories */
@@ -119,7 +129,7 @@ static inline int log_uc_cat(enum uclass_id id)
  * @level: Level of log record (indicating its severity)
  * @file: File name of file where log record was generated
  * @line: Line number in file where log record was generated
- * @func: Function where log record was generated
+ * @func: Function where log record was generated, NULL if not known
  * @fmt: printf() format string for log record
  * @...: Optional parameters, according to the format string @fmt
  * Return: 0 if log record was emitted, -ve on error
@@ -128,18 +138,6 @@ int _log(enum log_category_t cat, enum log_level_t level, const char *file,
 	 int line, const char *func, const char *fmt, ...)
 		__attribute__ ((format (__printf__, 6, 7)));
 
-static inline int _log_nop(enum log_category_t cat, enum log_level_t level,
-			   const char *file, int line, const char *func,
-			   const char *fmt, ...)
-		__attribute__ ((format (__printf__, 6, 7)));
-
-static inline int _log_nop(enum log_category_t cat, enum log_level_t level,
-			   const char *file, int line, const char *func,
-			   const char *fmt, ...)
-{
-	return 0;
-}
-
 /**
  * _log_buffer - Internal function to print data buffer in hex and ascii form
  *
@@ -147,7 +145,7 @@ static inline int _log_nop(enum log_category_t cat, enum log_level_t level,
  * @level: Level of log record (indicating its severity)
  * @file: File name of file where log record was generated
  * @line: Line number in file where log record was generated
- * @func: Function where log record was generated
+ * @func: Function where log record was generated, NULL if not known
  * @addr:	Starting address to display at start of line
  * @data:	pointer to data buffer
  * @width:	data value width.  May be 1, 2, or 4.
@@ -178,7 +176,7 @@ int _log_buffer(enum log_category_t cat, enum log_level_t level,
 #define _LOG_MAX_LEVEL LOGL_INFO
 #endif
 
-#define log_emer(_fmt...)	log(LOG_CATEGORY, LOGL_EMERG, ##_fmt)
+#define log_emerg(_fmt...)	log(LOG_CATEGORY, LOGL_EMERG, ##_fmt)
 #define log_alert(_fmt...)	log(LOG_CATEGORY, LOGL_ALERT, ##_fmt)
 #define log_crit(_fmt...)	log(LOG_CATEGORY, LOGL_CRIT, ##_fmt)
 #define log_err(_fmt...)	log(LOG_CATEGORY, LOGL_ERR, ##_fmt)
@@ -192,8 +190,17 @@ int _log_buffer(enum log_category_t cat, enum log_level_t level,
 
 #ifdef LOG_DEBUG
 #define _LOG_DEBUG	LOGL_FORCE_DEBUG
+#ifndef DEBUG
+#define DEBUG
+#endif
 #else
 #define _LOG_DEBUG	0
+#endif
+
+#ifdef CONFIG_LOGF_FUNC
+#define _log_func	__func__
+#else
+#define _log_func	NULL
 #endif
 
 #if CONFIG_IS_ENABLED(LOG)
@@ -204,7 +211,7 @@ int _log_buffer(enum log_category_t cat, enum log_level_t level,
 	if (_LOG_DEBUG != 0 || _l <= _LOG_MAX_LEVEL) \
 		_log((enum log_category_t)(_cat), \
 		     (enum log_level_t)(_l | _LOG_DEBUG), __FILE__, \
-		     __LINE__, __func__, \
+		     __LINE__, _log_func, \
 		      pr_fmt(_fmt), ##_args); \
 	})
 
@@ -214,7 +221,7 @@ int _log_buffer(enum log_category_t cat, enum log_level_t level,
 	if (_LOG_DEBUG != 0 || _l <= _LOG_MAX_LEVEL) \
 		_log_buffer((enum log_category_t)(_cat), \
 			    (enum log_level_t)(_l | _LOG_DEBUG), __FILE__, \
-			    __LINE__, __func__, _addr, _data, \
+			    __LINE__, _log_func, _addr, _data, \
 			    _width, _count, _linelen); \
 	})
 #else
@@ -235,22 +242,16 @@ int _log_buffer(enum log_category_t cat, enum log_level_t level,
 	})
 #endif
 
-#define log_nop(_cat, _level, _fmt, _args...) ({ \
-	int _l = _level; \
-	_log_nop((enum log_category_t)(_cat), _l, __FILE__, __LINE__, \
-		      __func__, pr_fmt(_fmt), ##_args); \
-})
-
 #ifdef DEBUG
 #define _DEBUG	1
 #else
 #define _DEBUG	0
 #endif
 
-#ifdef CONFIG_SPL_BUILD
-#define _SPL_BUILD	1
+#ifdef CONFIG_XPL_BUILD
+#define _XPL_BUILD	1
 #else
-#define _SPL_BUILD	0
+#define _XPL_BUILD	0
 #endif
 
 #if CONFIG_IS_ENABLED(LOG)
@@ -282,9 +283,9 @@ int _log_buffer(enum log_category_t cat, enum log_level_t level,
 #define debug(fmt, args...)			\
 	debug_cond(_DEBUG, fmt, ##args)
 
-/* Show a message if not in SPL */
-#define warn_non_spl(fmt, args...)			\
-	debug_cond(!_SPL_BUILD, fmt, ##args)
+/* Show a message if not in xPL */
+#define warn_non_xpl(fmt, args...)			\
+	debug_cond(!_XPL_BUILD, fmt, ##args)
 
 /*
  * An assertion is run-time check done in debug mode only. If DEBUG is not
@@ -323,7 +324,7 @@ void __assert_fail(const char *assertion, const char *file, unsigned int line,
 #define assert_noisy(x) \
 	({ bool _val = (x); \
 	if (!_val) \
-		__assert_fail(#x, "?", __LINE__, __func__); \
+		__assert_fail(#x, "?", __LINE__, _log_func); \
 	_val; \
 	})
 
@@ -335,7 +336,10 @@ void __assert_fail(const char *assertion, const char *file, unsigned int line,
  *
  * or:
  *
- *	return log_msg_ret("fred failed", fred_call());
+ *	return log_msg_ret("get", fred_call());
+ *
+ * It is recommended to use <= 3 characters for the name since this will only
+ * use 4 bytes in rodata
  */
 #define log_ret(_ret) ({ \
 	int __ret = (_ret); \
@@ -496,6 +500,7 @@ enum log_filter_flags {
  * @level: Maximum (or minimum, if %LOGFF_MIN_LEVEL) log level to allow
  * @file_list: List of files to allow, separated by comma. If NULL then all
  *	files are permitted
+ * @func_list: Comma separated list of functions or NULL.
  * @sibling_node: Next filter in the list of filters for this log device
  */
 struct log_filter {
@@ -504,6 +509,7 @@ struct log_filter {
 	enum log_category_t cat_list[LOGF_MAX_CATEGORIES];
 	enum log_level_t level;
 	const char *file_list;
+	const char *func_list;
 	struct list_head sibling_node;
 };
 
@@ -567,18 +573,6 @@ struct log_device *log_device_find_by_name(const char *drv_name);
  */
 bool log_has_cat(enum log_category_t cat_list[], enum log_category_t cat);
 
-/**
- * log_has_file() - check if a file is with a list
- *
- * @file_list: List of files to check, separated by comma
- * @file: File to check for. This string is matched against the end of each
- *	file in the list, i.e. ignoring any preceding path. The list is
- *	intended to consist of relative pathnames, e.g. common/main.c,cmd/log.c
- *
- * Return: ``true`` if @file is in @file_list, else ``false``
- */
-bool log_has_file(const char *file_list, const char *file);
-
 /* Log format flags (bit numbers) for gd->log_fmt. See log_fmt_chars */
 enum log_fmt {
 	LOGF_CAT	= 0,
@@ -607,13 +601,14 @@ int do_log_test(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[]);
  * @level: Maximum (or minimum, if %LOGFF_LEVEL_MIN) log level to allow
  * @file_list: List of files to allow, separated by comma. If NULL then all
  *	files are permitted
+ * @func_list: Comma separated list of functions or NULL.
  * Return:
  *   the sequence number of the new filter (>=0) if the filter was added, or a
  *   -ve value on error
  */
 int log_add_filter_flags(const char *drv_name, enum log_category_t cat_list[],
 			 enum log_level_t level, const char *file_list,
-			 int flags);
+			 const char *func_list, int flags);
 
 /**
  * log_add_filter() - Add a new filter to a log device
@@ -636,7 +631,7 @@ static inline int log_add_filter(const char *drv_name,
 				 const char *file_list)
 {
 	return log_add_filter_flags(drv_name, cat_list, max_level, file_list,
-				    0);
+				    NULL, 0);
 }
 
 /**
@@ -693,5 +688,17 @@ static inline int log_get_default_format(void)
 	       (IS_ENABLED(CONFIG_LOGF_LINE) ? BIT(LOGF_LINE) : 0) |
 	       (IS_ENABLED(CONFIG_LOGF_FUNC) ? BIT(LOGF_FUNC) : 0);
 }
+
+struct global_data;
+/**
+ * log_fixup_for_gd_move() - Handle global_data moving to a new place
+ *
+ * @new_gd: Pointer to the new global data
+ *
+ * The log_head list is part of global_data. Due to the way lists work, moving
+ * the list will cause it to become invalid. This function fixes that up so
+ * that the log_head list will work correctly.
+ */
+void log_fixup_for_gd_move(struct global_data *new_gd);
 
 #endif

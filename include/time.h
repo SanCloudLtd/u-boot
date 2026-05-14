@@ -28,13 +28,26 @@ uint64_t get_timer_us(uint64_t base);
  */
 unsigned long get_timer_us_long(unsigned long base);
 
-/*
+/**
  * timer_test_add_offset()
  *
  * Allow tests to add to the time reported through lib/time.c functions
  * offset: number of milliseconds to advance the system time
  */
 void timer_test_add_offset(unsigned long offset);
+
+#ifdef CONFIG_SANDBOX
+/**
+ * timer_test_get_offset()
+ *
+ * Get the total offset currently being added the time
+ *
+ * Return:: number of milliseconds the system time has been advanced
+ */
+ulong timer_test_get_offset(void);
+#else
+static inline ulong timer_test_get_offset(void) { return 0; }
+#endif
 
 /**
  * usec_to_tick() - convert microseconds to clock ticks
@@ -82,6 +95,25 @@ uint64_t usec_to_tick(unsigned long usec);
 #define time_in_range_open(a,b,c) \
 	(time_after_eq(a,b) && \
 	 time_before(a,c))
+
+/* Same as above, but does so with platform independent 64bit types.
+ * These must be used when utilizing jiffies_64 (i.e. return value of
+ * get_jiffies_64() */
+#define time_after64(a,b)	\
+	(typecheck(__u64, a) &&	\
+	 typecheck(__u64, b) && \
+	 ((__s64)((b) - (a)) < 0))
+#define time_before64(a,b)	time_after64(b,a)
+
+#define time_after_eq64(a,b)	\
+	(typecheck(__u64, a) && \
+	 typecheck(__u64, b) && \
+	 ((__s64)((a) - (b)) >= 0))
+#define time_before_eq64(a,b)	time_after_eq64(b,a)
+
+#define time_in_range64(a, b, c) \
+	(time_after_eq64(a, b) && \
+	 time_before_eq64(a, c))
 
 /**
  * usec2ticks() - Convert microseconds to internal ticks

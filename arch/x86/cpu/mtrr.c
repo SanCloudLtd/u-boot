@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
  * (C) Copyright 2014 Google, Inc
+ * Portions added from coreboot
  *
  * Memory Type Range Regsters - these are used to tell the CPU whether
  * memory is cacheable and if so the cache write mode to use.
@@ -16,7 +17,7 @@
  * since the MTRR registers are sometimes in flux.
  */
 
-#include <common.h>
+#include <cpu.h>
 #include <cpu_func.h>
 #include <log.h>
 #include <sort.h>
@@ -29,6 +30,37 @@
 #include <linux/log2.h>
 
 DECLARE_GLOBAL_DATA_PTR;
+
+static const char *const mtrr_type_name[MTRR_TYPE_COUNT] = {
+	"Uncacheable",
+	"Combine",
+	"2",
+	"3",
+	"Through",
+	"Protect",
+	"Back",
+};
+
+u64 mtrr_to_size(u64 mask)
+{
+	u64 size;
+
+	size = ~mask & ((1ULL << cpu_phys_address_size()) - 1);
+	size |= (1 << 12) - 1;
+	size += 1;
+
+	return size;
+}
+
+u64 mtrr_to_mask(u64 size)
+{
+	u64 mask;
+
+	mask = ~(size - 1);
+	mask &= (1ull << cpu_phys_address_size()) - 1;
+
+	return mask;
+}
 
 /* Prepare to adjust MTRRs */
 void mtrr_open(struct mtrr_state *state, bool do_caches)
@@ -59,11 +91,9 @@ void mtrr_close(struct mtrr_state *state, bool do_caches)
 
 static void set_var_mtrr(uint reg, uint type, uint64_t start, uint64_t size)
 {
-	u64 mask;
+	u64 mask = mtrr_to_mask(size);
 
 	wrmsrl(MTRR_PHYS_BASE_MSR(reg), start | type);
-	mask = ~(size - 1);
-	mask &= (1ULL << CONFIG_CPU_ADDR_BITS) - 1;
 	wrmsrl(MTRR_PHYS_MASK_MSR(reg), mask | MTRR_PHYS_MASK_VALID);
 }
 
@@ -78,7 +108,7 @@ void mtrr_read_all(struct mtrr_info *info)
 	}
 }
 
-void mtrr_write_all(struct mtrr_info *info)
+static void mtrr_write_all(struct mtrr_info *info)
 {
 	int reg_count = mtrr_get_var_count();
 	struct mtrr_state state;
@@ -156,8 +186,12 @@ int mtrr_commit(bool do_caches)
 	debug("open done\n");
 	qsort(req, gd->arch.mtrr_req_count, sizeof(*req), h_comp_mtrr);
 	for (i = 0; i < gd->arch.mtrr_req_count; i++, req++)
-		mtrr_set_next_var(req->type, req->start, req->size);
+		set_var_mtrr(i, req->type, req->start, req->size);
 
+	/* Clear the ones that are unused */
+	debug("clear\n");
+	for (; i < mtrr_get_var_count(); i++)
+		wrmsrl(MTRR_PHYS_MASK_MSR(i), 0);
 	debug("close\n");
 	mtrr_close(&state, do_caches);
 	debug("mtrr done\n");
@@ -171,30 +205,80 @@ int mtrr_commit(bool do_caches)
 	return 0;
 }
 
-int mtrr_add_request(int type, uint64_t start, uint64_t size)
+/* fms: find most significant bit set (from Linux)  */
+static inline uint fms(uint val)
+{
+	uint ret;
+
+	__asm__("bsrl %1,%0\n\t"
+		"jnz 1f\n\t"
+		"movl $0,%0\n"
+		"1:" : "=r" (ret) : "mr" (val));
+
+	return ret;
+}
+
+/*
+ * fms64: find most significant bit set in a 64-bit word
+ * As samples, fms64(0x0) = 0; fms64(0x4400) = 14;
+ * fms64(0x40400000000) = 42.
+ */
+static uint fms64(uint64_t val)
+{
+	u32 hi = (u32)(val >> 32);
+
+	if (!hi)
+		return fms((u32)val);
+
+	return fms(hi) + 32;
+}
+
+int mtrr_add_request(int type, u64 base, uint64_t size)
 {
 	struct mtrr_request *req;
-	uint64_t mask;
+	u64 mask;
 
 	debug("%s: count=%d\n", __func__, gd->arch.mtrr_req_count);
 	if (!gd->arch.has_mtrr)
 		return -ENOSYS;
 
-	if (!is_power_of_2(size))
-		return -EINVAL;
+	while (size) {
+		uint addr_lsb;
+		uint size_msb;
+		u64 mtrr_size;
 
-	if (gd->arch.mtrr_req_count == MAX_MTRR_REQUESTS)
-		return -ENOSPC;
-	req = &gd->arch.mtrr_req[gd->arch.mtrr_req_count++];
-	req->type = type;
-	req->start = start;
-	req->size = size;
-	debug("%d: type=%d, %08llx  %08llx\n", gd->arch.mtrr_req_count - 1,
-	      req->type, req->start, req->size);
-	mask = ~(req->size - 1);
-	mask &= (1ULL << CONFIG_CPU_ADDR_BITS) - 1;
-	mask |= MTRR_PHYS_MASK_VALID;
-	debug("   %016llx %016llx\n", req->start | req->type, mask);
+		addr_lsb = fls64(base);
+		size_msb = fms64(size);
+
+		/*
+		 * All MTRR entries need to have their base aligned to the
+		 * mask size. The maximum size is calculated by a function of
+		 * the min base bit set and maximum size bit set.
+		 * Algorithm is from coreboot
+		 */
+		if (!addr_lsb || addr_lsb > size_msb)
+			mtrr_size = 1ull << size_msb;
+		else
+			mtrr_size = 1ull << addr_lsb;
+		log_debug("addr_lsb %x size_msb %x mtrr_size %llx\n",
+			  addr_lsb, size_msb, mtrr_size);
+
+		if (gd->arch.mtrr_req_count == MAX_MTRR_REQUESTS)
+			return -ENOSPC;
+		req = &gd->arch.mtrr_req[gd->arch.mtrr_req_count++];
+		req->type = type;
+		req->start = base;
+		req->size = mtrr_size;
+		log_debug("%d: type=%d, %08llx  %08llx ",
+			  gd->arch.mtrr_req_count - 1, req->type, req->start,
+			  req->size);
+		mask = mtrr_to_mask(req->size);
+		mask |= MTRR_PHYS_MASK_VALID;
+		log_debug("   %016llx %016llx\n", req->start | req->type, mask);
+
+		size -= mtrr_size;
+		base += mtrr_size;
+	}
 
 	return 0;
 }
@@ -320,3 +404,52 @@ int mtrr_set(int cpu_select, int reg, u64 base, u64 mask)
 
 	return mtrr_start_op(cpu_select, &oper);
 }
+
+static void read_mtrrs_(void *arg)
+{
+	struct mtrr_info *info = arg;
+
+	mtrr_read_all(info);
+}
+
+int mtrr_list(int reg_count, int cpu_select)
+{
+	struct mtrr_info info;
+	int ret;
+	int i;
+
+	printf("Reg Valid Write-type   %-16s %-16s %-16s\n", "Base   ||",
+	       "Mask   ||", "Size   ||");
+	memset(&info, '\0', sizeof(info));
+	ret = mp_run_on_cpus(cpu_select, read_mtrrs_, &info);
+	if (ret)
+		return log_msg_ret("run", ret);
+	for (i = 0; i < reg_count; i++) {
+		const char *type = "Invalid";
+		u64 base, mask, size;
+		bool valid;
+
+		base = info.mtrr[i].base;
+		mask = info.mtrr[i].mask;
+		size = mtrr_to_size(mask);
+		valid = mask & MTRR_PHYS_MASK_VALID;
+		type = mtrr_type_name[base & MTRR_BASE_TYPE_MASK];
+		printf("%d   %-5s %-12s %016llx %016llx %016llx\n", i,
+		       valid ? "Y" : "N", type, base & ~MTRR_BASE_TYPE_MASK,
+		       mask & ~MTRR_PHYS_MASK_VALID, size);
+	}
+
+	return 0;
+}
+
+int mtrr_get_type_by_name(const char *typename)
+{
+	int i;
+
+	for (i = 0; i < MTRR_TYPE_COUNT; i++) {
+		if (*typename == *mtrr_type_name[i])
+			return i;
+	}
+
+	return -EINVAL;
+};

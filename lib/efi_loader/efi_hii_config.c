@@ -4,13 +4,10 @@
  *
  * Copyright (c) 2017 Leif Lindholm
  * Copyright (c) 2018 AKASHI Takahiro, Linaro Limited
- *
- * As this is still a non-working stub and the protocol is neither required
- * by the EFI shell nor by the UEFI SCT this module has been removed from
- * the Makefile.
  */
 
-#include <common.h>
+#define LOG_CATEGORY LOGC_EFI
+
 #include <efi_loader.h>
 
 const efi_guid_t efi_guid_hii_config_routing_protocol

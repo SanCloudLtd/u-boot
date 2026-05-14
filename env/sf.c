@@ -8,25 +8,19 @@
  *
  * (C) Copyright 2008 Atmel Corporation
  */
-#include <common.h>
 #include <dm.h>
 #include <env.h>
 #include <env_internal.h>
-#include <flash.h>
 #include <malloc.h>
 #include <spi.h>
 #include <spi_flash.h>
 #include <search.h>
 #include <errno.h>
-#include <uuid.h>
+#include <u-boot/uuid.h>
 #include <asm/cache.h>
 #include <asm/global_data.h>
 #include <dm/device-internal.h>
 #include <u-boot/crc.h>
-
-#ifndef CONFIG_SPL_BUILD
-#define INITENV
-#endif
 
 #define	OFFSET_INVALID		(~(u32)0)
 
@@ -44,15 +38,24 @@ static ulong env_new_offset	= CONFIG_ENV_OFFSET_REDUND;
 
 DECLARE_GLOBAL_DATA_PTR;
 
+__weak int spi_get_env_dev(void)
+{
+#ifdef CONFIG_ENV_SPI_BUS
+	return CONFIG_ENV_SPI_BUS;
+#else
+	return 0;
+#endif
+}
+
 static int setup_flash_device(struct spi_flash **env_flash)
 {
 #if CONFIG_IS_ENABLED(DM_SPI_FLASH)
 	struct udevice *new;
 	int	ret;
+	int dev = spi_get_env_dev();
 
 	/* speed and mode will be read from DT */
-	ret = spi_flash_probe_bus_cs(CONFIG_ENV_SPI_BUS, CONFIG_ENV_SPI_CS,
-				     CONFIG_ENV_SPI_MAX_HZ, CONFIG_ENV_SPI_MODE,
+	ret = spi_flash_probe_bus_cs(dev, CONFIG_ENV_SPI_CS,
 				     &new);
 	if (ret) {
 		env_set_default("spi_flash_probe_bus_cs() failed", 0);
@@ -216,8 +219,10 @@ static int env_sf_save(void)
 		saved_size = sect_size - CONFIG_ENV_SIZE;
 		saved_offset = CONFIG_ENV_OFFSET + CONFIG_ENV_SIZE;
 		saved_buffer = malloc(saved_size);
-		if (!saved_buffer)
+		if (!saved_buffer) {
+			ret = -ENOMEM;
 			goto done;
+		}
 
 		ret = spi_flash_read(env_flash, saved_offset,
 			saved_size, saved_buffer);
@@ -322,20 +327,24 @@ done:
 	return ret;
 }
 
-#if CONFIG_ENV_ADDR != 0x0
 __weak void *env_sf_get_env_addr(void)
 {
+#ifndef CONFIG_XPL_BUILD
 	return (void *)CONFIG_ENV_ADDR;
-}
+#else
+	return NULL;
 #endif
+}
 
-#if defined(INITENV) && (CONFIG_ENV_ADDR != 0x0)
 /*
  * check if Environment on CONFIG_ENV_ADDR is valid.
  */
 static int env_sf_init_addr(void)
 {
 	env_t *env_ptr = (env_t *)env_sf_get_env_addr();
+
+	if (!env_ptr)
+		return -ENOENT;
 
 	if (crc32(0, env_ptr->data, ENV_SIZE) == env_ptr->crc) {
 		gd->env_addr = (ulong)&(env_ptr->data);
@@ -346,7 +355,6 @@ static int env_sf_init_addr(void)
 
 	return 0;
 }
-#endif
 
 #if defined(CONFIG_ENV_SPI_EARLY)
 /*
@@ -372,7 +380,7 @@ static int env_sf_init_early(void)
 
 	tmp_env1 = (env_t *)memalign(ARCH_DMA_MINALIGN,
 			CONFIG_ENV_SIZE);
-	if (IS_ENABLED(CONFIG_SYS_REDUNDAND_ENVIRONMENT))
+	if (IS_ENABLED(CONFIG_ENV_REDUNDANT))
 		tmp_env2 = (env_t *)memalign(ARCH_DMA_MINALIGN,
 					     CONFIG_ENV_SIZE);
 
@@ -386,7 +394,7 @@ static int env_sf_init_early(void)
 	read1_fail = spi_flash_read(env_flash, CONFIG_ENV_OFFSET,
 				    CONFIG_ENV_SIZE, tmp_env1);
 
-	if (IS_ENABLED(CONFIG_SYS_REDUNDAND_ENVIRONMENT)) {
+	if (IS_ENABLED(CONFIG_ENV_REDUNDANT)) {
 		read2_fail = spi_flash_read(env_flash,
 					    CONFIG_ENV_OFFSET_REDUND,
 					    CONFIG_ENV_SIZE, tmp_env2);
@@ -421,7 +429,7 @@ err_read:
 	spi_flash_free(env_flash);
 
 	free(tmp_env1);
-	if (IS_ENABLED(CONFIG_SYS_REDUNDAND_ENVIRONMENT))
+	if (IS_ENABLED(CONFIG_ENV_REDUNDANT))
 		free(tmp_env2);
 out:
 	/* env is not valid. always return 0 */
@@ -432,9 +440,10 @@ out:
 
 static int env_sf_init(void)
 {
-#if defined(INITENV) && (CONFIG_ENV_ADDR != 0x0)
-	return env_sf_init_addr();
-#elif defined(CONFIG_ENV_SPI_EARLY)
+	int ret = env_sf_init_addr();
+	if (ret != -ENOENT)
+		return ret;
+#ifdef CONFIG_ENV_SPI_EARLY
 	return env_sf_init_early();
 #endif
 	/*

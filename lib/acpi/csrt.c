@@ -7,11 +7,11 @@
 
 #define LOG_CATEGORY LOGC_ACPI
 
-#include <common.h>
 #include <mapmem.h>
 #include <tables_csum.h>
 #include <acpi/acpi_table.h>
 #include <dm/acpi.h>
+#include <linux/string.h>
 
 __weak int acpi_fill_csrt(struct acpi_ctx *ctx)
 {
@@ -40,7 +40,7 @@ int acpi_write_csrt(struct acpi_ctx *ctx, const struct acpi_writer *entry)
 
 	/* (Re)calculate length and checksum */
 	header->length = (ulong)ctx->current - (ulong)csrt;
-	header->checksum = table_compute_checksum(csrt, header->length);
+	acpi_update_checksum(header);
 
 	acpi_add_table(ctx, csrt);
 

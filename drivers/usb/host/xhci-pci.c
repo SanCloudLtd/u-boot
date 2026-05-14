@@ -5,7 +5,6 @@
  * All rights reserved.
  */
 
-#include <common.h>
 #include <dm.h>
 #include <dm/device_compat.h>
 #include <init.h>
@@ -27,7 +26,8 @@ static int xhci_pci_init(struct udevice *dev, struct xhci_hccr **ret_hccr,
 	u32 cmd;
 
 	hccr = (struct xhci_hccr *)dm_pci_map_bar(dev,
-			PCI_BASE_ADDRESS_0, PCI_REGION_MEM);
+			PCI_BASE_ADDRESS_0, 0, 0, PCI_REGION_TYPE,
+			PCI_REGION_MEM);
 	if (!hccr) {
 		printf("xhci-pci init cannot map PCI mem bar\n");
 		return -EIO;

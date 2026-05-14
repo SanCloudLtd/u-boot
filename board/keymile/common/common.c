@@ -7,7 +7,7 @@
  * Holger Brunck, Keymile GmbH Hannover, holger.brunck@keymile.com
  */
 
-#include <common.h>
+#include <config.h>
 #include <env.h>
 #include <ioports.h>
 #include <command.h>
@@ -52,8 +52,8 @@ int set_km_env(void)
 	char envval[16];
 	char *p;
 
-	pnvramaddr = CONFIG_SYS_SDRAM_BASE + gd->ram_size -
-		CONFIG_KM_RESERVED_PRAM - CONFIG_KM_PHRAM - CONFIG_KM_PNVRAM;
+	pnvramaddr = CFG_SYS_SDRAM_BASE + gd->ram_size -
+		CONFIG_KM_PHRAM - CONFIG_KM_PNVRAM;
 	sprintf(envval, "0x%x", pnvramaddr);
 	env_set("pnvramaddr", envval);
 
@@ -61,12 +61,10 @@ int set_km_env(void)
 	p = env_get("rootfssize");
 	if (p)
 		strict_strtoul(p, 16, &rootfssize);
-	pram = (rootfssize + CONFIG_KM_RESERVED_PRAM + CONFIG_KM_PHRAM +
-		CONFIG_KM_PNVRAM) / 0x400;
+	pram = (rootfssize + CONFIG_KM_PHRAM + CONFIG_KM_PNVRAM) / 0x400;
 	env_set_ulong("pram", pram);
 
-	varaddr = CONFIG_SYS_SDRAM_BASE + gd->ram_size -
-		CONFIG_KM_RESERVED_PRAM - CONFIG_KM_PHRAM;
+	varaddr = CFG_SYS_SDRAM_BASE + gd->ram_size - CONFIG_KM_PHRAM;
 	env_set_hex("varaddr", varaddr);
 	sprintf(envval, "0x%x", varaddr);
 	env_set("varaddr", envval);
@@ -78,11 +76,11 @@ int set_km_env(void)
 	return 0;
 }
 
-#if CONFIG_IS_ENABLED(PG_WCOM_UBOOT_UPDATE_SUPPORTED)
-#if   ((!CONFIG_IS_ENABLED(PG_WCOM_UBOOT_BOOTPACKAGE) && \
-	!CONFIG_IS_ENABLED(PG_WCOM_UBOOT_UPDATE)) ||     \
-	(CONFIG_IS_ENABLED(PG_WCOM_UBOOT_BOOTPACKAGE) && \
-	CONFIG_IS_ENABLED(PG_WCOM_UBOOT_UPDATE)))
+#if IS_ENABLED(CONFIG_PG_WCOM_UBOOT_UPDATE_SUPPORTED)
+#if   ((!IS_ENABLED(CONFIG_PG_WCOM_UBOOT_BOOTPACKAGE) && \
+	!IS_ENABLED(CONFIG_PG_WCOM_UBOOT_UPDATE)) ||     \
+	(IS_ENABLED(CONFIG_PG_WCOM_UBOOT_BOOTPACKAGE) && \
+	IS_ENABLED(CONFIG_PG_WCOM_UBOOT_UPDATE)))
 #error "It has to be either bootpackage or update u-boot image!"
 #endif
 void check_for_uboot_update(void)
@@ -116,7 +114,7 @@ void check_for_uboot_update(void)
 			}
 		}
 		printf("Check update: starting factory image @%08x ...\n",
-		       CONFIG_SYS_TEXT_BASE);
+		       CONFIG_TEXT_BASE);
 	} else if (IS_ENABLED(CONFIG_PG_WCOM_UBOOT_UPDATE)) {
 		/*
 		 * When running in field updated u-boot, make sure that
@@ -124,12 +122,11 @@ void check_for_uboot_update(void)
 		 */
 		WARN_ON(bootcount > CONFIG_BOOTCOUNT_BOOTLIMIT);
 		printf("Check update: updated u-boot starting @%08x ...\n",
-		       CONFIG_SYS_TEXT_BASE);
+		       CONFIG_TEXT_BASE);
 	}
 }
 #endif
 
-#if defined(CONFIG_SYS_I2C_INIT_BOARD)
 static void i2c_write_start_seq(void)
 {
 	set_sda(1);
@@ -186,17 +183,6 @@ int i2c_make_abort(void)
 
 	return ret;
 }
-
-/**
- * i2c_init_board - reset i2c bus. When the board is powercycled during a
- * bus transfer it might hang; for details see doc/I2C_Edge_Conditions.
- */
-void i2c_init_board(void)
-{
-	/* Now run the AbortSequence() */
-	i2c_make_abort();
-}
-#endif
 
 #if defined(CONFIG_KM_COMMON_ETH_INIT)
 int board_eth_init(struct bd_info *bis)

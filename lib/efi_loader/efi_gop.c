@@ -5,12 +5,13 @@
  *  Copyright (c) 2016 Alexander Graf
  */
 
-#include <common.h>
+#define LOG_CATEGORY LOGC_EFI
+
 #include <dm.h>
 #include <efi_loader.h>
-#include <lcd.h>
 #include <log.h>
 #include <malloc.h>
+#include <mapmem.h>
 #include <video.h>
 #include <asm/global_data.h>
 
@@ -25,6 +26,7 @@ static const efi_guid_t efi_gop_guid = EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
  * @ops:	graphical output protocol interface
  * @info:	graphical output mode information
  * @mode:	graphical output mode
+ * @vdev:	backing video device
  * @bpix:	bits per pixel
  * @fb:		frame buffer
  */
@@ -33,6 +35,7 @@ struct efi_gop_obj {
 	struct efi_gop ops;
 	struct efi_gop_mode_info info;
 	struct efi_gop_mode mode;
+	struct udevice *vdev;
 	/* Fields we only have access to during init */
 	u32 bpix;
 	void *fb;
@@ -121,6 +124,7 @@ static __always_inline efi_status_t gop_blt_int(struct efi_gop *this,
 	u32 *fb32 = gopobj->fb;
 	u16 *fb16 = gopobj->fb;
 	struct efi_gop_pixel *buffer = __builtin_assume_aligned(bufferp, 4);
+	bool blt_to_video = (operation != EFI_BLT_VIDEO_TO_BLT_BUFFER);
 
 	if (delta) {
 		/* Check for 4 byte alignment */
@@ -244,6 +248,9 @@ static __always_inline efi_status_t gop_blt_int(struct efi_gop *this,
 		dlineoff += dwidth;
 	}
 
+	if (blt_to_video)
+		video_damage(gopobj->vdev, dx, dy, width, height);
+
 	return EFI_SUCCESS;
 }
 
@@ -253,21 +260,13 @@ static efi_uintn_t gop_get_bpp(struct efi_gop *this)
 	efi_uintn_t vid_bpp = 0;
 
 	switch (gopobj->bpix) {
-#ifdef CONFIG_DM_VIDEO
 	case VIDEO_BPP32:
-#else
-	case LCD_COLOR32:
-#endif
 		if (gopobj->info.pixel_format == EFI_GOT_BGRA8)
 			vid_bpp = 32;
 		else
 			vid_bpp = 30;
 		break;
-#ifdef CONFIG_DM_VIDEO
 	case VIDEO_BPP16:
-#else
-	case LCD_COLOR16:
-#endif
 		vid_bpp = 16;
 		break;
 	}
@@ -409,11 +408,12 @@ out:
  * @delta:	length in bytes of a line in the pixel buffer (optional)
  * Return:	status code
  */
-efi_status_t EFIAPI gop_blt(struct efi_gop *this, struct efi_gop_pixel *buffer,
-			    u32 operation, efi_uintn_t sx,
-			    efi_uintn_t sy, efi_uintn_t dx,
-			    efi_uintn_t dy, efi_uintn_t width,
-			    efi_uintn_t height, efi_uintn_t delta)
+static efi_status_t EFIAPI gop_blt(struct efi_gop *this,
+				   struct efi_gop_pixel *buffer,
+				   u32 operation, efi_uintn_t sx,
+				   efi_uintn_t sy, efi_uintn_t dx,
+				   efi_uintn_t dy, efi_uintn_t width,
+				   efi_uintn_t height, efi_uintn_t delta)
 {
 	efi_status_t ret = EFI_INVALID_PARAMETER;
 	efi_uintn_t vid_bpp;
@@ -459,11 +459,7 @@ efi_status_t EFIAPI gop_blt(struct efi_gop *this, struct efi_gop_pixel *buffer,
 	if (ret != EFI_SUCCESS)
 		return EFI_EXIT(ret);
 
-#ifdef CONFIG_DM_VIDEO
 	video_sync_all();
-#else
-	lcd_sync();
-#endif
 
 	return EFI_EXIT(EFI_SUCCESS);
 }
@@ -479,15 +475,13 @@ efi_status_t efi_gop_register(void)
 	struct efi_gop_obj *gopobj;
 	u32 bpix, format, col, row;
 	u64 fb_base, fb_size;
-	void *fb;
 	efi_status_t ret;
-
-#ifdef CONFIG_DM_VIDEO
 	struct udevice *vdev;
 	struct video_priv *priv;
+	struct video_uc_plat *plat;
 
 	/* We only support a single video output device for now */
-	if (uclass_first_device(UCLASS_VIDEO, &vdev) || !vdev) {
+	if (uclass_first_device_err(UCLASS_VIDEO, &vdev)) {
 		debug("WARNING: No video device\n");
 		return EFI_SUCCESS;
 	}
@@ -497,29 +491,14 @@ efi_status_t efi_gop_register(void)
 	format = priv->format;
 	col = video_get_xsize(vdev);
 	row = video_get_ysize(vdev);
-	fb_base = (uintptr_t)priv->fb;
-	fb_size = priv->fb_size;
-	fb = priv->fb;
-#else
-	int line_len;
 
-	bpix = panel_info.vl_bpix;
-	format = VIDEO_UNKNOWN;
-	col = panel_info.vl_col;
-	row = panel_info.vl_row;
-	fb_base = gd->fb_base;
-	fb_size = lcd_get_size(&line_len);
-	fb = (void*)gd->fb_base;
-#endif
+	plat = dev_get_uclass_plat(vdev);
+	fb_base = IS_ENABLED(CONFIG_VIDEO_COPY) ? plat->copy_base : plat->base;
+	fb_size = plat->size;
 
 	switch (bpix) {
-#ifdef CONFIG_DM_VIDEO
 	case VIDEO_BPP16:
 	case VIDEO_BPP32:
-#else
-	case LCD_COLOR32:
-	case LCD_COLOR16:
-#endif
 		break;
 	default:
 		/* So far, we only work in 16 or 32 bit mode */
@@ -558,11 +537,7 @@ efi_status_t efi_gop_register(void)
 	gopobj->info.version = 0;
 	gopobj->info.width = col;
 	gopobj->info.height = row;
-#ifdef CONFIG_DM_VIDEO
 	if (bpix == VIDEO_BPP32)
-#else
-	if (bpix == LCD_COLOR32)
-#endif
 	{
 		if (format == VIDEO_X2R10G10B10) {
 			gopobj->info.pixel_format = EFI_GOT_BITMASK;
@@ -581,7 +556,8 @@ efi_status_t efi_gop_register(void)
 	}
 	gopobj->info.pixels_per_scanline = col;
 	gopobj->bpix = bpix;
-	gopobj->fb = fb;
+	gopobj->fb = map_sysmem(fb_base, fb_size);
+	gopobj->vdev = vdev;
 
 	return EFI_SUCCESS;
 }

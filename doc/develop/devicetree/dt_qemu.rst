@@ -13,18 +13,25 @@ When `CONFIG_OF_BOARD` is enabled
 Obtaining the QEMU devicetree
 -----------------------------
 
-Where QEMU generates its own devicetree to pass to U-Boot tou can use
+Where QEMU generates its own devicetree to pass to U-Boot you can use
 `-dtb u-boot.dtb` to force QEMU to use U-Boot's in-tree version.
 
-To obtain the devicetree that qemu generates, add `-machine dumpdtb=qemu.dtb`,
-e.g.::
+To obtain the devicetree that QEMU generates, add `dumpdtb=qemu.dtb` to the
+`-machine` argument, e.g.
 
-    qemu-system-arm -machine virt -machine dumpdtb=qemu.dtb
+.. code-block:: bash
 
-    qemu-system-aarch64 -machine virt -machine dumpdtb=qemu.dtb
+    qemu-system-aarch64 \
+      -machine virt,gic-version=3,dumpdtb=qemu.dtb \
+      -cpu cortex-a57 \
+      -smp 4 \
+      -memory 8G \
+      -chardev socket,id=chrtpm,path=/tmp/mytpm1/swtpm-sock \
+      -tpmdev emulator,id=tpm0,chardev=chrtpm \
+      -device tpm-tis-device,tpmdev=tpm0
 
-    qemu-system-riscv64 -machine virt -machine dumpdtb=qemu.dtb
-
+Except for the dumpdtb=qemu.dtb sub-parameter use the same qemu-system-<arch>
+invocation that you would use to start U-Boot to to get a complete device-tree.
 
 Merging in U-Boot nodes/properties
 ----------------------------------
@@ -38,7 +45,7 @@ to produce a text file. It drops the duplicate header on the qemu one. Then it
 joins them up and runs them through dtc to compile the output::
 
     qemu-system-arm -machine virt -machine dumpdtb=qemu.dtb
-    cat  <(dtc -I dtb qemu.dtb) <(dtc -I dtb  u-boot.dtb |grep -v /dts-v1/) |dtc - -o merged.dtb
+    cat  <(dtc -I dtb qemu.dtb) <(dtc -I dtb u-boot.dtb | grep -v /dts-v1/) | dtc - -o merged.dtb
 
 You can then run qemu with the merged devicetree, e.g.::
 

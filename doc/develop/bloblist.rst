@@ -11,6 +11,10 @@ a central structure. Each record of information is assigned a tag so that its
 owner can find it and update it. Each record is generally described by a C
 structure defined by the code that owns it.
 
+For the design goals of bloblist, please see the comments at the top of the
+`bloblist.h` header file.
+
+Bloblist is an implementation with the `Firmware Handoff`_ protocol.
 
 Passing state through the boot process
 --------------------------------------
@@ -97,7 +101,7 @@ API documentation
 -----------------
 
 .. kernel-doc:: include/bloblist.h
-
+.. _`Firmware Handoff`: https://github.com/FirmwareHandoff/firmware_handoff
 
 Simon Glass
 sjg@chromium.org
