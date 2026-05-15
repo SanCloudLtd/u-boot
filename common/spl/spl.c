@@ -45,8 +45,8 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 DECLARE_BINMAN_MAGIC_SYM;
-
-#ifdef CONFIG_SPI_FALLBACK
+#if CONFIG_IS_ENABLED(CONFIG_SPL_BANNER_PRINT)
+#ifdef CONFIG_IS_ENABLED(CONFIG_SPI_FALLBACK)
 const char big_text_boot[] =
 	"███████╗ █████╗ ██╗     ██╗     ██████╗  █████╗  ██████╗██╗  ██╗\r\n"
 	"██╔════╝██╔══██╗██║     ██║     ██╔══██╗██╔══██╗██╔════╝██║ ██╔╝\r\n"
@@ -99,7 +99,7 @@ const char big_text_question[] = " ___  \r\n"
 				 "  / / \r\n"
 				 " |_|  \r\n"
 				 " (_)  \r\n";
-
+#endif
 u32 *boot_params_ptr = NULL;
 
 #if CONFIG_IS_ENABLED(BINMAN_UBOOT_SYMBOLS)
@@ -654,8 +654,8 @@ static int spl_load_image(struct spl_image_info *spl_image,
 }
 static void printBigBoot(const char *const loaderName)
 {
+#if CONFIG_IS_ENABLED(CONFIG_SPL_BANNER_PRINT)
 	char *bigStr = (char *)big_text_question;
-
 	if (0 == strncmp(loaderName, "SPI", 3)) {
 		bigStr = (char *)big_text_spi_nor;
 	} else if (0 == strncmp(loaderName, "MMC", 3)) {
@@ -664,10 +664,11 @@ static void printBigBoot(const char *const loaderName)
 		else if (0 == strncmp(loaderName, "MMC2", 4))
 			bigStr = (char *)big_text_mmc_card;
 	}
-
+#endif
 	printf("Booting from: %s\r\n", loaderName);
-
+#if CONFIG_IS_ENABLED(CONFIG_SPL_BANNER_PRINT)
 	printf("%s%s", big_text_boot, bigStr);
+#endif
 }
 
 /**
