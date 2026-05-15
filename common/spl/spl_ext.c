@@ -130,10 +130,10 @@ defaults:
 	err = ext4fs_read((void *)CONFIG_SPL_PAYLOAD_ARGS_ADDR, 0, filelen, &actlen);
 	if (err < 0) {
 #ifdef CONFIG_SPL_LIBCOMMON_SUPPORT
-		printf("%s: error reading image args %s, err - %d\n",
-		       __func__, CONFIG_SPL_FS_LOAD_ARGS_NAME, err);
+		printf("%s: error reading image args %s, err - %d\n", __func__,
+		       CONFIG_SPL_FS_LOAD_ARGS_NAME, err);
 #endif
-#if (!CONFIG_IS_ENABLED(LOAD_FIT) &&  !CONFIG_IS_ENABLED(LOAD_FIT_FULL))
+#if (!CONFIG_IS_ENABLED(LOAD_FIT) && !CONFIG_IS_ENABLED(LOAD_FIT_FULL))
 		return -1;
 #endif
 	}

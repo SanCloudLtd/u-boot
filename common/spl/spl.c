@@ -48,67 +48,57 @@ DECLARE_BINMAN_MAGIC_SYM;
 
 #ifdef CONFIG_SPI_FALLBACK
 const char big_text_boot[] =
-"███████╗ █████╗ ██╗     ██╗     ██████╗  █████╗  ██████╗██╗  ██╗\r\n"\
-"██╔════╝██╔══██╗██║     ██║     ██╔══██╗██╔══██╗██╔════╝██║ ██╔╝\r\n"\
-"█████╗  ███████║██║     ██║     ██████╔╝███████║██║     █████╔╝\r\n"\
-"██╔══╝  ██╔══██║██║     ██║     ██╔══██╗██╔══██║██║     ██╔═██╗\r\n"\
-"██║     ██║  ██║███████╗███████╗██████╔╝██║  ██║╚██████╗██║  ██╗\r\n"\
-"╚═╝     ╚═╝  ╚═╝╚══════╝╚══════╝╚═════╝ ╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝\r\n"\
-"\n"\
-"███╗   ███╗ ██████╗ ██████╗ ███████╗\r\n"\
-"████╗ ████║██╔═══██╗██╔══██╗██╔════╝\r\n"\
-"██╔████╔██║██║   ██║██║  ██║█████╗\r\n"\
-"██║╚██╔╝██║██║   ██║██║  ██║██╔══╝\r\n"\
-"██║ ╚═╝ ██║╚██████╔╝██████╔╝███████╗\r\n"\
-"╚═╝     ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝\r\n\n"\
-;                                                                                                           
-#else                                                                                                            
-const char big_text_boot[] = 
-" ____              _     \r\n" \
-"|  _ \\            | |  _ \r\n" \
-"| |_) | ___   ___ | |_(_)\r\n" \
-"|  _ < / _ \\ / _ \\| __|  \r\n" \
-"| |_) | (_) | (_) | |_ _ \r\n" \
-"|____/ \\___/ \\___/ \\__(_)\r\n" \
-;
+	"███████╗ █████╗ ██╗     ██╗     ██████╗  █████╗  ██████╗██╗  ██╗\r\n"
+	"██╔════╝██╔══██╗██║     ██║     ██╔══██╗██╔══██╗██╔════╝██║ ██╔╝\r\n"
+	"█████╗  ███████║██║     ██║     ██████╔╝███████║██║     █████╔╝\r\n"
+	"██╔══╝  ██╔══██║██║     ██║     ██╔══██╗██╔══██║██║     ██╔═██╗\r\n"
+	"██║     ██║  ██║███████╗███████╗██████╔╝██║  ██║╚██████╗██║  ██╗\r\n"
+	"╚═╝     ╚═╝  ╚═╝╚══════╝╚══════╝╚═════╝ ╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝\r\n"
+	"\n"
+	"███╗   ███╗ ██████╗ ██████╗ ███████╗\r\n"
+	"████╗ ████║██╔═══██╗██╔══██╗██╔════╝\r\n"
+	"██╔████╔██║██║   ██║██║  ██║█████╗\r\n"
+	"██║╚██╔╝██║██║   ██║██║  ██║██╔══╝\r\n"
+	"██║ ╚═╝ ██║╚██████╔╝██████╔╝███████╗\r\n"
+	"╚═╝     ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝\r\n\n";
+#else
+const char big_text_boot[] = " ____              _     \r\n"
+			     "|  _ \\            | |  _ \r\n"
+			     "| |_) | ___   ___ | |_(_)\r\n"
+			     "|  _ < / _ \\ / _ \\| __|  \r\n"
+			     "| |_) | (_) | (_) | |_ _ \r\n"
+			     "|____/ \\___/ \\___/ \\__(_)\r\n";
 #endif
-					
-const char big_text_spi_nor[] = 
-"  _____ _____ _____   _   _  ____  _____   \r\n" \
-" / ____|  __ \\_   _| | \\ | |/ __ \\|  __ \\  \r\n" \
-"| (___ | |__) || |   |  \\| | |  | | |__) | \r\n" \
-" \\___ \\|  ___/ | |   | . ` | |  | |  _  /  \r\n" \
-" ____) | |    _| |_  | |\\  | |__| | | \\ \\  \r\n" \
-"|_____/|_|   |_____| |_| \\_|\\____/|_|  \\_\\ \r\n" \
-;
 
-const char big_text_sd_card[] = 
-"  _____ _____     _____              _\r\n" \
-" / ____|  __ \\   / ____|            | |\r\n" \
-"| (___ | |  | | | |     __ _ _ __ __| |\r\n" \
-" \\___ \\| |  | | | |    / _` | '__/ _` |\r\n" \
-" ____) | |__| | | |___| (_| | | | (_| |\r\n" \
-"|_____/|_____/   \\_____\\__,_|_|  \\__,_|\r\n" \
-; 
+const char big_text_spi_nor[] =
+	"  _____ _____ _____   _   _  ____  _____   \r\n"
+	" / ____|  __ \\_   _| | \\ | |/ __ \\|  __ \\  \r\n"
+	"| (___ | |__) || |   |  \\| | |  | | |__) | \r\n"
+	" \\___ \\|  ___/ | |   | . ` | |  | |  _  /  \r\n"
+	" ____) | |    _| |_  | |\\  | |__| | | \\ \\  \r\n"
+	"|_____/|_|   |_____| |_| \\_|\\____/|_|  \\_\\ \r\n";
 
-const char big_text_mmc_card[] = 
-" ______ __  __ __  __  _____ \r\n" \
-"|  ____|  \\/  |  \\/  |/ ____|\r\n" \
-"| |__  | \\  / | \\  / | |     \r\n" \
-"|  __| | |\\/| | |\\/| | |     \r\n" \
-"| |____| |  | | |  | | |____ \r\n" \
-"|______|_|  |_|_|  |_|\\_____|\r\n" \
-;
+const char big_text_sd_card[] =
+	"  _____ _____     _____              _\r\n"
+	" / ____|  __ \\   / ____|            | |\r\n"
+	"| (___ | |  | | | |     __ _ _ __ __| |\r\n"
+	" \\___ \\| |  | | | |    / _` | '__/ _` |\r\n"
+	" ____) | |__| | | |___| (_| | | | (_| |\r\n"
+	"|_____/|_____/   \\_____\\__,_|_|  \\__,_|\r\n";
 
+const char big_text_mmc_card[] = " ______ __  __ __  __  _____ \r\n"
+				 "|  ____|  \\/  |  \\/  |/ ____|\r\n"
+				 "| |__  | \\  / | \\  / | |     \r\n"
+				 "|  __| | |\\/| | |\\/| | |     \r\n"
+				 "| |____| |  | | |  | | |____ \r\n"
+				 "|______|_|  |_|_|  |_|\\_____|\r\n";
 
-const char big_text_question[] = 
-" ___  \r\n" \
-"|__ \\ \r\n" \
-"   ) |\r\n" \
-"  / / \r\n" \
-" |_|  \r\n" \
-" (_)  \r\n" \
-;
+const char big_text_question[] = " ___  \r\n"
+				 "|__ \\ \r\n"
+				 "   ) |\r\n"
+				 "  / / \r\n"
+				 " |_|  \r\n"
+				 " (_)  \r\n";
 
 u32 *boot_params_ptr = NULL;
 
@@ -621,16 +611,13 @@ int spl_init(void)
 __weak void board_boot_order(u32 *spl_boot_list)
 {
 	spl_boot_list[0] = spl_boot_device();
-	
-    #ifdef CONFIG_SYS_MMCSD_FS_BOOT 
-	if(spl_boot_list[0]==BOOT_DEVICE_SPI)
-	 {
-	  spl_boot_list[1]=BOOT_DEVICE_MMC1;
-	  spl_boot_list[2]=BOOT_DEVICE_MMC2;
-	 }
-	 #endif
-	     
 
+#ifdef CONFIG_SYS_MMCSD_FS_BOOT
+	if (spl_boot_list[0] == BOOT_DEVICE_SPI) {
+		spl_boot_list[1] = BOOT_DEVICE_MMC1;
+		spl_boot_list[2] = BOOT_DEVICE_MMC2;
+	}
+#endif
 }
 
 __weak int spl_check_board_image(struct spl_image_info *spl_image,
@@ -665,20 +652,17 @@ static int spl_load_image(struct spl_image_info *spl_image,
 
 	return ret;
 }
-static void printBigBoot(const char * const loaderName)
+static void printBigBoot(const char *const loaderName)
 {
-	char * bigStr = (char * )big_text_question;
+	char *bigStr = (char *)big_text_question;
 
-	if(0 == strncmp(loaderName, "SPI", 3))
-	{
-		bigStr = (char * )big_text_spi_nor;
-	}
-	else if(0 == strncmp(loaderName, "MMC", 3))
-	{
-      if(0 == strncmp(loaderName, "MMC1", 4))
-		bigStr = (char * )big_text_sd_card;
-	  else if(0 == strncmp(loaderName, "MMC2", 4))
-		bigStr = (char * )big_text_mmc_card;		
+	if (0 == strncmp(loaderName, "SPI", 3)) {
+		bigStr = (char *)big_text_spi_nor;
+	} else if (0 == strncmp(loaderName, "MMC", 3)) {
+		if (0 == strncmp(loaderName, "MMC1", 4))
+			bigStr = (char *)big_text_sd_card;
+		else if (0 == strncmp(loaderName, "MMC2", 4))
+			bigStr = (char *)big_text_mmc_card;
 	}
 
 	printf("Booting from: %s\r\n", loaderName);
@@ -706,9 +690,9 @@ static int boot_from_devices(struct spl_image_info *spl_image,
 	int ret = -ENODEV;
 	int i;
 
-	for (i = 0; i < count ; i++) {
-        if(spl_boot_list[i] == BOOT_DEVICE_NONE)
-		  continue; 
+	for (i = 0; i < count; i++) {
+		if (spl_boot_list[i] == BOOT_DEVICE_NONE)
+			continue;
 		struct spl_image_loader *loader;
 		int bootdev = spl_boot_list[i];
 
@@ -718,12 +702,11 @@ static int boot_from_devices(struct spl_image_info *spl_image,
 			if (bootdev != loader->boot_device)
 				continue;
 			if (!CONFIG_IS_ENABLED(SILENT_CONSOLE)) {
-				if (loader){
+				if (loader) {
 					printf("Trying to boot from %s\n",
 					       spl_loader_name(loader));
 					printBigBoot(spl_loader_name(loader));
-				}
-				else if (CONFIG_IS_ENABLED(SHOW_ERRORS)) {
+				} else if (CONFIG_IS_ENABLED(SHOW_ERRORS)) {
 					printf(SPL_TPL_PROMPT
 					       "Unsupported Boot Device %d\n",
 					       bootdev);

@@ -1428,15 +1428,15 @@ static const struct flash_info *spi_nor_read_id(struct spi_nor *nor)
 	info = spi_nor_ids;
 	for (; info->name; info++) {
 		if (info->id_len) {
-			if (!memcmp(info->id, id, info->id_len))
-				{
-				printf("*** detected SPI Nor :%s *****\n",info->name);
+			if (!memcmp(info->id, id, info->id_len)) {
+				printf("*** detected SPI Nor :%s *****\n",
+				       info->name);
 				return info;
-				}
+			}
 		}
 	}
 	printf("CORE unrecognized JEDEC id :0x%02x%02x%02x%02x%02x%02x\n",
-		id[0], id[1], id[2],id[3], id[4], id[5]);
+	       id[0], id[1], id[2], id[3], id[4], id[5]);
 
 	dev_err(nor->dev, "unrecognized JEDEC id bytes: %02x, %02x, %02x\n",
 		id[0], id[1], id[2]);

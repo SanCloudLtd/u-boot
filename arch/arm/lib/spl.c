@@ -28,8 +28,8 @@ DECLARE_GLOBAL_DATA_PTR;
 gd_t gdata __section(".data");
 #else
 #ifdef CONFIG_AM33XX
- DECLARE_GLOBAL_DATA_PTR;
-#endif 
+DECLARE_GLOBAL_DATA_PTR;
+#endif
 #endif
 
 /*
@@ -66,7 +66,7 @@ void __noreturn jump_to_image_linux(struct spl_image_info *spl_image)
 void __noreturn jump_to_image_linux(struct spl_image_info *spl_image)
 {
 #ifdef CONFIG_AM33XX
-    unsigned long machid = gd->bd->bi_arch_number;
+	unsigned long machid = gd->bd->bi_arch_number;
 #else
 	unsigned long machid = 0xffffffff;
 #endif
@@ -76,7 +76,8 @@ void __noreturn jump_to_image_linux(struct spl_image_info *spl_image)
 
 	debug("Entering kernel arg pointer: 0x%p  \n"
 	      "Os entry pointer: 0x%lx \n"
-		  "MachID : 0x%lx \n", spl_image->arg,spl_image->entry_point,machid);
+	      "MachID : 0x%lx \n",
+	      spl_image->arg, spl_image->entry_point, machid);
 	typedef void (*image_entry_arg_t)(int, int, void *)
 		__attribute__ ((noreturn));
 	image_entry_arg_t image_entry =

@@ -23,9 +23,9 @@
 #define V_OSCK				24000000  /* Clock output from T2 */
 #define V_SCLK				(V_OSCK)
 
-#define CFG_SYS_SPI_KERNEL_OFFS      0x1E0000
-#define CFG_SYS_SPI_ARGS_OFFS    0x2000000
-#define CFG_SYS_SPI_ARGS_SIZE   0x10000f
+#define CFG_SYS_SPI_KERNEL_OFFS				0x1E0000
+#define CFG_SYS_SPI_ARGS_OFFS				0x2000000
+#define CFG_SYS_SPI_ARGS_SIZE				0x10000f
 
 #ifdef CONFIG_MTD_RAW_NAND
 #define NANDARGS \
@@ -189,8 +189,6 @@
 			"run sleep_5s;" \
 		"done; " \
 		"run halt; \0"
-
-
 
 #define CFG_EXTRA_ENV_SETTINGS \
 	DEFAULT_LINUX_BOOT_ENV \
@@ -364,7 +362,6 @@
  * in memory.
  */
 
-
 /*
  * Disable MMC DM for SPL build and can be re-enabled after adding
  * DM support in SPL
@@ -402,11 +399,11 @@
  * 0x4C0000 - 0xFFFFFF : Userland (11 MiB + 256 KiB)
  */
 #if defined(CONFIG_NOR)
-#define CONFIG_SYS_MAX_FLASH_SECT	128
-#define CFG_SYS_FLASH_BASE		(0x08000000)
-#define CONFIG_SYS_FLASH_CFI_WIDTH	FLASH_CFI_16BIT
-#define CFG_SYS_FLASH_SIZE		0x01000000
-#define CONFIG_SYS_MONITOR_BASE		CONFIG_SYS_FLASH_BASE
+#define CONFIG_SYS_MAX_FLASH_SECT		128
+#define CFG_SYS_FLASH_BASE				(0x08000000)
+#define CONFIG_SYS_FLASH_CFI_WIDTH		FLASH_CFI_16BIT
+#define CFG_SYS_FLASH_SIZE				0x01000000
+#define CONFIG_SYS_MONITOR_BASE			CONFIG_SYS_FLASH_BASE
 #endif  /* NOR support */
 
 #endif	/* ! __CONFIG_AM335X_EVM_H */

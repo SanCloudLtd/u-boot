@@ -163,14 +163,13 @@ void save_omap_boot_params(void)
 	}
 #endif
 
-    if(boot_mode == MMCSD_MODE_UNDEFINED)
-	{
-    #if defined(CONFIG_SPL_FS_FAT) || defined(CONFIG_SPL_FS_EXT4)
-		boot_mode= MMCSD_MODE_FS;
-	#elif defined(CONFIG_SUPPORT_EMMC_BOOT)
-		boot_mode= MMCSD_MODE_EMMCBOOT;
-	#endif
-	} 
+	if (boot_mode == MMCSD_MODE_UNDEFINED) {
+#if defined(CONFIG_SPL_FS_FAT) || defined(CONFIG_SPL_FS_EXT4)
+		boot_mode = MMCSD_MODE_FS;
+#elif defined(CONFIG_SUPPORT_EMMC_BOOT)
+		boot_mode = MMCSD_MODE_EMMCBOOT;
+#endif
+	}
 
 	gd->arch.omap_boot_mode = boot_mode;
 
