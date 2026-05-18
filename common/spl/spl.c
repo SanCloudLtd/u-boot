@@ -45,8 +45,8 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 DECLARE_BINMAN_MAGIC_SYM;
-#if CONFIG_IS_ENABLED(CONFIG_SPL_BANNER_PRINT)
-#ifdef CONFIG_IS_ENABLED(CONFIG_SPI_FALLBACK)
+#if CONFIG_SPL_BANNER_PRINT
+#if CONFIG_SPI_FALLBACK
 const char big_text_boot[] =
 	"███████╗ █████╗ ██╗     ██╗     ██████╗  █████╗  ██████╗██╗  ██╗\r\n"
 	"██╔════╝██╔══██╗██║     ██║     ██╔══██╗██╔══██╗██╔════╝██║ ██╔╝\r\n"
@@ -654,7 +654,7 @@ static int spl_load_image(struct spl_image_info *spl_image,
 }
 static void printBigBoot(const char *const loaderName)
 {
-#if CONFIG_IS_ENABLED(CONFIG_SPL_BANNER_PRINT)
+#if CONFIG_SPL_BANNER_PRINT
 	char *bigStr = (char *)big_text_question;
 	if (0 == strncmp(loaderName, "SPI", 3)) {
 		bigStr = (char *)big_text_spi_nor;
@@ -666,7 +666,7 @@ static void printBigBoot(const char *const loaderName)
 	}
 #endif
 	printf("Booting from: %s\r\n", loaderName);
-#if CONFIG_IS_ENABLED(CONFIG_SPL_BANNER_PRINT)
+#if CONFIG_SPL_BANNER_PRINT
 	printf("%s%s", big_text_boot, bigStr);
 #endif
 }
