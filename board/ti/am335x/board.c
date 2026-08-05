@@ -834,6 +834,9 @@ int board_late_init(void)
 		case 'I':
 			name = "BBE_EX_WIFI";
 			break;
+		case 'H':
+			name = "BBE_IND_WIFI";
+			break;
 		default:
 			name = "BBEN";
 		}
