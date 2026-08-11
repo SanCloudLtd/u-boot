@@ -10,7 +10,9 @@
 #include <asm/cache.h>
 #include <asm/global_data.h>
 #include <asm/io.h>
+#if !defined(CONFIG_SOC_K3_AM625)
 #include <asm/arch/omap.h>
+#endif
 #include <malloc.h>
 #include <spi.h>
 #include <spi-mem.h>
