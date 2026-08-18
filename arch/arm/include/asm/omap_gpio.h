@@ -19,9 +19,9 @@
  */
 #ifndef _GPIO_H
 #define _GPIO_H
-
+#if !defined(CONFIG_SOC_K3_AM625)
 #include <asm/arch/cpu.h>
-
+#endif
 #if CONFIG_IS_ENABLED(DM_GPIO)
 
 /* Information about a GPIO bank */
